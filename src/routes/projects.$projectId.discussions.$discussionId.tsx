@@ -105,8 +105,8 @@ function DiscussionPage() {
   const send = async () => {
     const text = input.trim();
     if ((!text && pending.length === 0) || busy) return;
-    if (!cfg.apiKey) {
-      toast.error(`No API key for ${provider}. Add one in Settings.`);
+    if (!keys[provider]) {
+      toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }
 
@@ -163,8 +163,8 @@ function DiscussionPage() {
   };
 
   const runExtraction = async () => {
-    if (!cfg.apiKey) {
-      toast.error("Add an API key in Settings first.");
+    if (!keys[provider]) {
+      toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }
     setWorking("extract");
@@ -197,8 +197,8 @@ function DiscussionPage() {
   };
 
   const runSummary = async () => {
-    if (!cfg.apiKey) {
-      toast.error("Add an API key in Settings first.");
+    if (!keys[provider]) {
+      toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }
     setWorking("summary");
