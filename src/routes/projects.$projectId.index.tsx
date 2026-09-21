@@ -28,6 +28,7 @@ function Dashboard() {
   const { projectId } = Route.useParams();
   const { ws } = useVpip();
   const p = useProject(projectId);
+  const { keys } = useAiKeys();
 
   if (!p.project) {
     return (
@@ -41,7 +42,7 @@ function Dashboard() {
 
   const count = (t: string) => p.approved.filter((k) => k.type === t).length;
   const connected = (Object.keys(ws.settings.providers) as ProviderId[]).filter(
-    (id) => ws.settings.providers[id].apiKey,
+    (id) => keys[id],
   );
   const lastActivity = [
     p.project.updatedAt,

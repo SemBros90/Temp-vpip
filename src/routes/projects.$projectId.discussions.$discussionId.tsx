@@ -40,6 +40,7 @@ function DiscussionPage() {
   const p = useProject(projectId);
   const actions = useVpipActions();
   const { provider, cfg, author } = useEngine();
+  const { keys } = useAiKeys();
   const discussion = p.discussions.find((d) => d.id === discussionId);
 
   const [input, setInput] = useState("");
