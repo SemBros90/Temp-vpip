@@ -38,6 +38,7 @@ export const Route = createFileRoute("/projects/$projectId/discussions/$discussi
 
 function DiscussionPage() {
   const { projectId, discussionId } = Route.useParams();
+  const { focus } = Route.useSearch();
   const { saveNow } = useVpip();
   const p = useProject(projectId);
   const actions = useVpipActions();
