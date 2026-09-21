@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
+import { Route as ProjectsProjectIdInboxRouteImport } from './routes/projects.$projectId.inbox'
+import { Route as ProjectsProjectIdRegisterRouteImport } from './routes/projects.$projectId.register'
 import { Route as ProjectsProjectIdDiscussionsIndexRouteImport } from './routes/projects.$projectId.discussions.index'
 import { Route as ProjectsProjectIdDiscussionsDiscussionIdRouteImport } from './routes/projects.$projectId.discussions.$discussionId'
 
@@ -36,6 +38,17 @@ const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdInboxRoute = ProjectsProjectIdInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
+const ProjectsProjectIdRegisterRoute =
+  ProjectsProjectIdRegisterRouteImport.update({
+    id: '/register',
+    path: '/register',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdDiscussionsIndexRoute =
   ProjectsProjectIdDiscussionsIndexRouteImport.update({
     id: '/discussions/',
@@ -53,6 +66,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
@@ -60,6 +75,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions': typeof ProjectsProjectIdDiscussionsIndexRoute
@@ -69,6 +86,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
@@ -79,6 +98,8 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/projects/$projectId'
+    | '/projects/$projectId/inbox'
+    | '/projects/$projectId/register'
     | '/projects/$projectId/'
     | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions/'
@@ -86,6 +107,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/settings'
+    | '/projects/$projectId/inbox'
+    | '/projects/$projectId/register'
     | '/projects/$projectId'
     | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions'
@@ -94,6 +117,8 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/projects/$projectId'
+    | '/projects/$projectId/inbox'
+    | '/projects/$projectId/register'
     | '/projects/$projectId/'
     | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions/'
@@ -135,6 +160,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdIndexRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/inbox': {
+      id: '/projects/$projectId/inbox'
+      path: '/inbox'
+      fullPath: '/projects/$projectId/inbox'
+      preLoaderRoute: typeof ProjectsProjectIdInboxRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/register': {
+      id: '/projects/$projectId/register'
+      path: '/register'
+      fullPath: '/projects/$projectId/register'
+      preLoaderRoute: typeof ProjectsProjectIdRegisterRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/discussions/': {
       id: '/projects/$projectId/discussions/'
       path: '/discussions'
@@ -153,12 +192,16 @@ declare module '@tanstack/react-router' {
 }
 
 interface ProjectsProjectIdRouteChildren {
+  ProjectsProjectIdInboxRoute: typeof ProjectsProjectIdInboxRoute
+  ProjectsProjectIdRegisterRoute: typeof ProjectsProjectIdRegisterRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
   ProjectsProjectIdDiscussionsDiscussionIdRoute: typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   ProjectsProjectIdDiscussionsIndexRoute: typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
+  ProjectsProjectIdInboxRoute: ProjectsProjectIdInboxRoute,
+  ProjectsProjectIdRegisterRoute: ProjectsProjectIdRegisterRoute,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
   ProjectsProjectIdDiscussionsDiscussionIdRoute:
     ProjectsProjectIdDiscussionsDiscussionIdRoute,
