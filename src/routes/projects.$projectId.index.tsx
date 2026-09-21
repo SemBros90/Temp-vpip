@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useProject, useVpip } from "@/lib/vpip/store";
 import { exportProjectZip } from "@/lib/vpip/files";
 import { PROVIDER_LABEL, type ProviderId } from "@/lib/vpip/types";
+import { useAiKeys } from "@/lib/vpip/keys";
 
 export const Route = createFileRoute("/projects/$projectId/")({
   head: () => ({
@@ -27,6 +28,7 @@ function Dashboard() {
   const { projectId } = Route.useParams();
   const { ws } = useVpip();
   const p = useProject(projectId);
+  const { keys } = useAiKeys();
 
   if (!p.project) {
     return (
@@ -40,7 +42,7 @@ function Dashboard() {
 
   const count = (t: string) => p.approved.filter((k) => k.type === t).length;
   const connected = (Object.keys(ws.settings.providers) as ProviderId[]).filter(
-    (id) => ws.settings.providers[id].apiKey,
+    (id) => keys[id],
   );
   const lastActivity = [
     p.project.updatedAt,

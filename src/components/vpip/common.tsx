@@ -123,9 +123,9 @@ export function EnginePicker({ compact = false }: { compact?: boolean }) {
       <span
         className={cn(
           "size-1.5 rounded-full",
-          cfg.apiKey ? (cfg.status === "error" ? "bg-destructive" : "bg-success") : "bg-muted-foreground",
+          cfg.status === "error" ? "bg-destructive" : cfg.status === "ok" ? "bg-success" : "bg-muted-foreground",
         )}
-        title={cfg.apiKey ? (cfg.statusMessage ?? "Key saved") : "No API key"}
+        title={cfg.statusMessage ?? "Not tested yet"}
       />
     </div>
   );
