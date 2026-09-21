@@ -45,6 +45,7 @@ function DiscussionPage() {
   const { provider, cfg, author } = useEngine();
   const { keys } = useAiKeys();
   const discussion = p.discussions.find((d) => d.id === discussionId);
+  const marker = focus ? p.knowledge.find((k) => k.id === focus) : undefined;
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
