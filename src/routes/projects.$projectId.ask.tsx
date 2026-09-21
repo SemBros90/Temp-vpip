@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useProject } from "@/lib/vpip/store";
 import { streamChat } from "@/lib/vpip/ai";
+import { useAiKeys } from "@/lib/vpip/keys";
+import { PROVIDER_LABEL } from "@/lib/vpip/types";
 import {
   buildContextPackage,
   memoryDigest,

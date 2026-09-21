@@ -16,7 +16,8 @@ import {
   type ProjectMemory,
 } from "@/lib/vpip/engine";
 import { discussionToMarkdown, download, slug } from "@/lib/vpip/files";
-import type { Attachment } from "@/lib/vpip/types";
+import { PROVIDER_LABEL, type Attachment } from "@/lib/vpip/types";
+import { useAiKeys } from "@/lib/vpip/keys";
 
 export const Route = createFileRoute("/projects/$projectId/discussions/$discussionId")({
   head: () => ({

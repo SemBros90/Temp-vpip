@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useProject, useVpip } from "@/lib/vpip/store";
 import { exportProjectZip } from "@/lib/vpip/files";
 import { PROVIDER_LABEL, type ProviderId } from "@/lib/vpip/types";
+import { useAiKeys } from "@/lib/vpip/keys";
 
 export const Route = createFileRoute("/projects/$projectId/")({
   head: () => ({
