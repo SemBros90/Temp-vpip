@@ -14,9 +14,12 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdAskRouteImport } from './routes/projects.$projectId.ask'
+import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects.$projectId.documents'
 import { Route as ProjectsProjectIdExplorerRouteImport } from './routes/projects.$projectId.explorer'
 import { Route as ProjectsProjectIdInboxRouteImport } from './routes/projects.$projectId.inbox'
+import { Route as ProjectsProjectIdPromptsRouteImport } from './routes/projects.$projectId.prompts'
 import { Route as ProjectsProjectIdRegisterRouteImport } from './routes/projects.$projectId.register'
+import { Route as ProjectsProjectIdSnapshotsRouteImport } from './routes/projects.$projectId.snapshots'
 import { Route as ProjectsProjectIdDiscussionsIndexRouteImport } from './routes/projects.$projectId.discussions.index'
 import { Route as ProjectsProjectIdDiscussionsDiscussionIdRouteImport } from './routes/projects.$projectId.discussions.$discussionId'
 
@@ -45,6 +48,12 @@ const ProjectsProjectIdAskRoute = ProjectsProjectIdAskRouteImport.update({
   path: '/ask',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdDocumentsRoute =
+  ProjectsProjectIdDocumentsRouteImport.update({
+    id: '/documents',
+    path: '/documents',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdExplorerRoute =
   ProjectsProjectIdExplorerRouteImport.update({
     id: '/explorer',
@@ -56,10 +65,22 @@ const ProjectsProjectIdInboxRoute = ProjectsProjectIdInboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdPromptsRoute =
+  ProjectsProjectIdPromptsRouteImport.update({
+    id: '/prompts',
+    path: '/prompts',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdRegisterRoute =
   ProjectsProjectIdRegisterRouteImport.update({
     id: '/register',
     path: '/register',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdSnapshotsRoute =
+  ProjectsProjectIdSnapshotsRouteImport.update({
+    id: '/snapshots',
+    path: '/snapshots',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
 const ProjectsProjectIdDiscussionsIndexRoute =
@@ -80,9 +101,12 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
+  '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
@@ -91,9 +115,12 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
+  '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions': typeof ProjectsProjectIdDiscussionsIndexRoute
@@ -104,9 +131,12 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
+  '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
@@ -118,9 +148,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects/$projectId'
     | '/projects/$projectId/ask'
+    | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
+    | '/projects/$projectId/prompts'
     | '/projects/$projectId/register'
+    | '/projects/$projectId/snapshots'
     | '/projects/$projectId/'
     | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions/'
@@ -129,9 +162,12 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/projects/$projectId/ask'
+    | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
+    | '/projects/$projectId/prompts'
     | '/projects/$projectId/register'
+    | '/projects/$projectId/snapshots'
     | '/projects/$projectId'
     | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions'
@@ -141,9 +177,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects/$projectId'
     | '/projects/$projectId/ask'
+    | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
+    | '/projects/$projectId/prompts'
     | '/projects/$projectId/register'
+    | '/projects/$projectId/snapshots'
     | '/projects/$projectId/'
     | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions/'
@@ -192,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdAskRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/documents': {
+      id: '/projects/$projectId/documents'
+      path: '/documents'
+      fullPath: '/projects/$projectId/documents'
+      preLoaderRoute: typeof ProjectsProjectIdDocumentsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/explorer': {
       id: '/projects/$projectId/explorer'
       path: '/explorer'
@@ -206,11 +252,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdInboxRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/prompts': {
+      id: '/projects/$projectId/prompts'
+      path: '/prompts'
+      fullPath: '/projects/$projectId/prompts'
+      preLoaderRoute: typeof ProjectsProjectIdPromptsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/register': {
       id: '/projects/$projectId/register'
       path: '/register'
       fullPath: '/projects/$projectId/register'
       preLoaderRoute: typeof ProjectsProjectIdRegisterRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/snapshots': {
+      id: '/projects/$projectId/snapshots'
+      path: '/snapshots'
+      fullPath: '/projects/$projectId/snapshots'
+      preLoaderRoute: typeof ProjectsProjectIdSnapshotsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/discussions/': {
@@ -232,9 +292,12 @@ declare module '@tanstack/react-router' {
 
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdAskRoute: typeof ProjectsProjectIdAskRoute
+  ProjectsProjectIdDocumentsRoute: typeof ProjectsProjectIdDocumentsRoute
   ProjectsProjectIdExplorerRoute: typeof ProjectsProjectIdExplorerRoute
   ProjectsProjectIdInboxRoute: typeof ProjectsProjectIdInboxRoute
+  ProjectsProjectIdPromptsRoute: typeof ProjectsProjectIdPromptsRoute
   ProjectsProjectIdRegisterRoute: typeof ProjectsProjectIdRegisterRoute
+  ProjectsProjectIdSnapshotsRoute: typeof ProjectsProjectIdSnapshotsRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
   ProjectsProjectIdDiscussionsDiscussionIdRoute: typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   ProjectsProjectIdDiscussionsIndexRoute: typeof ProjectsProjectIdDiscussionsIndexRoute
@@ -242,9 +305,12 @@ interface ProjectsProjectIdRouteChildren {
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdAskRoute: ProjectsProjectIdAskRoute,
+  ProjectsProjectIdDocumentsRoute: ProjectsProjectIdDocumentsRoute,
   ProjectsProjectIdExplorerRoute: ProjectsProjectIdExplorerRoute,
   ProjectsProjectIdInboxRoute: ProjectsProjectIdInboxRoute,
+  ProjectsProjectIdPromptsRoute: ProjectsProjectIdPromptsRoute,
   ProjectsProjectIdRegisterRoute: ProjectsProjectIdRegisterRoute,
+  ProjectsProjectIdSnapshotsRoute: ProjectsProjectIdSnapshotsRoute,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
   ProjectsProjectIdDiscussionsDiscussionIdRoute:
     ProjectsProjectIdDiscussionsDiscussionIdRoute,
