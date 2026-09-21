@@ -138,6 +138,14 @@ function DiscussionPage() {
 
     const history: ChatMessage[] = [
       { role: "system", content: discussionSystemPrompt(memory, discussion) },
+      ...(marker
+        ? [
+            {
+              role: "system" as const,
+              content: `This discussion is focused on knowledge item ${marker.code} (${marker.type}, status: ${marker.status}).\nTitle: ${marker.title}\nDescription: ${marker.description}\nKeep your answers anchored to this item.`,
+            },
+          ]
+        : []),
       ...discussion.messages.map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
       { role: "user", content: text + attachmentNote },
     ];
