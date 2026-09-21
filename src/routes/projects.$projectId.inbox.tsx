@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Check, Merge, Pencil, X } from "lucide-react";
+import { Check, Merge, MessageSquarePlus, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { EmptyState, relTime, Tag, TypeTag } from "@/components/vpip/common";
@@ -23,7 +23,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useProject, useVpipActions } from "@/lib/vpip/store";
-import { KNOWLEDGE_TYPES, type KnowledgeItem, type KnowledgeType } from "@/lib/vpip/types";
+import {
+  KNOWLEDGE_TYPES,
+  type DiscussionType,
+  type KnowledgeItem,
+  type KnowledgeType,
+} from "@/lib/vpip/types";
+
+const DISCUSSION_TYPE_FOR: Record<KnowledgeType, DiscussionType> = {
+  Decision: "Decision",
+  Requirement: "Requirement",
+  Idea: "General",
+  Risk: "Risk",
+  Question: "General",
+  Assumption: "General",
+};
 
 export const Route = createFileRoute("/projects/$projectId/inbox")({
   head: () => ({
@@ -47,8 +61,27 @@ function InboxPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<KnowledgeItem | null>(null);
 
+  const navigate = useNavigate();
+
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const discuss = (k: KnowledgeItem) => {
+    let discussionId = k.sourceDiscussionId;
+    if (!discussionId) {
+      const created = actions.createDiscussion({
+        projectId,
+        title: `Discuss · ${k.code} ${k.title}`,
+        type: DISCUSSION_TYPE_FOR[k.type],
+      });
+      discussionId = created.id;
+    }
+    void navigate({
+      to: "/projects/$projectId/discussions/$discussionId",
+      params: { projectId, discussionId },
+      search: { focus: k.id },
+    });
+  };
 
   return (
     <Shell
@@ -125,6 +158,15 @@ function InboxPage() {
                 </div>
               </div>
               <div className="flex shrink-0 items-start gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  title="Open a discussion focused on this candidate"
+                  onClick={() => discuss(k)}
+                >
+                  <MessageSquarePlus className="size-4" /> Discuss
+                </Button>
                 <Button variant="ghost" size="icon" className="size-8" onClick={() => setEditing(k)}>
                   <Pencil className="size-4" />
                 </Button>

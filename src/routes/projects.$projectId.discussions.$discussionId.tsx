@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Download, Loader2, Paperclip, Save, Send, Sparkles, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
-import { EnginePicker, Tag, useEngine } from "@/components/vpip/common";
+import { EnginePicker, Tag, TypeTag, useEngine } from "@/components/vpip/common";
 import { Markdown } from "@/lib/vpip/markdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,8 @@ import { PROVIDER_LABEL, type Attachment } from "@/lib/vpip/types";
 import { useAiKeys } from "@/lib/vpip/keys";
 
 export const Route = createFileRoute("/projects/$projectId/discussions/$discussionId")({
+  validateSearch: (search: Record<string, unknown>): { focus?: string } =>
+    typeof search['focus'] === "string" && search['focus'] ? { focus: search['focus'] } : {},
   head: () => ({
     meta: [
       { title: "Discussion — VPIP" },
@@ -36,12 +38,14 @@ export const Route = createFileRoute("/projects/$projectId/discussions/$discussi
 
 function DiscussionPage() {
   const { projectId, discussionId } = Route.useParams();
+  const { focus } = Route.useSearch();
   const { saveNow } = useVpip();
   const p = useProject(projectId);
   const actions = useVpipActions();
   const { provider, cfg, author } = useEngine();
   const { keys } = useAiKeys();
   const discussion = p.discussions.find((d) => d.id === discussionId);
+  const marker = focus ? p.knowledge.find((k) => k.id === focus) : undefined;
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -134,6 +138,14 @@ function DiscussionPage() {
 
     const history: ChatMessage[] = [
       { role: "system", content: discussionSystemPrompt(memory, discussion) },
+      ...(marker
+        ? [
+            {
+              role: "system" as const,
+              content: `This discussion is focused on knowledge item ${marker.code} (${marker.type}, status: ${marker.status}).\nTitle: ${marker.title}\nDescription: ${marker.description}\nKeep your answers anchored to this item.`,
+            },
+          ]
+        : []),
       ...discussion.messages.map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
       { role: "user", content: text + attachmentNote },
     ];
@@ -261,6 +273,30 @@ function DiscussionPage() {
       <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-4xl space-y-4 px-6 py-6">
+            {marker ? (
+              <div className="panel sticky top-0 z-10 border-warning/40 bg-warning/5 p-4 backdrop-blur">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="label-mono text-warning">Discussing</span>
+                  <TypeTag type={marker.type} />
+                  <Tag>{marker.code}</Tag>
+                  <Tag>{marker.status}</Tag>
+                  <span className="text-sm font-medium">{marker.title}</span>
+                </div>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  {marker.description}
+                </p>
+                <div className="mt-2">
+                  <Link
+                    to="/projects/$projectId/inbox"
+                    params={{ projectId }}
+                    className="label-mono hover:text-primary"
+                  >
+                    ← back to Knowledge Inbox
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
             {discussion.summary ? (
               <div className="panel border-primary/30 bg-primary/5 p-4">
                 <div className="label-mono mb-1 text-primary">Discussion summary</div>
