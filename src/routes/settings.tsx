@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, PlugZap, Trash2, Upload } from "lucide-react";
+import { Download, Loader2, PlugZap, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { Tag } from "@/components/vpip/common";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { useVpip, useVpipActions } from "@/lib/vpip/store";
 import { testConnection } from "@/lib/vpip/ai";
+import { useAiKeys } from "@/lib/vpip/keys";
 import { exportWorkspaceZip } from "@/lib/vpip/files";
 import { vaultSize } from "@/lib/vpip/db";
 import {
@@ -42,6 +43,7 @@ export const Route = createFileRoute("/settings")({
 function SettingsPage() {
   const { ws, saveNow, resetVault, importWorkspace } = useVpip();
   const actions = useVpipActions();
+  const { keys } = useAiKeys();
   const [testing, setTesting] = useState<ProviderId | null>(null);
   const [size, setSize] = useState(0);
   const importRef = useRef<HTMLInputElement>(null);
