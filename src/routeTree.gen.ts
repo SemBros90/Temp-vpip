@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
+import { Route as ApiAiChatRouteImport } from './routes/api/ai.chat'
+import { Route as ApiAiStatusRouteImport } from './routes/api/ai.status'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdAskRouteImport } from './routes/projects.$projectId.ask'
 import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects.$projectId.documents'
@@ -36,6 +38,16 @@ const SettingsRoute = SettingsRouteImport.update({
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAiChatRoute = ApiAiChatRouteImport.update({
+  id: '/api/ai/chat',
+  path: '/api/ai/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAiStatusRoute = ApiAiStatusRouteImport.update({
+  id: '/api/ai/status',
+  path: '/api/ai/status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
@@ -100,6 +112,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/api/ai/chat': typeof ApiAiChatRoute
+  '/api/ai/status': typeof ApiAiStatusRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
@@ -114,6 +128,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/api/ai/chat': typeof ApiAiChatRoute
+  '/api/ai/status': typeof ApiAiStatusRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
@@ -130,6 +146,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/api/ai/chat': typeof ApiAiChatRoute
+  '/api/ai/status': typeof ApiAiStatusRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
@@ -147,6 +165,8 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/projects/$projectId'
+    | '/api/ai/chat'
+    | '/api/ai/status'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
@@ -161,6 +181,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/settings'
+    | '/api/ai/chat'
+    | '/api/ai/status'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
@@ -176,6 +198,8 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/projects/$projectId'
+    | '/api/ai/chat'
+    | '/api/ai/status'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
@@ -192,6 +216,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingsRoute: typeof SettingsRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
+  ApiAiChatRoute: typeof ApiAiChatRoute
+  ApiAiStatusRoute: typeof ApiAiStatusRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -215,6 +241,20 @@ declare module '@tanstack/react-router' {
       path: '/projects/$projectId'
       fullPath: '/projects/$projectId'
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai/chat': {
+      id: '/api/ai/chat'
+      path: '/api/ai/chat'
+      fullPath: '/api/ai/chat'
+      preLoaderRoute: typeof ApiAiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai/status': {
+      id: '/api/ai/status'
+      path: '/api/ai/status'
+      fullPath: '/api/ai/status'
+      preLoaderRoute: typeof ApiAiStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId/': {
@@ -325,6 +365,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingsRoute: SettingsRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
+  ApiAiChatRoute: ApiAiChatRoute,
+  ApiAiStatusRoute: ApiAiStatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
