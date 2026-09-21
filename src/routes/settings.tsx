@@ -70,25 +70,24 @@ function SettingsPage() {
           <div className="space-y-5">
             {(Object.keys(PROVIDER_LABEL) as ProviderId[]).map((id) => {
               const cfg = ws.settings.providers[id];
+              const configured = keys[id];
               return (
                 <div key={id} className="space-y-2 border-b border-border pb-5 last:border-0 last:pb-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold">{PROVIDER_LABEL[id]}</span>
-                    <Tag>
-                      {cfg.status === "ok" ? "connected" : cfg.status === "error" ? "error" : "not tested"}
-                    </Tag>
+                    <Tag>{configured ? "key configured" : "no key"}</Tag>
+                    {cfg.status === "ok" ? <Tag>connected</Tag> : cfg.status === "error" ? <Tag>error</Tag> : null}
                     {ws.settings.defaultProvider === id ? <Tag>default</Tag> : null}
                   </div>
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_200px]">
                     <div>
                       <div className="label-mono mb-1">API key</div>
-                      <Input
-                        type="password"
-                        placeholder={id === "openai" ? "sk-…" : "sk-…"}
-                        value={cfg.apiKey}
-                        onChange={(e) => actions.setProvider(id, { apiKey: e.target.value })}
-                        className="font-mono text-xs"
-                      />
+                      <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-xs text-muted-foreground">
+                        <ShieldCheck className="size-3.5" />
+                        {configured
+                          ? "Stored securely on the server — never shown or sent to the browser."
+                          : "Not set. Ask Lovable to add your key and it is saved encrypted on the server."}
+                      </div>
                     </div>
                     <div>
                       <div className="label-mono mb-1">Model</div>
@@ -108,14 +107,6 @@ function SettingsPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <div>
-                    <div className="label-mono mb-1">Base URL</div>
-                    <Input
-                      value={cfg.baseUrl}
-                      onChange={(e) => actions.setProvider(id, { baseUrl: e.target.value })}
-                      className="font-mono text-xs"
-                    />
                   </div>
                   <div className="flex items-center gap-2 pt-1">
                     <Button size="sm" variant="outline" className="h-8" onClick={() => void test(id)}>
@@ -143,8 +134,9 @@ function SettingsPage() {
             })}
           </div>
           <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-            Keys are stored only in this browser's local vault and are sent directly to the provider
-            you select. Switching engines never changes your project memory.
+            API keys are held in encrypted server storage and used only by this app's own backend when
+            it calls the engine. They are never stored in the project database, never sent to the
+            browser, and switching engines never changes your project memory.
           </p>
         </section>
 
