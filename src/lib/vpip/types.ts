@@ -190,9 +190,8 @@ export interface Project {
 }
 
 export interface ProviderConfig {
-  apiKey: string;
+  /** API keys are NOT stored here — they live in encrypted server storage. */
   model: string;
-  baseUrl: string;
   status: "unknown" | "ok" | "error";
   statusMessage?: string;
   testedAt?: string;
@@ -240,15 +239,11 @@ export function emptyWorkspace(): Workspace {
       backupFolderLabel: "Backups",
       providers: {
         openai: {
-          apiKey: "",
           model: "gpt-4o-mini",
-          baseUrl: "https://api.openai.com/v1",
           status: "unknown",
         },
         deepseek: {
-          apiKey: "",
           model: "deepseek-chat",
-          baseUrl: "https://api.deepseek.com/v1",
           status: "unknown",
         },
       },
