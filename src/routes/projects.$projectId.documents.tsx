@@ -16,7 +16,8 @@ import {
 import { useProject, useVpipActions } from "@/lib/vpip/store";
 import { generateDocument, type ProjectMemory } from "@/lib/vpip/engine";
 import { download, slug } from "@/lib/vpip/files";
-import { DOCUMENT_KINDS, type DocumentKind } from "@/lib/vpip/types";
+import { DOCUMENT_KINDS, PROVIDER_LABEL, type DocumentKind } from "@/lib/vpip/types";
+import { useAiKeys } from "@/lib/vpip/keys";
 
 export const Route = createFileRoute("/projects/$projectId/documents")({
   head: () => ({
@@ -38,14 +39,15 @@ function DocumentsPage() {
   const p = useProject(projectId);
   const actions = useVpipActions();
   const { provider, cfg } = useEngine();
+  const { keys } = useAiKeys();
   const [kind, setKind] = useState<DocumentKind>("Project Summary");
   const [discussionId, setDiscussionId] = useState<string>("none");
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
 
   const generate = async () => {
-    if (!cfg.apiKey) {
-      toast.error("Add an API key in Settings first.");
+    if (!keys[provider]) {
+      toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }
     setBusy(true);

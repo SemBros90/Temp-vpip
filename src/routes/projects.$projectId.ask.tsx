@@ -36,6 +36,7 @@ function AskPage() {
   const { projectId } = Route.useParams();
   const p = useProject(projectId);
   const { provider, cfg } = useEngine();
+  const { keys } = useAiKeys();
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [hits, setHits] = useState<ContextHit[]>([]);
@@ -44,8 +45,8 @@ function AskPage() {
   const ask = async () => {
     const q = question.trim();
     if (!q || busy) return;
-    if (!cfg.apiKey) {
-      toast.error("Add an API key in Settings first.");
+    if (!keys[provider]) {
+      toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }
     const memory: ProjectMemory = {

@@ -17,7 +17,8 @@ import {
 import { useProject, useVpipActions } from "@/lib/vpip/store";
 import { generatePrompt, type ProjectMemory } from "@/lib/vpip/engine";
 import { download, slug } from "@/lib/vpip/files";
-import { PROMPT_KINDS, type PromptKind } from "@/lib/vpip/types";
+import { PROMPT_KINDS, PROVIDER_LABEL, type PromptKind } from "@/lib/vpip/types";
+import { useAiKeys } from "@/lib/vpip/keys";
 
 export const Route = createFileRoute("/projects/$projectId/prompts")({
   head: () => ({
@@ -39,14 +40,15 @@ function PromptsPage() {
   const p = useProject(projectId);
   const actions = useVpipActions();
   const { provider, cfg } = useEngine();
+  const { keys } = useAiKeys();
   const [kind, setKind] = useState<PromptKind>("Lovable Prompt");
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
 
   const generate = async () => {
-    if (!cfg.apiKey) {
-      toast.error("Add an API key in Settings first.");
+    if (!keys[provider]) {
+      toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }
     setBusy(true);
