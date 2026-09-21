@@ -61,8 +61,27 @@ function InboxPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<KnowledgeItem | null>(null);
 
+  const navigate = useNavigate();
+
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const discuss = (k: KnowledgeItem) => {
+    let discussionId = k.sourceDiscussionId;
+    if (!discussionId) {
+      const created = actions.createDiscussion({
+        projectId,
+        title: `Discuss · ${k.code} ${k.title}`,
+        type: DISCUSSION_TYPE_FOR[k.type],
+      });
+      discussionId = created.id;
+    }
+    void navigate({
+      to: "/projects/$projectId/discussions/$discussionId",
+      params: { projectId, discussionId },
+      search: { focus: k.id },
+    });
+  };
 
   return (
     <Shell
