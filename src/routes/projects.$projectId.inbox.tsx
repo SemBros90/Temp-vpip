@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Check, Merge, Pencil, X } from "lucide-react";
+import { Check, Merge, MessageSquarePlus, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { EmptyState, relTime, Tag, TypeTag } from "@/components/vpip/common";
