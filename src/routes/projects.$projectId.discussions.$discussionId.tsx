@@ -273,6 +273,30 @@ function DiscussionPage() {
       <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-4xl space-y-4 px-6 py-6">
+            {marker ? (
+              <div className="panel sticky top-0 z-10 border-warning/40 bg-warning/5 p-4 backdrop-blur">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="label-mono text-warning">Discussing</span>
+                  <TypeTag type={marker.type} />
+                  <Tag>{marker.code}</Tag>
+                  <Tag>{marker.status}</Tag>
+                  <span className="text-sm font-medium">{marker.title}</span>
+                </div>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  {marker.description}
+                </p>
+                <div className="mt-2">
+                  <Link
+                    to="/projects/$projectId/inbox"
+                    params={{ projectId }}
+                    className="label-mono hover:text-primary"
+                  >
+                    ← back to Knowledge Inbox
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
             {discussion.summary ? (
               <div className="panel border-primary/30 bg-primary/5 p-4">
                 <div className="label-mono mb-1 text-primary">Discussion summary</div>
