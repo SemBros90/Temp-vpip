@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Download, Loader2, Paperclip, Save, Send, Sparkles, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
-import { EnginePicker, Tag, useEngine } from "@/components/vpip/common";
+import { EnginePicker, Tag, TypeTag, useEngine } from "@/components/vpip/common";
 import { Markdown } from "@/lib/vpip/markdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
