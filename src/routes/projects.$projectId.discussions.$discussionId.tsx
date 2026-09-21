@@ -161,7 +161,10 @@ function DiscussionPage() {
   };
 
   const runExtraction = async () => {
-    if (!cfg.apiKey) return toast.error("Add an API key in Settings first.");
+    if (!cfg.apiKey) {
+      toast.error("Add an API key in Settings first.");
+      return;
+    }
     setWorking("extract");
     try {
       const candidates = await extractKnowledge(provider, cfg, discussion);
@@ -192,7 +195,10 @@ function DiscussionPage() {
   };
 
   const runSummary = async () => {
-    if (!cfg.apiKey) return toast.error("Add an API key in Settings first.");
+    if (!cfg.apiKey) {
+      toast.error("Add an API key in Settings first.");
+      return;
+    }
     setWorking("summary");
     try {
       const summary = await summariseDiscussion(provider, cfg, discussion);

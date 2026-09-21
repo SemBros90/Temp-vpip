@@ -10,13 +10,20 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdDiscussionsIndexRouteImport } from './routes/projects.$projectId.discussions.index'
+import { Route as ProjectsProjectIdDiscussionsDiscussionIdRouteImport } from './routes/projects.$projectId.discussions.$discussionId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
@@ -35,44 +42,66 @@ const ProjectsProjectIdDiscussionsIndexRoute =
     path: '/discussions/',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdDiscussionsDiscussionIdRoute =
+  ProjectsProjectIdDiscussionsDiscussionIdRouteImport.update({
+    id: '/discussions/$discussionId',
+    path: '/discussions/$discussionId',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/settings'
     | '/projects/$projectId'
     | '/projects/$projectId/'
+    | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/projects/$projectId' | '/projects/$projectId/discussions'
+  to:
+    | '/'
+    | '/settings'
+    | '/projects/$projectId'
+    | '/projects/$projectId/discussions/$discussionId'
+    | '/projects/$projectId/discussions'
   id:
     | '__root__'
     | '/'
+    | '/settings'
     | '/projects/$projectId'
     | '/projects/$projectId/'
+    | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
 }
 
@@ -83,6 +112,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId': {
@@ -106,16 +142,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdDiscussionsIndexRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/discussions/$discussionId': {
+      id: '/projects/$projectId/discussions/$discussionId'
+      path: '/discussions/$discussionId'
+      fullPath: '/projects/$projectId/discussions/$discussionId'
+      preLoaderRoute: typeof ProjectsProjectIdDiscussionsDiscussionIdRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
   }
 }
 
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
+  ProjectsProjectIdDiscussionsDiscussionIdRoute: typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   ProjectsProjectIdDiscussionsIndexRoute: typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
+  ProjectsProjectIdDiscussionsDiscussionIdRoute:
+    ProjectsProjectIdDiscussionsDiscussionIdRoute,
   ProjectsProjectIdDiscussionsIndexRoute:
     ProjectsProjectIdDiscussionsIndexRoute,
 }
@@ -125,6 +171,7 @@ const ProjectsProjectIdRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
