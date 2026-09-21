@@ -179,7 +179,7 @@ export async function vaultWrite(value: unknown): Promise<void> {
       auto_save_interval_sec: ws.settings.autoSaveIntervalSec,
       project_root_label: ws.settings.projectRootLabel,
       backup_folder_label: ws.settings.backupFolderLabel,
-      providers: ws.settings.providers,
+      providers: JSON.parse(JSON.stringify(ws.settings.providers)),
       saved_at: new Date().toISOString(),
     },
     { onConflict: "id" },
