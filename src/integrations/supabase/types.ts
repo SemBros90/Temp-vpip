@@ -14,7 +14,301 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      vpip_discussions: {
+        Row: {
+          attachments: Json
+          created_at: string
+          id: string
+          messages: Json
+          project_id: string
+          summary: string | null
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json
+          created_at?: string
+          id: string
+          messages?: Json
+          project_id: string
+          summary?: string | null
+          title: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json
+          created_at?: string
+          id?: string
+          messages?: Json
+          project_id?: string
+          summary?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_discussions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_documents: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          markdown: string
+          model: string | null
+          project_id: string
+          provider: string | null
+          source_discussion_id: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          kind: string
+          markdown?: string
+          model?: string | null
+          project_id: string
+          provider?: string | null
+          source_discussion_id?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          markdown?: string
+          model?: string | null
+          project_id?: string
+          provider?: string | null
+          source_discussion_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_knowledge: {
+        Row: {
+          author: string
+          code: string
+          created_at: string
+          description: string
+          id: string
+          merged_from: Json
+          project_id: string
+          provider: string | null
+          revisions: Json
+          source_discussion_id: string | null
+          source_discussion_title: string | null
+          source_messages: Json
+          status: string
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          author?: string
+          code: string
+          created_at?: string
+          description?: string
+          id: string
+          merged_from?: Json
+          project_id: string
+          provider?: string | null
+          revisions?: Json
+          source_discussion_id?: string | null
+          source_discussion_title?: string | null
+          source_messages?: Json
+          status?: string
+          title: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          author?: string
+          code?: string
+          created_at?: string
+          description?: string
+          id?: string
+          merged_from?: Json
+          project_id?: string
+          provider?: string | null
+          revisions?: Json
+          source_discussion_id?: string | null
+          source_discussion_title?: string | null
+          source_messages?: Json
+          status?: string
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_knowledge_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_projects: {
+        Row: {
+          archived: boolean
+          created_at: string
+          description: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          description?: string
+          id: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      vpip_prompts: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          markdown: string
+          model: string | null
+          project_id: string
+          provider: string | null
+          title: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          kind: string
+          markdown?: string
+          model?: string | null
+          project_id: string
+          provider?: string | null
+          title: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          markdown?: string
+          model?: string | null
+          project_id?: string
+          provider?: string | null
+          title?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_prompts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_settings: {
+        Row: {
+          author: string
+          auto_save_interval_sec: number
+          backup_folder_label: string
+          default_provider: string
+          id: number
+          project_root_label: string
+          providers: Json
+          saved_at: string
+        }
+        Insert: {
+          author?: string
+          auto_save_interval_sec?: number
+          backup_folder_label?: string
+          default_provider?: string
+          id?: number
+          project_root_label?: string
+          providers?: Json
+          saved_at?: string
+        }
+        Update: {
+          author?: string
+          auto_save_interval_sec?: number
+          backup_folder_label?: string
+          default_provider?: string
+          id?: number
+          project_root_label?: string
+          providers?: Json
+          saved_at?: string
+        }
+        Relationships: []
+      }
+      vpip_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          markdown: string
+          project_id: string
+          ref_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          kind: string
+          markdown?: string
+          project_id: string
+          ref_id: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          markdown?: string
+          project_id?: string
+          ref_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
