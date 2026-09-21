@@ -10,33 +10,188 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
+import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
+import { Route as ProjectsProjectIdAskRouteImport } from './routes/projects.$projectId.ask'
+import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects.$projectId.documents'
+import { Route as ProjectsProjectIdExplorerRouteImport } from './routes/projects.$projectId.explorer'
+import { Route as ProjectsProjectIdInboxRouteImport } from './routes/projects.$projectId.inbox'
+import { Route as ProjectsProjectIdPromptsRouteImport } from './routes/projects.$projectId.prompts'
+import { Route as ProjectsProjectIdRegisterRouteImport } from './routes/projects.$projectId.register'
+import { Route as ProjectsProjectIdSnapshotsRouteImport } from './routes/projects.$projectId.snapshots'
+import { Route as ProjectsProjectIdDiscussionsIndexRouteImport } from './routes/projects.$projectId.discussions.index'
+import { Route as ProjectsProjectIdDiscussionsDiscussionIdRouteImport } from './routes/projects.$projectId.discussions.$discussionId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
+  id: '/projects/$projectId',
+  path: '/projects/$projectId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
+const ProjectsProjectIdAskRoute = ProjectsProjectIdAskRouteImport.update({
+  id: '/ask',
+  path: '/ask',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
+const ProjectsProjectIdDocumentsRoute =
+  ProjectsProjectIdDocumentsRouteImport.update({
+    id: '/documents',
+    path: '/documents',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdExplorerRoute =
+  ProjectsProjectIdExplorerRouteImport.update({
+    id: '/explorer',
+    path: '/explorer',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdInboxRoute = ProjectsProjectIdInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
+const ProjectsProjectIdPromptsRoute =
+  ProjectsProjectIdPromptsRouteImport.update({
+    id: '/prompts',
+    path: '/prompts',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdRegisterRoute =
+  ProjectsProjectIdRegisterRouteImport.update({
+    id: '/register',
+    path: '/register',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdSnapshotsRoute =
+  ProjectsProjectIdSnapshotsRouteImport.update({
+    id: '/snapshots',
+    path: '/snapshots',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdDiscussionsIndexRoute =
+  ProjectsProjectIdDiscussionsIndexRouteImport.update({
+    id: '/discussions/',
+    path: '/discussions/',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdDiscussionsDiscussionIdRoute =
+  ProjectsProjectIdDiscussionsDiscussionIdRouteImport.update({
+    id: '/discussions/$discussionId',
+    path: '/discussions/$discussionId',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
+  '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
+  '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
+  '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
+  '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
+  '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
+  '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
+  '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
+  '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
+  '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
+  '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
+  '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
+  '/projects/$projectId/discussions': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
+  '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
+  '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
+  '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
+  '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
+  '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
+  '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/settings'
+    | '/projects/$projectId'
+    | '/projects/$projectId/ask'
+    | '/projects/$projectId/documents'
+    | '/projects/$projectId/explorer'
+    | '/projects/$projectId/inbox'
+    | '/projects/$projectId/prompts'
+    | '/projects/$projectId/register'
+    | '/projects/$projectId/snapshots'
+    | '/projects/$projectId/'
+    | '/projects/$projectId/discussions/$discussionId'
+    | '/projects/$projectId/discussions/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/settings'
+    | '/projects/$projectId/ask'
+    | '/projects/$projectId/documents'
+    | '/projects/$projectId/explorer'
+    | '/projects/$projectId/inbox'
+    | '/projects/$projectId/prompts'
+    | '/projects/$projectId/register'
+    | '/projects/$projectId/snapshots'
+    | '/projects/$projectId'
+    | '/projects/$projectId/discussions/$discussionId'
+    | '/projects/$projectId/discussions'
+  id:
+    | '__root__'
+    | '/'
+    | '/settings'
+    | '/projects/$projectId'
+    | '/projects/$projectId/ask'
+    | '/projects/$projectId/documents'
+    | '/projects/$projectId/explorer'
+    | '/projects/$projectId/inbox'
+    | '/projects/$projectId/prompts'
+    | '/projects/$projectId/register'
+    | '/projects/$projectId/snapshots'
+    | '/projects/$projectId/'
+    | '/projects/$projectId/discussions/$discussionId'
+    | '/projects/$projectId/discussions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRoute
+  ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +203,128 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$projectId': {
+      id: '/projects/$projectId'
+      path: '/projects/$projectId'
+      fullPath: '/projects/$projectId'
+      preLoaderRoute: typeof ProjectsProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$projectId/': {
+      id: '/projects/$projectId/'
+      path: '/'
+      fullPath: '/projects/$projectId/'
+      preLoaderRoute: typeof ProjectsProjectIdIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/ask': {
+      id: '/projects/$projectId/ask'
+      path: '/ask'
+      fullPath: '/projects/$projectId/ask'
+      preLoaderRoute: typeof ProjectsProjectIdAskRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/documents': {
+      id: '/projects/$projectId/documents'
+      path: '/documents'
+      fullPath: '/projects/$projectId/documents'
+      preLoaderRoute: typeof ProjectsProjectIdDocumentsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/explorer': {
+      id: '/projects/$projectId/explorer'
+      path: '/explorer'
+      fullPath: '/projects/$projectId/explorer'
+      preLoaderRoute: typeof ProjectsProjectIdExplorerRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/inbox': {
+      id: '/projects/$projectId/inbox'
+      path: '/inbox'
+      fullPath: '/projects/$projectId/inbox'
+      preLoaderRoute: typeof ProjectsProjectIdInboxRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/prompts': {
+      id: '/projects/$projectId/prompts'
+      path: '/prompts'
+      fullPath: '/projects/$projectId/prompts'
+      preLoaderRoute: typeof ProjectsProjectIdPromptsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/register': {
+      id: '/projects/$projectId/register'
+      path: '/register'
+      fullPath: '/projects/$projectId/register'
+      preLoaderRoute: typeof ProjectsProjectIdRegisterRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/snapshots': {
+      id: '/projects/$projectId/snapshots'
+      path: '/snapshots'
+      fullPath: '/projects/$projectId/snapshots'
+      preLoaderRoute: typeof ProjectsProjectIdSnapshotsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/discussions/': {
+      id: '/projects/$projectId/discussions/'
+      path: '/discussions'
+      fullPath: '/projects/$projectId/discussions/'
+      preLoaderRoute: typeof ProjectsProjectIdDiscussionsIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/discussions/$discussionId': {
+      id: '/projects/$projectId/discussions/$discussionId'
+      path: '/discussions/$discussionId'
+      fullPath: '/projects/$projectId/discussions/$discussionId'
+      preLoaderRoute: typeof ProjectsProjectIdDiscussionsDiscussionIdRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
   }
 }
 
+interface ProjectsProjectIdRouteChildren {
+  ProjectsProjectIdAskRoute: typeof ProjectsProjectIdAskRoute
+  ProjectsProjectIdDocumentsRoute: typeof ProjectsProjectIdDocumentsRoute
+  ProjectsProjectIdExplorerRoute: typeof ProjectsProjectIdExplorerRoute
+  ProjectsProjectIdInboxRoute: typeof ProjectsProjectIdInboxRoute
+  ProjectsProjectIdPromptsRoute: typeof ProjectsProjectIdPromptsRoute
+  ProjectsProjectIdRegisterRoute: typeof ProjectsProjectIdRegisterRoute
+  ProjectsProjectIdSnapshotsRoute: typeof ProjectsProjectIdSnapshotsRoute
+  ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
+  ProjectsProjectIdDiscussionsDiscussionIdRoute: typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
+  ProjectsProjectIdDiscussionsIndexRoute: typeof ProjectsProjectIdDiscussionsIndexRoute
+}
+
+const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
+  ProjectsProjectIdAskRoute: ProjectsProjectIdAskRoute,
+  ProjectsProjectIdDocumentsRoute: ProjectsProjectIdDocumentsRoute,
+  ProjectsProjectIdExplorerRoute: ProjectsProjectIdExplorerRoute,
+  ProjectsProjectIdInboxRoute: ProjectsProjectIdInboxRoute,
+  ProjectsProjectIdPromptsRoute: ProjectsProjectIdPromptsRoute,
+  ProjectsProjectIdRegisterRoute: ProjectsProjectIdRegisterRoute,
+  ProjectsProjectIdSnapshotsRoute: ProjectsProjectIdSnapshotsRoute,
+  ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
+  ProjectsProjectIdDiscussionsDiscussionIdRoute:
+    ProjectsProjectIdDiscussionsDiscussionIdRoute,
+  ProjectsProjectIdDiscussionsIndexRoute:
+    ProjectsProjectIdDiscussionsIndexRoute,
+}
+
+const ProjectsProjectIdRouteWithChildren =
+  ProjectsProjectIdRoute._addFileChildren(ProjectsProjectIdRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRoute,
+  ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
