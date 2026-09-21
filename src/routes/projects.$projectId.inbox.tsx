@@ -23,7 +23,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useProject, useVpipActions } from "@/lib/vpip/store";
-import { KNOWLEDGE_TYPES, type KnowledgeItem, type KnowledgeType } from "@/lib/vpip/types";
+import {
+  KNOWLEDGE_TYPES,
+  type DiscussionType,
+  type KnowledgeItem,
+  type KnowledgeType,
+} from "@/lib/vpip/types";
+
+const DISCUSSION_TYPE_FOR: Record<KnowledgeType, DiscussionType> = {
+  Decision: "Decision",
+  Requirement: "Requirement",
+  Idea: "General",
+  Risk: "Risk",
+  Question: "General",
+  Assumption: "General",
+};
 
 export const Route = createFileRoute("/projects/$projectId/inbox")({
   head: () => ({
