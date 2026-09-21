@@ -7,21 +7,20 @@ export interface ChatMessage {
 
 export class AIError extends Error {}
 
-function endpoint(cfg: ProviderConfig) {
-  return `${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`;
-}
+/**
+ * All provider calls go through this app's own server endpoint.
+ * API keys live in encrypted server storage and are never sent to the browser.
+ */
+const CHAT_URL = "/api/ai/chat";
 
 async function readError(res: Response) {
-  let detail = "";
   try {
-    const body = await res.json();
-    detail = body?.error?.message ?? JSON.stringify(body);
+    const body = (await res.json()) as { error?: string };
+    if (body?.error) return body.error;
   } catch {
-    detail = await res.text().catch(() => "");
+    /* fall through */
   }
-  if (res.status === 401) return "Invalid API key.";
-  if (res.status === 429) return "Rate limited or out of credit with the provider.";
-  return `${res.status} ${res.statusText}${detail ? ` — ${detail}` : ""}`;
+  return `${res.status} ${res.statusText}`;
 }
 
 export async function streamChat(
@@ -31,16 +30,10 @@ export async function streamChat(
   onDelta: (chunk: string) => void,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (!cfg.apiKey) {
-    throw new AIError(`No API key saved for ${provider}. Add one in Settings.`);
-  }
-  const res = await fetch(endpoint(cfg), {
+  const res = await fetch(CHAT_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${cfg.apiKey}`,
-    },
-    body: JSON.stringify({ model: cfg.model, messages, stream: true }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, model: cfg.model, messages, stream: true }),
     signal: signal ?? null,
   });
   if (!res.ok || !res.body) throw new AIError(await readError(res));
@@ -80,9 +73,7 @@ export async function completeChat(
   cfg: ProviderConfig,
   messages: ChatMessage[],
 ): Promise<string> {
-  let out = "";
-  out = await streamChat(provider, cfg, messages, () => {});
-  return out;
+  return streamChat(provider, cfg, messages, () => {});
 }
 
 export async function testConnection(
@@ -90,17 +81,14 @@ export async function testConnection(
   cfg: ProviderConfig,
 ): Promise<{ ok: boolean; message: string }> {
   try {
-    if (!cfg.apiKey) return { ok: false, message: "No API key saved." };
-    const res = await fetch(endpoint(cfg), {
+    const res = await fetch(CHAT_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${cfg.apiKey}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        provider,
         model: cfg.model,
         messages: [{ role: "user", content: "ping" }],
-        max_tokens: 5,
+        stream: false,
       }),
     });
     if (!res.ok) return { ok: false, message: await readError(res) };
