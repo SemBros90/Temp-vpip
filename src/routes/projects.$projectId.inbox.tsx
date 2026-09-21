@@ -158,6 +158,15 @@ function InboxPage() {
                 </div>
               </div>
               <div className="flex shrink-0 items-start gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  title="Open a discussion focused on this candidate"
+                  onClick={() => discuss(k)}
+                >
+                  <MessageSquarePlus className="size-4" /> Discuss
+                </Button>
                 <Button variant="ghost" size="icon" className="size-8" onClick={() => setEditing(k)}>
                   <Pencil className="size-4" />
                 </Button>
