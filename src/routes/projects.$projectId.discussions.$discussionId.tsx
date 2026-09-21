@@ -20,6 +20,8 @@ import { PROVIDER_LABEL, type Attachment } from "@/lib/vpip/types";
 import { useAiKeys } from "@/lib/vpip/keys";
 
 export const Route = createFileRoute("/projects/$projectId/discussions/$discussionId")({
+  validateSearch: (search: Record<string, unknown>): { focus?: string } =>
+    typeof search['focus'] === "string" && search['focus'] ? { focus: search['focus'] } : {},
   head: () => ({
     meta: [
       { title: "Discussion — VPIP" },
