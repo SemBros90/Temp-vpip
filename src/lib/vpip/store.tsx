@@ -84,9 +84,13 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveNow = useCallback(async () => {
-    await vaultWrite({ ...wsRef.current, savedAt: now() });
-    setLastSavedAt(now());
-    setDirty(false);
+    try {
+      await vaultWrite({ ...wsRef.current, savedAt: now() });
+      setLastSavedAt(now());
+      setDirty(false);
+    } catch (err) {
+      console.error("Vault save failed", err);
+    }
   }, []);
 
   const update = useCallback((fn: (w: Workspace) => Workspace) => {
