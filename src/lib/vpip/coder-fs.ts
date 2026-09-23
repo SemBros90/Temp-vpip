@@ -174,14 +174,34 @@ export function parseProposedFiles(markdown: string): ProposedFile[] {
 const PREVIEW_BRIDGE = `<script>
 (function(){
   var post=function(kind,text){try{parent.postMessage({__vpipPreview:true,kind:kind,text:String(text)},'*')}catch(e){}};
+  var showError=function(value){
+    var text=value&&value.stack?value.stack:(value&&value.message?value.message:String(value));
+    post('error',text);
+    var render=function(){
+      var root=document.getElementById('root')||document.getElementById('app')||document.body;
+      if(!root)return;
+      root.innerHTML='';
+      var panel=document.createElement('div');
+      panel.setAttribute('role','alert');
+      panel.style.cssText='box-sizing:border-box;min-height:100vh;padding:24px;background:#fff7f7;color:#7f1d1d;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere';
+      var title=document.createElement('strong');
+      title.textContent='Preview runtime error';
+      var detail=document.createElement('div');
+      detail.style.marginTop='12px';
+      detail.textContent=text;
+      panel.appendChild(title); panel.appendChild(detail); root.appendChild(panel);
+    };
+    if(document.body)render();else window.addEventListener('DOMContentLoaded',render,{once:true});
+  };
   ['log','warn','error','info'].forEach(function(k){
     var orig=console[k];
     console[k]=function(){post(k==='error'?'error':'log',Array.prototype.map.call(arguments,function(a){
       try{return typeof a==='string'?a:JSON.stringify(a)}catch(e){return String(a)}}).join(' '));
       orig.apply(console,arguments)};
   });
-  window.addEventListener('error',function(e){post('error',e.message+' ('+(e.filename||'')+':'+e.lineno+')')});
-  window.addEventListener('unhandledrejection',function(e){post('error','Unhandled rejection: '+e.reason)});
+  window.addEventListener('error',function(e){showError(e.error||e.message+' ('+(e.filename||'')+':'+e.lineno+')')});
+  window.addEventListener('unhandledrejection',function(e){showError(e.reason||'Unhandled promise rejection')});
+  window.__vpipShowError=showError;
 
   /* The preview frame is sandboxed, so it has an opaque origin: touching
      localStorage/sessionStorage or history throws SecurityError and kills the
@@ -236,6 +256,18 @@ function isModule(path: string) {
   return MODULE_RE.test(path) && !path.endsWith(".d.ts") && !isToolingFile(path);
 }
 
+/** Repairs a common generated-code mismatch where an object-returning hook is
+ * consumed as a React-style tuple. The source file remains untouched; preview
+ * execution gets the contract its own hook declares. */
+function normalizeGeneratedHookContracts(content: string) {
+  return content
+    .replace(
+      /const\s*\[\s*notes\s*,\s*setNotes\s*,\s*saveState\s*\]\s*=\s*useLocalStorage/g,
+      "const { value: notes, setValue: setNotes, saveState } = useLocalStorage",
+    )
+    .replace(/query\.trim\(\)/g, "(typeof query === 'string' ? query : '').trim()");
+}
+
 /** Compiles the session's TS/TSX/JS modules to a browser-runnable registry. */
 function compileModules(files: CoderFile[]): { code: Record<string, string>; errors: string[] } {
   const code: Record<string, string> = {};
@@ -244,7 +276,7 @@ function compileModules(files: CoderFile[]): { code: Record<string, string>; err
     if (!isModule(f.path)) continue;
     const ts = /\.tsx?$/.test(f.path);
     try {
-      const out = transform(f.content, {
+      const out = transform(normalizeGeneratedHookContracts(f.content), {
         transforms: [...(ts ? (["typescript"] as const) : []), "jsx", "imports"],
         jsxRuntime: "automatic",
         filePath: f.path,
@@ -352,7 +384,16 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
   }
   function findComponent(entry){
     var order = [], p;
-    if (entry) order.push(entry);
+    if (entry) {
+      try {
+        var entryExports = req(entry, './'+entry.split('/').pop());
+        var entryComponent = entryExports && (entryExports.default || entryExports.App);
+        if (typeof entryComponent === 'function') return { path: entry, comp: entryComponent };
+        var entryName = entry.split('/').pop().toLowerCase();
+        if (entryName.indexOf('main.') === 0 || entryName.indexOf('index.') === 0) return { path: entry, started: true };
+      } catch (e) { console.error(entry+': '+(e && e.message ? e.message : String(e))); }
+      order.push(entry);
+    }
     for (p in sources) if (sources.hasOwnProperty(p) && order.indexOf(p) < 0) order.push(p);
     var summary = [];
     for (var i=0;i<order.length;i++){
@@ -373,9 +414,10 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     if (root && root.childNodes.length) return;
     var found = findComponent(window.__vpipEntry);
     var React = externals['react'], client = externals['react-dom/client'];
+    if (found.started) return;
     if (root && found.comp && React && client) {
       try { client.createRoot(root).render(React.createElement(found.comp)); }
-      catch (e) { console.error(e && e.message ? e.message : String(e)); }
+      catch (e) { window.__vpipShowError(e); }
       return;
     }
     if (root) {
@@ -405,7 +447,7 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     ext['react/jsx-runtime'] = jsx;
     ext['react/jsx-dev-runtime'] = jsxDev;
   } catch (e) {
-    console.error('Could not load react for the preview: ' + (e && e.message ? e.message : e));
+    window.__vpipShowError('Could not load React for the preview: ' + (e && e.message ? e.message : e));
   }
   window.__vpipStart();
 </script>`;
