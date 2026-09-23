@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
-import { pingDatabase, saveQueueLength, vaultClear, vaultRead, vaultWrite, verifySave } from "./db";
+import { saveQueueLength, vaultClear, vaultRead, vaultWrite, verifySave } from "./db";
 import {
   emptyWorkspace,
   KNOWLEDGE_PREFIX,
@@ -315,8 +315,35 @@ export function VpipProvider({ children }: { children: ReactNode }) {
       saveNow,
       resetVault,
       importWorkspace,
+      saveState,
+      saveError,
+      saveMetrics,
+      pendingChanges,
+      queueLength,
+      tabId: TAB_ID,
+      otherTabs,
+      confirmSaved,
     }),
-    [ws, loaded, dirty, lastSavedAt, lastLoadedAt, loadError, load, update, saveNow, resetVault, importWorkspace],
+    [
+      ws,
+      loaded,
+      dirty,
+      lastSavedAt,
+      lastLoadedAt,
+      loadError,
+      load,
+      update,
+      saveNow,
+      resetVault,
+      importWorkspace,
+      saveState,
+      saveError,
+      saveMetrics,
+      pendingChanges,
+      queueLength,
+      otherTabs,
+      confirmSaved,
+    ],
   );
 
   return (
