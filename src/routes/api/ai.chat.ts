@@ -7,8 +7,8 @@ interface ProviderDef {
   /** Full chat endpoint, not just the base. */
   url: string;
   env: string;
-  /** Anthropic speaks its own Messages protocol. */
-  dialect: "openai" | "anthropic";
+  /** Anthropic speaks its own Messages protocol; Perplexity moved to the Responses protocol. */
+  dialect: "openai" | "anthropic" | "responses";
 }
 
 const PROVIDERS: Record<ProviderId, ProviderDef> = {
@@ -26,9 +26,10 @@ const PROVIDERS: Record<ProviderId, ProviderDef> = {
   },
   perplexity: {
     label: "Perplexity",
-    url: "https://api.perplexity.ai/chat/completions",
+    // Sonar is now the Agent API: chat/completions is retired.
+    url: "https://api.perplexity.ai/v1/responses",
     env: "PERPLEXITY_API_KEY",
-    dialect: "openai",
+    dialect: "responses",
   },
   Gemini: {
     label: "Gemini",
@@ -99,6 +100,39 @@ function anthropicToOpenAiStream(body: ReadableStream<Uint8Array>) {
   );
 }
 
+/** Re-shapes the Responses SSE stream (Perplexity Agent API) into the app's chunk shape. */
+function responsesToOpenAiStream(body: ReadableStream<Uint8Array>) {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        buffer += decoder.decode(chunk, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(payload) as { type?: string; delta?: unknown };
+            if (evt.type === "response.output_text.delta" && typeof evt.delta === "string") {
+              controller.enqueue(encoder.encode(sseFrame(evt.delta)));
+            }
+          } catch {
+            /* ignore partial frames */
+          }
+        }
+      },
+      flush(controller) {
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      },
+    }),
+  );
+}
+
 export const Route = createFileRoute("/api/ai/chat")({
   server: {
     handlers: {
@@ -124,6 +158,7 @@ export const Route = createFileRoute("/api/ai/chat")({
 
         const stream = body.stream !== false;
         const anthropic = conf.dialect === "anthropic";
+        const responses = conf.dialect === "responses";
 
         const systemText = body.messages
           .filter((m) => m.role === "system")
@@ -150,7 +185,17 @@ export const Route = createFileRoute("/api/ai/chat")({
                 content: m.content,
               })),
             }
-          : { model: body.model, messages: body.messages, stream };
+          : responses
+            ? {
+                model: body.model,
+                stream,
+                ...(systemText ? { instructions: systemText } : {}),
+                input: turns.map((m) => ({
+                  role: m.role === "assistant" ? "assistant" : "user",
+                  content: m.content,
+                })),
+              }
+            : { model: body.model, messages: body.messages, stream };
 
         let upstream: Response;
         try {
@@ -179,8 +224,10 @@ export const Route = createFileRoute("/api/ai/chat")({
             detail = await upstream.text().catch(() => "");
           }
           const message =
-            upstream.status === 401 || upstream.status === 403
+            upstream.status === 401
               ? `The ${conf.label} API key was rejected.`
+              : upstream.status === 403
+                ? `${conf.label} refused the request${detail ? ` — ${detail}` : " (key rejected or no access to this model)."}`
               : upstream.status === 404
                 ? `${conf.label} does not know the model "${body.model}".`
                 : upstream.status === 429
@@ -198,6 +245,17 @@ export const Route = createFileRoute("/api/ai/chat")({
               content: (data.content ?? []).map((c) => c.text ?? "").join(""),
             });
           }
+          if (responses) {
+            const data = (await upstream.json()) as {
+              output?: Array<{ content?: Array<{ text?: string }> }>;
+            };
+            return json({
+              content: (data.output ?? [])
+                .flatMap((o) => o.content ?? [])
+                .map((c) => c.text ?? "")
+                .join(""),
+            });
+          }
           const data = (await upstream.json()) as {
             choices?: Array<{ message?: { content?: string } }>;
           };
@@ -205,7 +263,11 @@ export const Route = createFileRoute("/api/ai/chat")({
         }
 
         return new Response(
-          anthropic ? anthropicToOpenAiStream(upstream.body) : upstream.body,
+          anthropic
+            ? anthropicToOpenAiStream(upstream.body)
+            : responses
+              ? responsesToOpenAiStream(upstream.body)
+              : upstream.body,
           {
             headers: {
               "Content-Type": "text/event-stream",
