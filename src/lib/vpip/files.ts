@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import type {
   BuildSession,
-  CodeArtifact,
+  Artifact,
   ContextPackageRecord,
   Discussion,
   FailureRecord,
@@ -98,7 +98,7 @@ export interface ProjectBundle {
   buildSessions?: BuildSession[];
   repositories?: Repository[];
   repoCommits?: RepoCommit[];
-  artifacts?: CodeArtifact[];
+  artifacts?: Artifact[];
   contextPackages?: ContextPackageRecord[];
   outcomes?: OutcomeRecord[];
   failures?: FailureRecord[];
