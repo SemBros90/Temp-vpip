@@ -227,6 +227,16 @@ export function resolveImport(files: CoderFile[], from: string, spec: string): s
     const candidate = `${base}${ext}`;
     if (paths.has(candidate)) return candidate;
   }
+  // Fallback: the generated code pointed at the right file name from the wrong
+  // folder. Accept it when exactly one file in the session carries that name.
+  const wanted = base.split("/").pop();
+  if (wanted) {
+    const matches = files.filter((f) => {
+      const name = f.path.split("/").pop() ?? "";
+      return name === wanted || name.replace(/\.[cm]?[jt]sx?$/, "") === wanted;
+    });
+    if (matches.length === 1 && matches[0]) return matches[0].path;
+  }
   return null;
 }
 
