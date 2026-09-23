@@ -100,6 +100,39 @@ function anthropicToOpenAiStream(body: ReadableStream<Uint8Array>) {
   );
 }
 
+/** Re-shapes the Responses SSE stream (Perplexity Agent API) into the app's chunk shape. */
+function responsesToOpenAiStream(body: ReadableStream<Uint8Array>) {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        buffer += decoder.decode(chunk, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(payload) as { type?: string; delta?: unknown };
+            if (evt.type === "response.output_text.delta" && typeof evt.delta === "string") {
+              controller.enqueue(encoder.encode(sseFrame(evt.delta)));
+            }
+          } catch {
+            /* ignore partial frames */
+          }
+        }
+      },
+      flush(controller) {
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      },
+    }),
+  );
+}
+
 export const Route = createFileRoute("/api/ai/chat")({
   server: {
     handlers: {
