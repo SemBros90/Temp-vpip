@@ -811,7 +811,14 @@ function CommitHistory({
                 ))}
                 <Tag>{c.files.length} files</Tag>
                 <Tag>{new Date(c.createdAt).toLocaleString()}</Tag>
+                {c.releaseTag ? (
+                  <Tag>
+                    release {c.releaseTag}
+                    {c.releaseName ? ` · ${c.releaseName}` : ""}
+                  </Tag>
+                ) : null}
               </div>
+              <ReleaseTagger commitId={c.id} releaseTag={c.releaseTag} releaseName={c.releaseName} />
               {c.buildSessionId ? (
                 <div className="label-mono mt-1.5">
                   Trace ·{" "}
@@ -1006,6 +1013,69 @@ function BranchPanel({
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+
+/* ============================ V-10 — releases in repository intelligence */
+
+function ReleaseTagger({
+  commitId,
+  releaseTag,
+  releaseName,
+}: {
+  commitId: string;
+  releaseTag?: string | undefined;
+  releaseName?: string | undefined;
+}) {
+  const actions = useVpipActions();
+  const [editing, setEditing] = useState(false);
+  const [tag, setTag] = useState(releaseTag ?? "");
+  const [name, setName] = useState(releaseName ?? "");
+
+  if (!editing) {
+    return (
+      <button
+        className="label-mono mt-1.5 underline"
+        onClick={() => setEditing(true)}
+      >
+        {releaseTag ? "Edit release" : "Mark as release"}
+      </button>
+    );
+  }
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+      <Input
+        value={tag}
+        onChange={(e) => setTag(e.target.value)}
+        placeholder="v1.0.0"
+        className="h-7 w-32 bg-surface-2 text-xs"
+      />
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Release name"
+        className="h-7 w-52 bg-surface-2 text-xs"
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-xs"
+        onClick={() => {
+          actions.updateRepoCommit(commitId, {
+            releaseTag: tag.trim() || undefined,
+            releaseName: name.trim() || undefined,
+          });
+          setEditing(false);
+          toast.success(tag.trim() ? `Release ${tag.trim()} recorded.` : "Release cleared.");
+        }}
+      >
+        Save
+      </Button>
+      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(false)}>
+        Cancel
+      </Button>
     </div>
   );
 }
