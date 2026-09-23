@@ -1,0 +1,1 @@
+COMMENT ON TABLE public.vpip_projects IS 'VPIP projects root table';
