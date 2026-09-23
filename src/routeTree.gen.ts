@@ -10,9 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as DiagnosticsRouteImport } from './routes/diagnostics'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as DiagnosticsIndexRouteImport } from './routes/diagnostics.index'
+import { Route as DiagnosticsPersistenceRouteImport } from './routes/diagnostics.persistence'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai.chat'
 import { Route as ApiAiStatusRouteImport } from './routes/api/ai.status'
@@ -40,11 +41,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DiagnosticsRoute = DiagnosticsRouteImport.update({
-  id: '/diagnostics',
-  path: '/diagnostics',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IntelligenceRoute = IntelligenceRouteImport.update({
   id: '/intelligence',
   path: '/intelligence',
@@ -53,6 +49,16 @@ const IntelligenceRoute = IntelligenceRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiagnosticsIndexRoute = DiagnosticsIndexRouteImport.update({
+  id: '/diagnostics/',
+  path: '/diagnostics/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiagnosticsPersistenceRoute = DiagnosticsPersistenceRouteImport.update({
+  id: '/diagnostics/persistence',
+  path: '/diagnostics/persistence',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
@@ -176,10 +182,11 @@ const ProjectsProjectIdDiscussionsDiscussionIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/diagnostics': typeof DiagnosticsRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
+  '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/diagnostics/': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
@@ -203,9 +210,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/diagnostics': typeof DiagnosticsRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
+  '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
+  '/diagnostics': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
@@ -230,10 +238,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/diagnostics': typeof DiagnosticsRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
+  '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/diagnostics/': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
@@ -259,10 +268,11 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/diagnostics'
     | '/intelligence'
     | '/settings'
+    | '/diagnostics/persistence'
     | '/projects/$projectId'
+    | '/diagnostics/'
     | '/api/ai/chat'
     | '/api/ai/status'
     | '/projects/$projectId/artifacts'
@@ -286,9 +296,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/diagnostics'
     | '/intelligence'
     | '/settings'
+    | '/diagnostics/persistence'
+    | '/diagnostics'
     | '/api/ai/chat'
     | '/api/ai/status'
     | '/projects/$projectId/artifacts'
@@ -312,10 +323,11 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/diagnostics'
     | '/intelligence'
     | '/settings'
+    | '/diagnostics/persistence'
     | '/projects/$projectId'
+    | '/diagnostics/'
     | '/api/ai/chat'
     | '/api/ai/status'
     | '/projects/$projectId/artifacts'
@@ -340,10 +352,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DiagnosticsRoute: typeof DiagnosticsRoute
   IntelligenceRoute: typeof IntelligenceRoute
   SettingsRoute: typeof SettingsRoute
+  DiagnosticsPersistenceRoute: typeof DiagnosticsPersistenceRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
+  DiagnosticsIndexRoute: typeof DiagnosticsIndexRoute
   ApiAiChatRoute: typeof ApiAiChatRoute
   ApiAiStatusRoute: typeof ApiAiStatusRoute
 }
@@ -355,13 +368,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/diagnostics': {
-      id: '/diagnostics'
-      path: '/diagnostics'
-      fullPath: '/diagnostics'
-      preLoaderRoute: typeof DiagnosticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/intelligence': {
@@ -376,6 +382,20 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diagnostics/': {
+      id: '/diagnostics/'
+      path: '/diagnostics'
+      fullPath: '/diagnostics/'
+      preLoaderRoute: typeof DiagnosticsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diagnostics/persistence': {
+      id: '/diagnostics/persistence'
+      path: '/diagnostics/persistence'
+      fullPath: '/diagnostics/persistence'
+      preLoaderRoute: typeof DiagnosticsPersistenceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId': {
@@ -577,10 +597,11 @@ const ProjectsProjectIdRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DiagnosticsRoute: DiagnosticsRoute,
   IntelligenceRoute: IntelligenceRoute,
   SettingsRoute: SettingsRoute,
+  DiagnosticsPersistenceRoute: DiagnosticsPersistenceRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
+  DiagnosticsIndexRoute: DiagnosticsIndexRoute,
   ApiAiChatRoute: ApiAiChatRoute,
   ApiAiStatusRoute: ApiAiStatusRoute,
 }
