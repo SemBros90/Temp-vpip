@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as DiagnosticsIndexRouteImport } from './routes/diagnostics.index'
+import { Route as DiagnosticsPersistenceRouteImport } from './routes/diagnostics.persistence'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai.chat'
 import { Route as ApiAiStatusRouteImport } from './routes/api/ai.status'
@@ -53,6 +54,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const DiagnosticsIndexRoute = DiagnosticsIndexRouteImport.update({
   id: '/diagnostics/',
   path: '/diagnostics/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiagnosticsPersistenceRoute = DiagnosticsPersistenceRouteImport.update({
+  id: '/diagnostics/persistence',
+  path: '/diagnostics/persistence',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
@@ -178,6 +184,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
+  '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/diagnostics/': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
@@ -205,6 +212,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
+  '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/diagnostics': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
@@ -232,6 +240,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
+  '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/diagnostics/': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
@@ -261,6 +270,7 @@ export interface FileRouteTypes {
     | '/'
     | '/intelligence'
     | '/settings'
+    | '/diagnostics/persistence'
     | '/projects/$projectId'
     | '/diagnostics/'
     | '/api/ai/chat'
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/'
     | '/intelligence'
     | '/settings'
+    | '/diagnostics/persistence'
     | '/diagnostics'
     | '/api/ai/chat'
     | '/api/ai/status'
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/'
     | '/intelligence'
     | '/settings'
+    | '/diagnostics/persistence'
     | '/projects/$projectId'
     | '/diagnostics/'
     | '/api/ai/chat'
@@ -342,6 +354,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   IntelligenceRoute: typeof IntelligenceRoute
   SettingsRoute: typeof SettingsRoute
+  DiagnosticsPersistenceRoute: typeof DiagnosticsPersistenceRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   DiagnosticsIndexRoute: typeof DiagnosticsIndexRoute
   ApiAiChatRoute: typeof ApiAiChatRoute
@@ -376,6 +389,13 @@ declare module '@tanstack/react-router' {
       path: '/diagnostics'
       fullPath: '/diagnostics/'
       preLoaderRoute: typeof DiagnosticsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diagnostics/persistence': {
+      id: '/diagnostics/persistence'
+      path: '/diagnostics/persistence'
+      fullPath: '/diagnostics/persistence'
+      preLoaderRoute: typeof DiagnosticsPersistenceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId': {
@@ -579,6 +599,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   IntelligenceRoute: IntelligenceRoute,
   SettingsRoute: SettingsRoute,
+  DiagnosticsPersistenceRoute: DiagnosticsPersistenceRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   DiagnosticsIndexRoute: DiagnosticsIndexRoute,
   ApiAiChatRoute: ApiAiChatRoute,
