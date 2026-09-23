@@ -293,9 +293,15 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     return base.join('/');
   }
   function resolve(from, spec){
-    var base = spec.charAt(0) === '.' ? join(from, spec) : spec.replace(/^\\//,'');
+    var base = spec.charAt(0) === '.' ? join(from, spec) : spec.replace(/^@\\//,'src/').replace(/^\\//,'');
     var tries = [base, base+'.tsx', base+'.ts', base+'.jsx', base+'.js', base+'/index.tsx', base+'/index.ts', base+'/index.jsx', base+'/index.js'];
     for (var i=0;i<tries.length;i++) if (sources[tries[i]]) return tries[i];
+    var wanted = base.split('/').pop(), hits = [], p;
+    for (p in sources) if (sources.hasOwnProperty(p)) {
+      var name = p.split('/').pop();
+      if (name === wanted || name.replace(/\\.[cm]?[jt]sx?$/,'') === wanted) hits.push(p);
+    }
+    if (hits.length === 1) return hits[0];
     return null;
   }
   function req(from, spec){

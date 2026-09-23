@@ -279,7 +279,9 @@ function findFile(files: CoderFile[], candidates: string[]) {
 
 /** Runs dependency, startup and compile validation over the session files. */
 export function validateBuild(files: CoderFile[]): ValidationReport {
-  const real = files.filter((f) => fileName(f.path) !== FOLDER_KEEP);
+  const real = files.filter(
+    (f) => fileName(f.path) !== FOLDER_KEEP && !isToolingFile(f.path),
+  );
   const issues: ValidationIssue[] = [];
   const declared = declaredDependencies(real);
   const missingDependencies: string[] = [];
