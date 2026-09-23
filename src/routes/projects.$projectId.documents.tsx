@@ -40,7 +40,7 @@ function DocumentsPage() {
   const { projectId } = Route.useParams();
   const p = useProject(projectId);
   const actions = useVpipActions();
-  const { provider, cfg } = useEngine();
+  const { provider, cfg, author } = useEngine();
   const { keys } = useAiKeys();
   const [kind, setKind] = useState<DocumentKind>("Project Summary");
   const [discussionId, setDiscussionId] = useState<string>("none");
@@ -71,6 +71,17 @@ function DocumentsPage() {
         provider,
         model: cfg.model,
         ...(focus ? { sourceDiscussionId: focus.id } : {}),
+      });
+      actions.logActivity({
+        projectId,
+        subjectType: "Document",
+        subjectId: doc.id,
+        subjectLabel: doc.title,
+        action: "Created",
+        provider,
+        model: cfg.model,
+        author,
+        note: `Generated ${kind}`,
       });
       setOpenId(doc.id);
       toast.success("Document generated and snapshotted");

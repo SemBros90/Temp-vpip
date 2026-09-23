@@ -62,7 +62,7 @@ function PromptsPage() {
   const { projectId } = Route.useParams();
   const p = useProject(projectId);
   const actions = useVpipActions();
-  const { provider, cfg } = useEngine();
+  const { provider, cfg, author } = useEngine();
   const { keys } = useAiKeys();
   const [kind, setKind] = useState<PromptKind>("Lovable Prompt");
   const [instruction, setInstruction] = useState("");
@@ -91,6 +91,17 @@ function PromptsPage() {
         markdown,
         provider,
         model: cfg.model,
+      });
+      actions.logActivity({
+        projectId,
+        subjectType: "Prompt",
+        subjectId: created.id,
+        subjectLabel: `${created.title} V${created.version}`,
+        action: "Created",
+        provider,
+        model: cfg.model,
+        author,
+        note: `Generated ${kind}`,
       });
       setOpenId(created.id);
       toast.success(`Saved as ${kind} V${created.version}`);
