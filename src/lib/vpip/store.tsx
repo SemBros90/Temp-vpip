@@ -55,6 +55,16 @@ export function uid() {
 
 export const now = () => new Date().toISOString();
 
+export type SaveState = "idle" | "saving" | "saved" | "error";
+
+export interface SaveMetrics {
+  successes: number;
+  failures: number;
+  retries: number;
+  lastError: string | null;
+  lastDurationMs: number | null;
+}
+
 interface Ctx {
   ws: Workspace;
   loaded: boolean;
@@ -67,9 +77,21 @@ interface Ctx {
   saveNow: () => Promise<void>;
   resetVault: () => Promise<void>;
   importWorkspace: (ws: Workspace) => void;
+  /* persistence observability */
+  saveState: SaveState;
+  saveError: string | null;
+  saveMetrics: SaveMetrics;
+  pendingChanges: number;
+  queueLength: number;
+  tabId: string;
+  otherTabs: string[];
+  /** Announce a created record; a confirmation toast fires once it is in the database. */
+  confirmSaved: (label: string) => void;
 }
 
 const VpipContext = createContext<Ctx | null>(null);
+
+const TAB_ID = uid().slice(-6).toUpperCase();
 
 export function VpipProvider({ children }: { children: ReactNode }) {
   const [ws, setWs] = useState<Workspace>(() => emptyWorkspace());
@@ -78,8 +100,24 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveMetrics, setSaveMetrics] = useState<SaveMetrics>({
+    successes: 0,
+    failures: 0,
+    retries: 0,
+    lastError: null,
+    lastDurationMs: null,
+  });
+  const [pendingChanges, setPendingChanges] = useState(0);
+  const [queueLength, setQueueLength] = useState(0);
+  const [otherTabs, setOtherTabs] = useState<string[]>([]);
   const wsRef = useRef(ws);
   wsRef.current = ws;
+  const pendingRef = useRef(0);
+  const savingRef = useRef(false);
+  const failedRef = useRef(false);
+  const confirmRef = useRef<string[]>([]);
   // Writes are only allowed once a complete snapshot has been read. Writing is a
   // full sync, so saving on top of a failed/incomplete load would delete rows.
   const readableRef = useRef(false);
@@ -93,6 +131,8 @@ export function VpipProvider({ children }: { children: ReactNode }) {
       readableRef.current = true;
       setLoadError(null);
       setLastLoadedAt(now());
+      pendingRef.current = 0;
+      setPendingChanges(0);
       setDirty(false);
     } catch (err) {
       readableRef.current = false;
@@ -112,12 +152,63 @@ export function VpipProvider({ children }: { children: ReactNode }) {
       console.warn("Vault save skipped: workspace was never loaded successfully");
       return;
     }
+    const startedPending = pendingRef.current;
+    const stamp = now();
+    const t0 = Date.now();
+    savingRef.current = true;
+    setSaveState("saving");
+    setQueueLength(saveQueueLength() + 1);
+    const retrying = failedRef.current;
     try {
-      await vaultWrite({ ...wsRef.current, savedAt: now() });
+      await vaultWrite({ ...wsRef.current, savedAt: stamp });
+      await verifySave(stamp);
+      const duration = Date.now() - t0;
+      pendingRef.current = Math.max(0, pendingRef.current - startedPending);
+      setPendingChanges(pendingRef.current);
       setLastSavedAt(now());
-      setDirty(false);
+      if (pendingRef.current === 0) setDirty(false);
+      failedRef.current = false;
+      setSaveError(null);
+      setSaveState("saved");
+      setSaveMetrics((m) => ({
+        successes: m.successes + 1,
+        failures: m.failures,
+        retries: retrying ? m.retries + 1 : m.retries,
+        lastError: m.lastError,
+        lastDurationMs: duration,
+      }));
+      const labels = confirmRef.current;
+      confirmRef.current = [];
+      if (labels.length) {
+        toast.dismiss("vpip-save-error");
+        toast.success(
+          labels.length === 1 ? `${labels[0]} saved` : `${labels.length} records saved`,
+          { description: "Written to the database and verified." },
+        );
+      } else {
+        toast.dismiss("vpip-save-error");
+      }
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failedRef.current = true;
+      setSaveError(message);
+      setSaveState("error");
+      setSaveMetrics((m) => ({
+        successes: m.successes,
+        failures: m.failures + 1,
+        retries: retrying ? m.retries + 1 : m.retries,
+        lastError: message,
+        lastDurationMs: Date.now() - t0,
+      }));
+      toast.error("Save failed — your changes are not stored yet", {
+        id: "vpip-save-error",
+        description: message,
+        duration: Infinity,
+      });
       console.error("Vault save failed", err);
+    } finally {
+      savingRef.current = false;
+      setQueueLength(saveQueueLength());
     }
   }, []);
 
@@ -127,7 +218,13 @@ export function VpipProvider({ children }: { children: ReactNode }) {
       wsRef.current = next;
       return next;
     });
+    pendingRef.current += 1;
+    setPendingChanges(pendingRef.current);
     setDirty(true);
+  }, []);
+
+  const confirmSaved = useCallback((label: string) => {
+    confirmRef.current = [...confirmRef.current, label];
   }, []);
 
   // Real-time save (debounced) — every change reaches the vault immediately.
@@ -148,6 +245,46 @@ export function VpipProvider({ children }: { children: ReactNode }) {
     }, ms);
     return () => clearInterval(i);
   }, [loaded, loadError, dirty, ws.settings.autoSaveIntervalSec, saveNow]);
+
+  // Unsaved-changes / save-in-progress protection on close, refresh and navigation.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirty && !savingRef.current && !failedRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
+  // Multi-tab detection — every tab announces itself so overwrites are never silent.
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const ch = new BroadcastChannel("vpip-tabs");
+    const seen = new Map<string, number>();
+    const publish = () => {
+      const cutoff = Date.now() - 9000;
+      for (const [id, at] of seen) if (at < cutoff) seen.delete(id);
+      setOtherTabs([...seen.keys()]);
+    };
+    ch.onmessage = (ev: MessageEvent) => {
+      const data = ev.data as { type?: string; id?: string };
+      if (!data?.id || data.id === TAB_ID) return;
+      seen.set(data.id, Date.now());
+      if (data.type === "hello") ch.postMessage({ type: "here", id: TAB_ID });
+      publish();
+    };
+    ch.postMessage({ type: "hello", id: TAB_ID });
+    const i = setInterval(() => {
+      ch.postMessage({ type: "here", id: TAB_ID });
+      publish();
+    }, 3000);
+    return () => {
+      clearInterval(i);
+      ch.close();
+    };
+  }, []);
 
   const resetVault = useCallback(async () => {
     await vaultClear();
