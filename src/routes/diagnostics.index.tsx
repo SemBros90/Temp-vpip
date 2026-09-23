@@ -4,7 +4,7 @@ import { Stat } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { useVpip } from "@/lib/vpip/store";
 
-export const Route = createFileRoute("/diagnostics")({
+export const Route = createFileRoute("/diagnostics/")({
   head: () => ({
     meta: [
       { title: "Persistence diagnostics — VPIP" },
