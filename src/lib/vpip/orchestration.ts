@@ -1,6 +1,6 @@
 import { transform } from "sucrase";
 import { completeChat, extractJson } from "./ai";
-import { FOLDER_KEEP, fileName, normalizePath } from "./coder-fs";
+import { FOLDER_KEEP, fileName, isToolingFile, normalizePath } from "./coder-fs";
 import type {
   BuildHealth,
   BuildPlan,
