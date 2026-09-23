@@ -1,6 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, Paperclip, Save, Send, Sparkles, Wand2, X } from "lucide-react";
+import {
+  Download,
+  Loader2,
+  Paperclip,
+  RotateCcw,
+  Save,
+  Send,
+  Sparkles,
+  Wand2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { EnginePicker, Tag, TypeTag, useEngine } from "@/components/vpip/common";
@@ -206,6 +216,55 @@ function DiscussionPage() {
     } finally {
       setWorking(null);
     }
+  };
+
+  /* V-08 — reopen the discussion with the current state of the project for review */
+  const reopen = () => {
+    const decisions = p.approved.filter((k) => k.type === "Decision");
+    const requirements = p.approved.filter((k) => k.type === "Requirement");
+    const lines = [
+      "**Discussion reopened for review.**",
+      "",
+      "Review the current project state below and tell me what changed, what is now wrong, and what should be added. I will turn your answers into updated knowledge candidates.",
+      "",
+      `**Decisions (${decisions.length})**`,
+      ...(decisions.length
+        ? decisions.map((k) => `- ${k.code} ${k.title} (V${k.version ?? 1})`)
+        : ["- none"]),
+      "",
+      `**Requirements (${requirements.length})**`,
+      ...(requirements.length
+        ? requirements.map((k) => `- ${k.code} ${k.title} (V${k.version ?? 1})`)
+        : ["- none"]),
+      "",
+      `**Prompts (${p.prompts.length})**`,
+      ...(p.prompts.length
+        ? p.prompts.map((x) => `- ${x.title} V${x.version} · ${x.status ?? "Draft"}`)
+        : ["- none"]),
+      "",
+      `**Build sessions (${p.buildSessions.length})**`,
+      ...(p.buildSessions.length
+        ? p.buildSessions.map((b) => `- ${b.code} ${b.promptTitle} · ${b.status}`)
+        : ["- none"]),
+    ];
+    const context = lines.join("\n");
+    actions.appendMessage(discussion.id, { role: "assistant", content: context, provider });
+    actions.updateDiscussion(discussion.id, {
+      reopenedAt: new Date().toISOString(),
+      reopenContext: context,
+    });
+    actions.logActivity({
+      projectId,
+      subjectType: "Discussion",
+      subjectId: discussion.id,
+      subjectLabel: discussion.title,
+      action: "Reviewed",
+      provider,
+      model: cfg.model,
+      author,
+      note: "Reopened for feedback loop",
+    });
+    toast.success("Discussion reopened with the current project state.");
   };
 
   const runSummary = async () => {
