@@ -368,7 +368,7 @@ export function useVpip() {
 /* ---------------------------------------------------------------- actions */
 
 export function useVpipActions() {
-  const { ws, update } = useVpip();
+  const { ws, update, confirmSaved } = useVpip();
 
   const touchProject = (w: Workspace, projectId: string): Workspace => ({
     ...w,
@@ -389,6 +389,7 @@ export function useVpipActions() {
           createdAt: now(),
           updatedAt: now(),
         };
+        confirmSaved("Project");
         update((w) => ({ ...w, projects: [project, ...w.projects] }));
         return project;
       },
@@ -489,6 +490,7 @@ export function useVpipActions() {
           Omit<KnowledgeItem, "id" | "code" | "createdAt" | "updatedAt" | "revisions">
         >,
       ) {
+        for (const item of items) confirmSaved(item.type);
         update((w) => {
           const created: KnowledgeItem[] = [];
           for (const item of items) {
@@ -569,6 +571,7 @@ export function useVpipActions() {
           markdown: doc.markdown,
           createdAt: now(),
         };
+        confirmSaved("Document");
         update((w) =>
           touchProject(
             { ...w, documents: [full, ...w.documents], snapshots: [snap, ...w.snapshots] },
