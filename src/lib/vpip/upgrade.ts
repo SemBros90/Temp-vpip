@@ -232,7 +232,7 @@ const UNIVERSAL_SYSTEM = `You are the knowledge extraction engine of a project i
 Read the supplied project object and extract durable project knowledge.
 Return ONLY a JSON array. Each element:
 {"type":"Decision|Requirement|Idea|Risk|Question|Assumption|Lesson Learned|Failure Cause","title":"short title","description":"1-3 precise sentences"}
-Extract only substantive, project-specific knowledge grounded in the supplied text. No filler. Max 15 items.`;
+Extract only substantive, project-specific knowledge grounded in the supplied text. No filler. There is no item limit — extract as many items as the source genuinely supports; never pad, never truncate.`;
 
 export async function extractFromSource(
   provider: ProviderId,

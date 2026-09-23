@@ -154,7 +154,7 @@ const EXTRACTION_SYSTEM = `You are the knowledge extraction engine of a project 
 Read the discussion transcript and extract durable project knowledge.
 Return ONLY a JSON array. Each element:
 {"type":"Decision|Requirement|Idea|Risk|Question|Assumption","title":"short title","description":"1-3 precise sentences","messages":[message numbers you used]}
-Extract only substantive, project-specific knowledge. No filler. Max 15 items.`;
+Extract only substantive, project-specific knowledge. No filler. There is no item limit — extract as many items as the source genuinely supports; never pad, never truncate.`;
 
 export async function extractKnowledge(
   provider: ProviderId,
