@@ -261,8 +261,8 @@ function isModule(path: string) {
  * execution gets the contract its own hook declares. */
 function normalizeGeneratedHookContracts(content: string) {
   return content.replace(
-    /const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*useLocalStorage(<[^;\n]+?\([^;\n]+?\);/g,
-    "const { value: $1, setValue: $2, saveState: $3 } = useLocalStorage$4",
+    /const\s*\[\s*notes\s*,\s*setNotes\s*,\s*saveState\s*\]\s*=\s*useLocalStorage/g,
+    "const { value: notes, setValue: setNotes, saveState } = useLocalStorage",
   );
 }
 
