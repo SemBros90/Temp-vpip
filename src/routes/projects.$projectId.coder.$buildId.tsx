@@ -1289,15 +1289,15 @@ function CoderPage() {
                     >
                       <RefreshCw className="size-3.5" /> Refresh
                     </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7"
-                    onClick={() => setPreviewLogsOpen((open) => !open)}
-                  >
-                    <TerminalIcon className="size-3.5" />
-                    Logs{previewLogs.some((entry) => entry.kind === "error") ? " !" : ""}
-                  </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7"
+                      onClick={() => setPreviewLogsOpen((open) => !open)}
+                    >
+                      <TerminalIcon className="size-3.5" />
+                      Logs{previewLogs.some((entry) => entry.kind === "error") ? " !" : ""}
+                    </Button>
                   </div>
                   <div className="relative min-h-0 flex-1 bg-white">
                     {previewDoc ? (
@@ -1330,16 +1330,16 @@ function CoderPage() {
                   </div>
                   {previewLogsOpen ? (
                     <div className="h-24 shrink-0 overflow-y-auto border-t border-border bg-surface-2 p-2 font-mono text-[11px]">
-                    <div className="label-mono mb-1">Preview logs</div>
-                    {previewLogs.length === 0 ? (
-                      <span className="text-muted-foreground">no output</span>
-                    ) : (
-                      previewLogs.map((l, i) => (
-                        <div key={i} className={l.kind === "error" ? "text-destructive" : ""}>
-                          {l.text}
+                      <div className="label-mono mb-1">Preview logs</div>
+                      {previewLogs.length === 0 ? (
+                        <span className="text-muted-foreground">no output</span>
+                      ) : (
+                        previewLogs.map((l, i) => (
+                          <div key={i} className={l.kind === "error" ? "text-destructive" : ""}>
+                            {l.text}
                           </div>
-                      ))
-                    )}
+                        ))
+                      )}
                     </div>
                   ) : null}
                 </TabsContent>
