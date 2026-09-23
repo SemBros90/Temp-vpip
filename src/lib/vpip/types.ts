@@ -1073,7 +1073,12 @@ export const PROVIDER_LABEL: Record<ProviderId, string> = {
 export const PROVIDER_MODELS: Record<ProviderId, string[]> = {
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini"],
   deepseek: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-pro"],
-  perplexity: ["sonar", "sonar-pro", "sonar-reasoning"],
+  perplexity: [
+    "perplexity/sonar",
+    "perplexity/deepseek-v4-pro-0813",
+    "perplexity/kimi-k3",
+    "perplexity/glm-5.3",
+  ],
   Gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
   Claude: ["claude-sonnet-4-5", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"],
 };
@@ -1097,7 +1102,7 @@ export function emptyWorkspace(): Workspace {
           status: "unknown",
         },
         perplexity: {
-          model: "sonar",
+          model: "perplexity/sonar",
           status: "unknown",
         },
         Gemini: {
