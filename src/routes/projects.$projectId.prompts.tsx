@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  BrainCog,
   Copy,
   Download,
   ListOrdered,
@@ -39,6 +38,7 @@ import {
 } from "@/lib/vpip/types";
 import { useAiKeys } from "@/lib/vpip/keys";
 import { LinkPicker } from "@/components/vpip/LinkPicker";
+import { ExtractButton } from "@/components/vpip/ExtractButton";
 import { buildContextPackage } from "@/lib/vpip/context-package";
 import { useNavigate } from "@tanstack/react-router";
 import { Boxes, Link2, Rocket } from "lucide-react";
