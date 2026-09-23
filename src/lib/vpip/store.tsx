@@ -439,6 +439,7 @@ export function useVpipActions() {
           messages: [],
           attachments: [],
         };
+        confirmSaved("Discussion");
         update((w) => touchProject({ ...w, discussions: [discussion, ...w.discussions] }, d.projectId));
         return discussion;
       },
@@ -644,6 +645,7 @@ export function useVpipActions() {
           createdAt: now(),
           updatedAt: now(),
         };
+        confirmSaved("Build session");
         update((w) =>
           touchProject(
             { ...w, buildSessions: [session, ...(w.buildSessions ?? [])] },
