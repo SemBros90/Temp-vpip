@@ -1419,13 +1419,26 @@ function CoderPage() {
           </section>
           <section className="min-h-0 bg-surface">
             {previewDoc ? (
-              <iframe
-                key={`mobile-${previewKey}`}
-                title="Live preview"
-                srcDoc={previewDoc}
-                sandbox="allow-scripts allow-forms"
-                className="size-full border-0 bg-background"
-              />
+              <>
+                <div className="flex items-center justify-end gap-2 border-b border-border px-2 py-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    onClick={openPreviewInTab}
+                    title="Open preview in a new full browser tab"
+                  >
+                    <ExternalLink className="size-3.5" /> Open tab
+                  </Button>
+                </div>
+                <iframe
+                  key={`mobile-${previewKey}`}
+                  title="Live preview"
+                  srcDoc={previewDoc}
+                  sandbox="allow-scripts allow-forms"
+                  className="size-full border-0 bg-background"
+                />
+              </>
             ) : (
               <ConversationEmptyState
                 title="Nothing to preview"
