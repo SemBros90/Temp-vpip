@@ -389,7 +389,8 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
         var entryExports = req(entry, './'+entry.split('/').pop());
         var entryComponent = entryExports && (entryExports.default || entryExports.App);
         if (typeof entryComponent === 'function') return { path: entry, comp: entryComponent };
-        if (/(^|\/)(main|index)\.[cm]?[jt]sx?$/.test(entry)) return { path: entry, started: true };
+        var entryName = entry.split('/').pop().toLowerCase();
+        if (entryName.indexOf('main.') === 0 || entryName.indexOf('index.') === 0) return { path: entry, started: true };
       } catch (e) { console.error(entry+': '+(e && e.message ? e.message : String(e))); }
       order.push(entry);
     }
