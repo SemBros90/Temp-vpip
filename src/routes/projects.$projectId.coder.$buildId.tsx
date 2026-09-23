@@ -1310,6 +1310,7 @@ function CoderPage() {
                           title="Live preview"
                           srcDoc={previewDoc}
                           sandbox="allow-scripts allow-forms"
+
                           className="size-full border-0"
                         />
                       </>
