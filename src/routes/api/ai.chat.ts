@@ -224,8 +224,10 @@ export const Route = createFileRoute("/api/ai/chat")({
             detail = await upstream.text().catch(() => "");
           }
           const message =
-            upstream.status === 401 || upstream.status === 403
+            upstream.status === 401
               ? `The ${conf.label} API key was rejected.`
+              : upstream.status === 403
+                ? `${conf.label} refused the request${detail ? ` — ${detail}` : " (key rejected or no access to this model)."}`
               : upstream.status === 404
                 ? `${conf.label} does not know the model "${body.model}".`
                 : upstream.status === 429
@@ -243,6 +245,17 @@ export const Route = createFileRoute("/api/ai/chat")({
               content: (data.content ?? []).map((c) => c.text ?? "").join(""),
             });
           }
+          if (responses) {
+            const data = (await upstream.json()) as {
+              output?: Array<{ content?: Array<{ text?: string }> }>;
+            };
+            return json({
+              content: (data.output ?? [])
+                .flatMap((o) => o.content ?? [])
+                .map((c) => c.text ?? "")
+                .join(""),
+            });
+          }
           const data = (await upstream.json()) as {
             choices?: Array<{ message?: { content?: string } }>;
           };
@@ -250,7 +263,11 @@ export const Route = createFileRoute("/api/ai/chat")({
         }
 
         return new Response(
-          anthropic ? anthropicToOpenAiStream(upstream.body) : upstream.body,
+          anthropic
+            ? anthropicToOpenAiStream(upstream.body)
+            : responses
+              ? responsesToOpenAiStream(upstream.body)
+              : upstream.body,
           {
             headers: {
               "Content-Type": "text/event-stream",
