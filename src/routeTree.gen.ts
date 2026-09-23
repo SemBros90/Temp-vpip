@@ -22,6 +22,7 @@ import { Route as ProjectsProjectIdContextRouteImport } from './routes/projects.
 import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects.$projectId.documents'
 import { Route as ProjectsProjectIdExplorerRouteImport } from './routes/projects.$projectId.explorer'
 import { Route as ProjectsProjectIdInboxRouteImport } from './routes/projects.$projectId.inbox'
+import { Route as ProjectsProjectIdLessonsRouteImport } from './routes/projects.$projectId.lessons'
 import { Route as ProjectsProjectIdMemoryRouteImport } from './routes/projects.$projectId.memory'
 import { Route as ProjectsProjectIdOutcomesRouteImport } from './routes/projects.$projectId.outcomes'
 import { Route as ProjectsProjectIdPromptsRouteImport } from './routes/projects.$projectId.prompts'
@@ -101,6 +102,12 @@ const ProjectsProjectIdInboxRoute = ProjectsProjectIdInboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdLessonsRoute =
+  ProjectsProjectIdLessonsRouteImport.update({
+    id: '/lessons',
+    path: '/lessons',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdMemoryRoute = ProjectsProjectIdMemoryRouteImport.update({
   id: '/memory',
   path: '/memory',
@@ -168,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/lessons': typeof ProjectsProjectIdLessonsRoute
   '/projects/$projectId/memory': typeof ProjectsProjectIdMemoryRoute
   '/projects/$projectId/outcomes': typeof ProjectsProjectIdOutcomesRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
@@ -191,6 +199,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/lessons': typeof ProjectsProjectIdLessonsRoute
   '/projects/$projectId/memory': typeof ProjectsProjectIdMemoryRoute
   '/projects/$projectId/outcomes': typeof ProjectsProjectIdOutcomesRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
@@ -216,6 +225,7 @@ export interface FileRoutesById {
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/lessons': typeof ProjectsProjectIdLessonsRoute
   '/projects/$projectId/memory': typeof ProjectsProjectIdMemoryRoute
   '/projects/$projectId/outcomes': typeof ProjectsProjectIdOutcomesRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
@@ -242,6 +252,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
+    | '/projects/$projectId/lessons'
     | '/projects/$projectId/memory'
     | '/projects/$projectId/outcomes'
     | '/projects/$projectId/prompts'
@@ -265,6 +276,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
+    | '/projects/$projectId/lessons'
     | '/projects/$projectId/memory'
     | '/projects/$projectId/outcomes'
     | '/projects/$projectId/prompts'
@@ -289,6 +301,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
+    | '/projects/$projectId/lessons'
     | '/projects/$projectId/memory'
     | '/projects/$projectId/outcomes'
     | '/projects/$projectId/prompts'
@@ -402,6 +415,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdInboxRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/lessons': {
+      id: '/projects/$projectId/lessons'
+      path: '/lessons'
+      fullPath: '/projects/$projectId/lessons'
+      preLoaderRoute: typeof ProjectsProjectIdLessonsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/memory': {
       id: '/projects/$projectId/memory'
       path: '/memory'
@@ -476,6 +496,7 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdDocumentsRoute: typeof ProjectsProjectIdDocumentsRoute
   ProjectsProjectIdExplorerRoute: typeof ProjectsProjectIdExplorerRoute
   ProjectsProjectIdInboxRoute: typeof ProjectsProjectIdInboxRoute
+  ProjectsProjectIdLessonsRoute: typeof ProjectsProjectIdLessonsRoute
   ProjectsProjectIdMemoryRoute: typeof ProjectsProjectIdMemoryRoute
   ProjectsProjectIdOutcomesRoute: typeof ProjectsProjectIdOutcomesRoute
   ProjectsProjectIdPromptsRoute: typeof ProjectsProjectIdPromptsRoute
@@ -496,6 +517,7 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdDocumentsRoute: ProjectsProjectIdDocumentsRoute,
   ProjectsProjectIdExplorerRoute: ProjectsProjectIdExplorerRoute,
   ProjectsProjectIdInboxRoute: ProjectsProjectIdInboxRoute,
+  ProjectsProjectIdLessonsRoute: ProjectsProjectIdLessonsRoute,
   ProjectsProjectIdMemoryRoute: ProjectsProjectIdMemoryRoute,
   ProjectsProjectIdOutcomesRoute: ProjectsProjectIdOutcomesRoute,
   ProjectsProjectIdPromptsRoute: ProjectsProjectIdPromptsRoute,
