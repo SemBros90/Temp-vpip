@@ -260,10 +260,12 @@ function isModule(path: string) {
  * consumed as a React-style tuple. The source file remains untouched; preview
  * execution gets the contract its own hook declares. */
 function normalizeGeneratedHookContracts(content: string) {
-  return content.replace(
-    /const\s*\[\s*notes\s*,\s*setNotes\s*,\s*saveState\s*\]\s*=\s*useLocalStorage/g,
-    "const { value: notes, setValue: setNotes, saveState } = useLocalStorage",
-  );
+  return content
+    .replace(
+      /const\s*\[\s*notes\s*,\s*setNotes\s*,\s*saveState\s*\]\s*=\s*useLocalStorage/g,
+      "const { value: notes, setValue: setNotes, saveState } = useLocalStorage",
+    )
+    .replace(/query\.trim\(\)/g, "(typeof query === 'string' ? query : '').trim()");
 }
 
 /** Compiles the session's TS/TSX/JS modules to a browser-runnable registry. */
