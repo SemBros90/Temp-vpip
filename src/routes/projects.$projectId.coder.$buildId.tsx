@@ -167,8 +167,11 @@ function CoderPage() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const workspaceRef = useRef<GroupImperativeHandle | null>(null);
   const filesPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const chatPanelRef = useRef<PanelImperativeHandle | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
   const [bottomOpen, setBottomOpen] = useState(false);
+  const [previewLogsOpen, setPreviewLogsOpen] = useState(false);
 
   const session = p.buildSessions.find((b) => b.id === buildId);
   const files = useMemo(() => session?.files ?? [], [session?.files]);
@@ -663,6 +666,18 @@ function CoderPage() {
             variant="outline"
             size="sm"
             className="h-8"
+            title={chatOpen ? "Maximize preview" : "Restore coding chat"}
+            onClick={() => {
+              if (chatPanelRef.current?.isCollapsed()) chatPanelRef.current.expand();
+              else chatPanelRef.current?.collapse();
+            }}
+          >
+            <MessagesSquare className="size-4" /> {chatOpen ? "Max preview" : "Chat"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
             onClick={() => setBottomOpen((open) => !open)}
           >
             <TerminalIcon className="size-4" /> {bottomOpen ? "Close logs" : "Logs"}
@@ -930,7 +945,16 @@ function CoderPage() {
           </ResizeSeparator>
 
           {/* -------------------------------------------- center panel */}
-          <Panel id="chat" defaultSize="20%" minSize="300px" maxSize="55%">
+          <Panel
+            id="chat"
+            panelRef={chatPanelRef}
+            defaultSize="20%"
+            minSize="280px"
+            maxSize="55%"
+            collapsedSize="0%"
+            collapsible
+            onResize={(size) => setChatOpen(size.asPercentage > 0)}
+          >
             <section className="flex size-full min-h-0 flex-col bg-background">
               <Tabs
                 value={centerTab}
@@ -1265,6 +1289,15 @@ function CoderPage() {
                     >
                       <RefreshCw className="size-3.5" /> Refresh
                     </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    onClick={() => setPreviewLogsOpen((open) => !open)}
+                  >
+                    <TerminalIcon className="size-3.5" />
+                    Logs{previewLogs.some((entry) => entry.kind === "error") ? " !" : ""}
+                  </Button>
                   </div>
                   <div className="relative min-h-0 flex-1 bg-white">
                     {previewDoc ? (
@@ -1295,7 +1328,7 @@ function CoderPage() {
                       </div>
                     )}
                   </div>
-                  <div className="h-24 shrink-0 overflow-y-auto border-t border-border bg-surface-2 p-2 font-mono text-[11px]">
+                {previewLogsOpen ? <div className="h-24 shrink-0 overflow-y-auto border-t border-border bg-surface-2 p-2 font-mono text-[11px]">
                     <div className="label-mono mb-1">Preview logs</div>
                     {previewLogs.length === 0 ? (
                       <span className="text-muted-foreground">no output</span>
@@ -1303,7 +1336,7 @@ function CoderPage() {
                       previewLogs.map((l, i) => (
                         <div key={i} className={l.kind === "error" ? "text-destructive" : ""}>
                           {l.text}
-                        </div>
+                </div> : null}
                       ))
                     )}
                   </div>
