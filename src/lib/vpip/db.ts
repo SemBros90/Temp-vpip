@@ -590,22 +590,22 @@ function json(value: unknown) {
   return JSON.parse(JSON.stringify(value ?? null));
 }
 
+/**
+ * Ids this browser session is known to own, per table, as of the last read or
+ * write. Deletes are computed against this set — never against "everything in
+ * the table" — so a second open tab (or the editor preview) can no longer wipe
+ * records it simply had not loaded yet.
+ */
+const ownedIds: Record<string, Set<string>> = {};
+
+function rememberIds(table: string, ids: string[]) {
+  ownedIds[table] = new Set(ids);
+}
+
 async function syncTable(table: string, rows: Row[], keepIds: string[]) {
-  // Paginated + error-propagating: an incomplete id list would make the delete
-  // set wrong, and a silent failure here used to remove live rows.
-  const existingIds: string[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from(table as never)
-      .select("id")
-      .range(from, from + PAGE - 1);
-    if (error) throw new Error(`Failed to list ${table} ids: ${error.message}`);
-    const page = (data ?? []) as Row[];
-    existingIds.push(...page.map((r) => r['id'] as string));
-    if (page.length < PAGE) break;
-  }
   const keep = new Set(keepIds);
-  const removed = existingIds.filter((id) => !keep.has(id));
+  const known = ownedIds[table] ?? new Set<string>();
+  const removed = [...known].filter((id) => !keep.has(id));
   if (removed.length) {
     for (let i = 0; i < removed.length; i += 200) {
       const { error } = await supabase
@@ -615,6 +615,7 @@ async function syncTable(table: string, rows: Row[], keepIds: string[]) {
       if (error) throw new Error(`Failed to delete from ${table}: ${error.message}`);
     }
   }
+  rememberIds(table, keepIds);
   if (rows.length) {
     const { error } = await supabase.from(table as never).upsert(rows as never, { onConflict: "id" });
     if (error) throw error;
