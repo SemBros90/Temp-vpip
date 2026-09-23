@@ -653,8 +653,15 @@ async function syncTable(table: string, rows: Row[], keepIds: string[]) {
 // Writes are serialised: concurrent flushes (debounced save + auto-save interval)
 // could interleave a parent delete with a child upsert and trip a foreign key.
 let writeChain: Promise<void> = Promise.resolve();
+let queued = 0;
+
+/** Number of writes currently queued or in flight. */
+export function saveQueueLength() {
+  return queued;
+}
 
 export function vaultWrite(value: unknown): Promise<void> {
+  queued += 1;
   const run = writeChain.then(
     () => writeWorkspace(value),
     () => writeWorkspace(value),
@@ -663,7 +670,39 @@ export function vaultWrite(value: unknown): Promise<void> {
     () => undefined,
     () => undefined,
   );
-  return run;
+  return run.finally(() => {
+    queued = Math.max(0, queued - 1);
+  });
+}
+
+/**
+ * Reads one record straight back from the database after a save, so a write
+ * that silently did nothing cannot be reported as success.
+ */
+export async function verifySave(expectedSavedAt: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("vpip_settings")
+    .select("saved_at")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) throw new Error(`Save verification failed: ${error.message}`);
+  if (!data?.saved_at) throw new Error("Save verification failed: no settings row found");
+  const written = new Date(data.saved_at as string).getTime();
+  const expected = new Date(expectedSavedAt).getTime();
+  if (!Number.isFinite(written) || written + 1000 < expected) {
+    throw new Error("Save verification failed: database did not record the latest write");
+  }
+}
+
+/** Round-trip check used by the persistence diagnostics screen. */
+export async function pingDatabase(): Promise<{ ok: boolean; ms: number; message: string }> {
+  const t0 = Date.now();
+  const { error } = await supabase.from("vpip_settings").select("id").eq("id", 1).maybeSingle();
+  return {
+    ok: !error,
+    ms: Date.now() - t0,
+    message: error ? error.message : "Reachable",
+  };
 }
 
 async function writeWorkspace(value: unknown): Promise<void> {
