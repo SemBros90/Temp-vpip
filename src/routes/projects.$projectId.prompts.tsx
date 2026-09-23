@@ -262,7 +262,7 @@ function ContextPackagePanel({
   const p = useProject(projectId);
   const actions = useVpipActions();
   const navigate = useNavigate();
-  const { provider, cfg } = useEngine();
+  const { provider, cfg, author } = useEngine();
   const [showPackage, setShowPackage] = useState(false);
 
   const prompt = p.prompts.find((x) => x.id === promptId);
@@ -292,6 +292,23 @@ function ContextPackagePanel({
   };
 
   const execute = () => {
+    // V-05 — every build session references a permanently stored context package.
+    const record = actions.addContextPackage({
+      projectId,
+      title: `${prompt.title} V${prompt.version}`,
+      promptId: prompt.id,
+      promptTitle: prompt.title,
+      promptVersion: prompt.version,
+      markdown: pkg.markdown,
+      counts: { ...pkg.counts, prompts: 1 },
+      decisionIds: prompt.linkedDecisionIds ?? [],
+      requirementIds: prompt.linkedRequirementIds ?? [],
+      documentIds: prompt.linkedDocumentIds ?? [],
+      discussionIds: prompt.linkedDiscussionIds ?? [],
+      promptIds: [prompt.id],
+      provider,
+      model: cfg.model,
+    });
     const session = actions.createBuildSession({
       projectId,
       promptId: prompt.id,
@@ -302,9 +319,23 @@ function ContextPackagePanel({
       model: cfg.model,
       status: "Handed Off",
       contextPackage: pkg.markdown,
+      contextPackageId: record.id,
+      sourceDocumentIds: prompt.linkedDocumentIds ?? [],
+      sourceDiscussionIds: prompt.linkedDiscussionIds ?? [],
       counts: pkg.counts,
     });
     actions.updatePrompt(prompt.id, { status: "Sent To Coder" });
+    actions.logActivity({
+      projectId,
+      subjectType: "Build Session",
+      subjectId: session.id,
+      subjectLabel: `${session.code} — ${prompt.title} V${prompt.version}`,
+      action: "Created",
+      provider,
+      model: cfg.model,
+      author,
+      note: `Context package ${record.code}`,
+    });
     toast.success(`${session.code} created — prompt handed off`);
     void navigate({
       to: "/projects/$projectId/coder/$buildId",
