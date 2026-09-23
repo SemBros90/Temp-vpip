@@ -29,7 +29,9 @@ export type KnowledgeType =
   | "Idea"
   | "Risk"
   | "Question"
-  | "Assumption";
+  | "Assumption"
+  | "Lesson Learned"
+  | "Failure Cause";
 
 export const KNOWLEDGE_TYPES: KnowledgeType[] = [
   "Decision",
@@ -38,6 +40,8 @@ export const KNOWLEDGE_TYPES: KnowledgeType[] = [
   "Risk",
   "Question",
   "Assumption",
+  "Lesson Learned",
+  "Failure Cause",
 ];
 
 export const KNOWLEDGE_PREFIX: Record<KnowledgeType, string> = {
@@ -47,7 +51,28 @@ export const KNOWLEDGE_PREFIX: Record<KnowledgeType, string> = {
   Risk: "K",
   Question: "Q",
   Assumption: "A",
+  "Lesson Learned": "L",
+  "Failure Cause": "F",
 };
+
+/** V-13 — knowledge can now be extracted from any project object. */
+export type KnowledgeSourceKind =
+  | "Discussion"
+  | "Document"
+  | "Prompt"
+  | "Build Session"
+  | "Repository"
+  | "Artifact";
+
+export const KNOWLEDGE_SOURCE_KINDS: KnowledgeSourceKind[] = [
+  "Discussion",
+  "Document",
+  "Prompt",
+  "Build Session",
+  "Repository",
+  "Artifact",
+];
+
 
 export type KnowledgeStatus = "candidate" | "approved" | "rejected";
 
