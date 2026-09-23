@@ -173,7 +173,7 @@ export function parseProposedFiles(markdown: string): ProposedFile[] {
 
 const PREVIEW_BRIDGE = `<script>
 (function(){
-  var post=function(kind,text){parent.postMessage({__vpipPreview:true,kind:kind,text:String(text)},'*')};
+  var post=function(kind,text){try{parent.postMessage({__vpipPreview:true,kind:kind,text:String(text)},'*')}catch(e){}};
   ['log','warn','error','info'].forEach(function(k){
     var orig=console[k];
     console[k]=function(){post(k==='error'?'error':'log',Array.prototype.map.call(arguments,function(a){
@@ -182,9 +182,41 @@ const PREVIEW_BRIDGE = `<script>
   });
   window.addEventListener('error',function(e){post('error',e.message+' ('+(e.filename||'')+':'+e.lineno+')')});
   window.addEventListener('unhandledrejection',function(e){post('error','Unhandled rejection: '+e.reason)});
+
+  /* The preview frame is sandboxed, so it has an opaque origin: touching
+     localStorage/sessionStorage or history throws SecurityError and kills the
+     app before it renders. Provide in-memory equivalents instead. */
+  function memoryStorage(){
+    var data={};
+    return {
+      getItem:function(k){return Object.prototype.hasOwnProperty.call(data,String(k))?data[String(k)]:null},
+      setItem:function(k,v){data[String(k)]=String(v)},
+      removeItem:function(k){delete data[String(k)]},
+      clear:function(){data={}},
+      key:function(i){return Object.keys(data)[i]===undefined?null:Object.keys(data)[i]},
+      get length(){return Object.keys(data).length}
+    };
+  }
+  ['localStorage','sessionStorage'].forEach(function(name){
+    var ok=false;
+    try{ var s=window[name]; s.setItem('__vpip__','1'); s.removeItem('__vpip__'); ok=true; }catch(e){}
+    if(!ok){
+      try{ Object.defineProperty(window,name,{configurable:true,get:(function(store){return function(){return store}})(memoryStorage())}); }catch(e){}
+    }
+  });
+  ['pushState','replaceState'].forEach(function(m){
+    var orig=window.history[m];
+    window.history[m]=function(){
+      try{ return orig.apply(window.history, arguments); }
+      catch(e){ return undefined; }
+    };
+  });
+  try{ if(!window.indexedDB){ /* nothing to do */ } }catch(e){}
+
   post('log','preview loaded');
 })();
 </script>`;
+
 
 const MODULE_RE = /\.(tsx|ts|jsx|js|mjs)$/;
 
@@ -424,8 +456,15 @@ export function buildPreviewDoc(files: CoderFile[], entryPath?: string): string 
   let doc = html.content
     .replace(/<script[^>]*\ssrc=["'](?!https?:)[^"']+["'][^>]*>\s*<\/script>/gi, "")
     .replace(/<link[^>]*rel=["']stylesheet["'][^>]*href=["'](?!https?:)[^"']+["'][^>]*>/gi, "");
-  const head = `${PREVIEW_BRIDGE}${styleTag}`;
-  doc = doc.includes("</head>") ? doc.replace("</head>", `${head}\n</head>`) : `${head}\n${doc}`;
+  // The bridge must run before any of the document's own scripts, so it is
+  // injected right after <head> rather than at the end of it.
+  doc = doc.includes("<head")
+    ? doc.replace(/<head[^>]*>/i, (m) => `${m}\n${PREVIEW_BRIDGE}`)
+    : `${PREVIEW_BRIDGE}\n${doc}`;
+  doc = doc.includes("</head>")
+    ? doc.replace("</head>", `${styleTag}\n</head>`)
+    : `${doc}\n${styleTag}`;
+
   if (scripts) {
     doc = doc.includes("</body>")
       ? doc.replace("</body>", `${scripts}\n</body>`)
