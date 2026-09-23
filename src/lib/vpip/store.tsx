@@ -1679,7 +1679,7 @@ export function useVpipActions() {
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ws, update],
+    [ws, update, confirmSaved],
   );
 }
 
