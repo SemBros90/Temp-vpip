@@ -826,7 +826,7 @@ export const PROVIDER_LABEL: Record<ProviderId, string> = {
 
 export const PROVIDER_MODELS: Record<ProviderId, string[]> = {
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini"],
-  deepseek: ["deepseek-chat", "deepseek-reasoner"],
+  deepseek: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-pro"],
 };
 
 export function emptyWorkspace(): Workspace {
