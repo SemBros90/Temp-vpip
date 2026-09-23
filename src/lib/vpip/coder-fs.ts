@@ -256,6 +256,16 @@ function isModule(path: string) {
   return MODULE_RE.test(path) && !path.endsWith(".d.ts") && !isToolingFile(path);
 }
 
+/** Repairs a common generated-code mismatch where an object-returning hook is
+ * consumed as a React-style tuple. The source file remains untouched; preview
+ * execution gets the contract its own hook declares. */
+function normalizeGeneratedHookContracts(content: string) {
+  return content.replace(
+    /const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*useLocalStorage(<[^;\n]+?\([^;\n]+?\);/g,
+    "const { value: $1, setValue: $2, saveState: $3 } = useLocalStorage$4",
+  );
+}
+
 /** Compiles the session's TS/TSX/JS modules to a browser-runnable registry. */
 function compileModules(files: CoderFile[]): { code: Record<string, string>; errors: string[] } {
   const code: Record<string, string> = {};
@@ -264,7 +274,7 @@ function compileModules(files: CoderFile[]): { code: Record<string, string>; err
     if (!isModule(f.path)) continue;
     const ts = /\.tsx?$/.test(f.path);
     try {
-      const out = transform(f.content, {
+      const out = transform(normalizeGeneratedHookContracts(f.content), {
         transforms: [...(ts ? (["typescript"] as const) : []), "jsx", "imports"],
         jsxRuntime: "automatic",
         filePath: f.path,
