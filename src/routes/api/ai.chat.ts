@@ -158,6 +158,7 @@ export const Route = createFileRoute("/api/ai/chat")({
 
         const stream = body.stream !== false;
         const anthropic = conf.dialect === "anthropic";
+        const responses = conf.dialect === "responses";
 
         const systemText = body.messages
           .filter((m) => m.role === "system")
@@ -184,7 +185,17 @@ export const Route = createFileRoute("/api/ai/chat")({
                 content: m.content,
               })),
             }
-          : { model: body.model, messages: body.messages, stream };
+          : responses
+            ? {
+                model: body.model,
+                stream,
+                ...(systemText ? { instructions: systemText } : {}),
+                input: turns.map((m) => ({
+                  role: m.role === "assistant" ? "assistant" : "user",
+                  content: m.content,
+                })),
+              }
+            : { model: body.model, messages: body.messages, stream };
 
         let upstream: Response;
         try {
