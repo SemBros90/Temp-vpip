@@ -143,12 +143,9 @@ export function ExplorerPage() {
                   <Tag>V{k.version ?? 1}</Tag>
                   {k.sourceKind && k.sourceKind !== "Discussion" ? <Tag>{k.sourceKind}</Tag> : null}
                   <Tag>{new Date(k.createdAt).toLocaleDateString()}</Tag>
-                  <Tag
-                    className="cursor-pointer hover:text-primary"
-                    onClick={() => setHistoryFor(historyFor === k.id ? null : k.id)}
-                  >
-                    {k.revisions.length} revisions
-                  </Tag>
+                  <button onClick={() => setHistoryFor(historyFor === k.id ? null : k.id)}>
+                    <Tag className="hover:text-primary">{k.revisions.length} revisions</Tag>
+                  </button>
                   {k.status === "candidate" ? (
                     <Button
                       size="sm"
