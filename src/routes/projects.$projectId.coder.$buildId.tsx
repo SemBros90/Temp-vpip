@@ -1306,6 +1306,16 @@ function CoderPage() {
                       size="sm"
                       variant="outline"
                       className="h-7"
+                      onClick={openPreviewInTab}
+                      disabled={!previewDoc}
+                      title="Open preview in a new full browser tab"
+                    >
+                      <ExternalLink className="size-3.5" /> Open tab
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7"
                       onClick={() => setPreviewLogsOpen((open) => !open)}
                     >
                       <TerminalIcon className="size-3.5" />
@@ -1320,6 +1330,7 @@ function CoderPage() {
                           title="Live preview"
                           srcDoc={previewDoc}
                           sandbox="allow-scripts allow-forms"
+
 
                           className="size-full border-0"
                         />
