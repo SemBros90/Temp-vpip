@@ -2,6 +2,11 @@ import { Link, useParams } from "@tanstack/react-router";
 import {
   Boxes,
   BrainCircuit,
+  Brain,
+  GraduationCap,
+  Layers,
+  Network,
+  ShieldAlert,
   Camera,
   FileText,
   GitBranch,
@@ -23,6 +28,7 @@ import { cn } from "@/lib/utils";
 
 const projectNav = [
   { to: "/projects/$projectId", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/projects/$projectId/memory", label: "Project Memory", icon: Brain },
   { to: "/projects/$projectId/discussions", label: "Discussions", icon: MessagesSquare },
   { to: "/projects/$projectId/inbox", label: "Knowledge Inbox", icon: Inbox },
   { to: "/projects/$projectId/register", label: "Master Register", icon: Table2 },
@@ -30,9 +36,12 @@ const projectNav = [
   { to: "/projects/$projectId/ask", label: "Ask Project Memory", icon: BrainCircuit },
   { to: "/projects/$projectId/documents", label: "Documents", icon: FileText },
   { to: "/projects/$projectId/prompts", label: "Prompts", icon: Sparkles },
+  { to: "/projects/$projectId/context", label: "Context Packages", icon: Layers },
   { to: "/projects/$projectId/builds", label: "Build Sessions", icon: HardDriveDownload },
   { to: "/projects/$projectId/repositories", label: "Repositories", icon: GitBranch },
   { to: "/projects/$projectId/artifacts", label: "Artifacts & Builds", icon: Package },
+  { to: "/projects/$projectId/outcomes", label: "Outcomes & Failures", icon: ShieldAlert },
+  { to: "/projects/$projectId/lessons", label: "Lessons Learned", icon: GraduationCap },
   { to: "/projects/$projectId/snapshots", label: "Snapshots", icon: Camera },
 ] as const;
 
@@ -89,6 +98,7 @@ export function Shell({
         <nav className="flex-1 overflow-y-auto px-2 py-3">
           <div className="label-mono px-2 pb-1.5">Workspace</div>
           <NavItem to="/" icon={Library} label="Projects" exact />
+          <NavItem to="/intelligence" icon={Network} label="Intelligence Register" />
           <NavItem to="/settings" icon={SettingsIcon} label="Settings" />
 
           {project ? (
