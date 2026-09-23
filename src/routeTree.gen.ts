@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DiagnosticsRouteImport } from './routes/diagnostics'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
@@ -37,6 +38,11 @@ import { Route as ProjectsProjectIdDiscussionsDiscussionIdRouteImport } from './
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiagnosticsRoute = DiagnosticsRouteImport.update({
+  id: '/diagnostics',
+  path: '/diagnostics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntelligenceRoute = IntelligenceRouteImport.update({
@@ -170,6 +176,7 @@ const ProjectsProjectIdDiscussionsDiscussionIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/diagnostics': typeof DiagnosticsRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
@@ -196,6 +203,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/diagnostics': typeof DiagnosticsRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
   '/api/ai/chat': typeof ApiAiChatRoute
@@ -222,6 +230,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/diagnostics': typeof DiagnosticsRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/diagnostics'
     | '/intelligence'
     | '/settings'
     | '/projects/$projectId'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/diagnostics'
     | '/intelligence'
     | '/settings'
     | '/api/ai/chat'
@@ -301,6 +312,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/diagnostics'
     | '/intelligence'
     | '/settings'
     | '/projects/$projectId'
@@ -328,6 +340,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DiagnosticsRoute: typeof DiagnosticsRoute
   IntelligenceRoute: typeof IntelligenceRoute
   SettingsRoute: typeof SettingsRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
@@ -342,6 +355,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diagnostics': {
+      id: '/diagnostics'
+      path: '/diagnostics'
+      fullPath: '/diagnostics'
+      preLoaderRoute: typeof DiagnosticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/intelligence': {
@@ -557,6 +577,7 @@ const ProjectsProjectIdRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DiagnosticsRoute: DiagnosticsRoute,
   IntelligenceRoute: IntelligenceRoute,
   SettingsRoute: SettingsRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
