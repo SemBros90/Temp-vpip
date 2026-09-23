@@ -1,10 +1,17 @@
 import JSZip from "jszip";
 import type {
+  BuildSession,
+  Artifact,
+  ContextPackageRecord,
   Discussion,
+  FailureRecord,
   GeneratedDocument,
   GeneratedPrompt,
   KnowledgeItem,
+  OutcomeRecord,
   Project,
+  RepoCommit,
+  Repository,
   Snapshot,
   Workspace,
 } from "./types";
@@ -87,6 +94,14 @@ export interface ProjectBundle {
   documents: GeneratedDocument[];
   prompts: GeneratedPrompt[];
   snapshots: Snapshot[];
+  /* V-14 — portable project intelligence */
+  buildSessions?: BuildSession[];
+  repositories?: Repository[];
+  repoCommits?: RepoCommit[];
+  artifacts?: Artifact[];
+  contextPackages?: ContextPackageRecord[];
+  outcomes?: OutcomeRecord[];
+  failures?: FailureRecord[];
 }
 
 export function addProjectToZip(zip: JSZip, b: ProjectBundle) {
@@ -128,6 +143,53 @@ export function addProjectToZip(zip: JSZip, b: ProjectBundle) {
   for (const p of b.prompts) {
     root.file(`Prompts/${slug(p.title)}-V${p.version}.md`, p.markdown);
   }
+  for (const cp of b.contextPackages ?? []) {
+    root.file(`ContextPackages/${cp.code}-${slug(cp.title)}.md`, cp.markdown);
+  }
+  for (const bs of b.buildSessions ?? []) {
+    root.file(
+      `BuildSessions/${bs.code}-${slug(bs.promptTitle)}.json`,
+      JSON.stringify(bs, null, 2),
+    );
+  }
+  for (const a of b.artifacts ?? []) {
+    root.file(`Artifacts/${a.code}/${a.path}`, a.content);
+  }
+  if ((b.repositories ?? []).length || (b.repoCommits ?? []).length) {
+    root.file(
+      "Repositories/repositories.json",
+      JSON.stringify(
+        {
+          repositories: (b.repositories ?? []).map(({ token: _token, ...r }) => r),
+          commits: b.repoCommits ?? [],
+        },
+        null,
+        2,
+      ),
+    );
+  }
+  if ((b.outcomes ?? []).length || (b.failures ?? []).length) {
+    const lines = [
+      `# Lessons Learned — ${b.project.name}`,
+      "",
+      "## Outcomes",
+      ...((b.outcomes ?? []).length
+        ? (b.outcomes ?? []).map(
+            (o) =>
+              `- ${o.code} · ${o.subjectType} ${o.subjectLabel} · ${o.result}\n  - Lessons: ${o.lessons || "—"}\n  - Recommendations: ${o.recommendations || "—"}`,
+          )
+        : ["- none"]),
+      "",
+      "## Failures",
+      ...((b.failures ?? []).length
+        ? (b.failures ?? []).map(
+            (f) =>
+              `- ${f.code} · ${f.subjectType} ${f.subjectLabel} · ${f.status} · ${f.title}\n  - Root cause: ${f.rootCause || "—"}\n  - Resolution: ${f.resolution || "—"}\n  - Lessons: ${f.lessons || "—"}`,
+          )
+        : ["- none"]),
+    ];
+    root.file("LessonsLearned/lessons-learned.md", lines.join("\n"));
+  }
   for (const s of b.snapshots) {
     root.file(
       `Snapshots/${s.createdAt.replace(/[:.]/g, "-")}-${slug(s.title)}.md`,
@@ -158,6 +220,13 @@ export async function exportWorkspaceZip(ws: Workspace) {
       documents: ws.documents.filter((d) => d.projectId === project.id),
       prompts: ws.prompts.filter((p) => p.projectId === project.id),
       snapshots: ws.snapshots.filter((s) => s.projectId === project.id),
+      buildSessions: (ws.buildSessions ?? []).filter((x) => x.projectId === project.id),
+      repositories: (ws.repositories ?? []).filter((x) => x.projectId === project.id),
+      repoCommits: (ws.repoCommits ?? []).filter((x) => x.projectId === project.id),
+      artifacts: (ws.artifacts ?? []).filter((x) => x.projectId === project.id),
+      contextPackages: (ws.contextPackages ?? []).filter((x) => x.projectId === project.id),
+      outcomes: (ws.outcomes ?? []).filter((x) => x.projectId === project.id),
+      failures: (ws.failures ?? []).filter((x) => x.projectId === project.id),
     });
   }
   const blob = await zip.generateAsync({ type: "blob" });

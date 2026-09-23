@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
+import { ExtractButton } from "@/components/vpip/ExtractButton";
+import { artifactSource } from "@/lib/vpip/upgrade";
 import { EmptyState, Tag, relTime } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -222,6 +224,13 @@ function ArtifactsPage() {
           <Button size="sm" className="h-8" onClick={capture} disabled={!p.buildSessions.length}>
             <Play className="size-4" /> Capture build
           </Button>
+          {open ? (
+            <ExtractButton
+              projectId={projectId}
+              source={artifactSource(open)}
+              label="Extract artifact knowledge"
+            />
+          ) : null}
         </div>
       }
     >

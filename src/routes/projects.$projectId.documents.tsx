@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Download, FileText, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
+import { ExtractButton } from "@/components/vpip/ExtractButton";
+import { documentSource } from "@/lib/vpip/upgrade";
 import { EmptyState, EnginePicker, relTime, Tag, useEngine } from "@/components/vpip/common";
 import { Markdown } from "@/lib/vpip/markdown";
 import { Button } from "@/components/ui/button";
@@ -38,7 +40,7 @@ function DocumentsPage() {
   const { projectId } = Route.useParams();
   const p = useProject(projectId);
   const actions = useVpipActions();
-  const { provider, cfg } = useEngine();
+  const { provider, cfg, author } = useEngine();
   const { keys } = useAiKeys();
   const [kind, setKind] = useState<DocumentKind>("Project Summary");
   const [discussionId, setDiscussionId] = useState<string>("none");
@@ -69,6 +71,17 @@ function DocumentsPage() {
         provider,
         model: cfg.model,
         ...(focus ? { sourceDiscussionId: focus.id } : {}),
+      });
+      actions.logActivity({
+        projectId,
+        subjectType: "Document",
+        subjectId: doc.id,
+        subjectLabel: doc.title,
+        action: "Created",
+        provider,
+        model: cfg.model,
+        author,
+        note: `Generated ${kind}`,
       });
       setOpenId(doc.id);
       toast.success("Document generated and snapshotted");
@@ -169,14 +182,17 @@ function DocumentsPage() {
                       <Tag>{new Date(open.createdAt).toLocaleString()}</Tag>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8"
-                    onClick={() => download(open.markdown, `${slug(open.title)}.md`)}
-                  >
-                    <Download className="size-4" /> Markdown
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8"
+                      onClick={() => download(open.markdown, `${slug(open.title)}.md`)}
+                    >
+                      <Download className="size-4" /> Markdown
+                    </Button>
+                    <ExtractButton projectId={projectId} source={documentSource(open)} />
+                  </div>
                 </div>
                 <Markdown source={open.markdown} />
               </div>

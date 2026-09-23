@@ -36,6 +36,7 @@ export function ExplorerPage() {
   const { projectId } = Route.useParams();
   const p = useProject(projectId);
   const actions = useVpipActions();
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("all");
   const [sort, setSort] = useState<"newest" | "oldest" | "title">("newest");
@@ -139,7 +140,12 @@ export function ExplorerPage() {
                   ) : null}
                   {k.sourceMessages.length ? <Tag>msg {k.sourceMessages.join(", ")}</Tag> : null}
                   {k.provider ? <Tag>{k.provider}</Tag> : null}
+                  <Tag>V{k.version ?? 1}</Tag>
+                  {k.sourceKind && k.sourceKind !== "Discussion" ? <Tag>{k.sourceKind}</Tag> : null}
                   <Tag>{new Date(k.createdAt).toLocaleDateString()}</Tag>
+                  <button onClick={() => setHistoryFor(historyFor === k.id ? null : k.id)}>
+                    <Tag className="hover:text-primary">{k.revisions.length} revisions</Tag>
+                  </button>
                   {k.status === "candidate" ? (
                     <Button
                       size="sm"
@@ -151,6 +157,23 @@ export function ExplorerPage() {
                     </Button>
                   ) : null}
                 </div>
+                {historyFor === k.id ? (
+                  <div className="mt-2 rounded-sm border border-border bg-surface-2 p-3">
+                    <div className="label-mono mb-1.5">Revision history</div>
+                    {k.reasonForChange ? (
+                      <div className="mb-1.5 text-xs">
+                        <span className="label-mono">Latest reason</span> {k.reasonForChange}
+                      </div>
+                    ) : null}
+                    <ol className="space-y-1 text-xs text-muted-foreground">
+                      {k.revisions.map((r, i) => (
+                        <li key={`${r.at}-${i}`}>
+                          V{i + 1} · {new Date(r.at).toLocaleString()} · {r.note} · {r.author}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

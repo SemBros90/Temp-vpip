@@ -898,6 +898,13 @@ export function useVpipActions() {
           ],
         }));
       },
+      /** V-10 — repository intelligence: name a commit as a release. */
+      updateRepoCommit(id: string, patch: Partial<RepoCommit>) {
+        update((w) => ({
+          ...w,
+          repoCommits: (w.repoCommits ?? []).map((c) => (c.id === id ? { ...c, ...patch } : c)),
+        }));
+      },
       addRepoCommit(commit: Omit<RepoCommit, "id" | "createdAt">): RepoCommit {
         const full: RepoCommit = { ...commit, id: uid(), createdAt: now() };
         update((w) => ({

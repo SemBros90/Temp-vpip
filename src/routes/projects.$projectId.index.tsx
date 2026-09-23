@@ -57,6 +57,11 @@ function Dashboard() {
       actions={
         <>
           <EnginePicker />
+          <Button asChild variant="outline" size="sm" className="h-8">
+            <Link to="/projects/$projectId/memory" params={{ projectId }}>
+              Project Memory
+            </Link>
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -69,6 +74,13 @@ function Dashboard() {
                 documents: p.documents,
                 prompts: p.prompts,
                 snapshots: p.snapshots,
+                buildSessions: p.buildSessions,
+                repositories: p.repositories,
+                repoCommits: p.repoCommits,
+                artifacts: p.artifacts,
+                contextPackages: p.contextPackages,
+                outcomes: p.outcomes,
+                failures: p.failures,
               });
               toast.success("Project folder exported as ZIP");
             }}

@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/select";
 import { useProject, useVpipActions } from "@/lib/vpip/store";
 import { download, slug } from "@/lib/vpip/files";
+import { ExtractButton } from "@/components/vpip/ExtractButton";
+import { buildSessionSource } from "@/lib/vpip/upgrade";
 import { BUILD_STATUSES, PROVIDER_LABEL, type BuildStatus } from "@/lib/vpip/types";
 
 export const Route = createFileRoute("/projects/$projectId/builds")({
@@ -153,6 +155,7 @@ function BuildsPage() {
                     >
                       <Download className="size-4" /> Markdown
                     </Button>
+                    <ExtractButton projectId={projectId} source={buildSessionSource(open)} />
                   </div>
                 </div>
 
@@ -179,16 +182,7 @@ function BuildsPage() {
                   )}
                 </div>
 
-                <div className="label-mono">
-                  Source prompt ·{" "}
-                  <Link
-                    to="/projects/$projectId/prompts"
-                    params={{ projectId }}
-                    className="underline"
-                  >
-                    open in Prompts
-                  </Link>
-                </div>
+                <Traceability projectId={projectId} buildId={open.id} />
 
                 <Markdown source={open.contextPackage} />
               </div>
@@ -197,5 +191,115 @@ function BuildsPage() {
         )}
       </div>
     </Shell>
+  );
+}
+
+
+/* ============================ V-04 — prompt-to-coder traceability */
+
+function Traceability({ projectId, buildId }: { projectId: string; buildId: string }) {
+  const p = useProject(projectId);
+  const build = p.buildSessions.find((b) => b.id === buildId);
+  if (!build) return null;
+
+  const prompt = p.prompts.find((x) => x.id === build.promptId);
+  const pkg = p.contextPackages.find((c) => c.id === build.contextPackageId);
+  const ids = (list: string[] | undefined) => list ?? [];
+  const decisions = p.knowledge.filter((k) =>
+    ids(pkg?.decisionIds ?? prompt?.linkedDecisionIds).includes(k.id),
+  );
+  const requirements = p.knowledge.filter((k) =>
+    ids(pkg?.requirementIds ?? prompt?.linkedRequirementIds).includes(k.id),
+  );
+  const documents = p.documents.filter((d) =>
+    ids(pkg?.documentIds ?? build.sourceDocumentIds ?? prompt?.linkedDocumentIds).includes(d.id),
+  );
+  const discussions = p.discussions.filter((d) =>
+    ids(pkg?.discussionIds ?? build.sourceDiscussionIds ?? prompt?.linkedDiscussionIds).includes(d.id),
+  );
+  const outcomes = p.outcomes.filter((o) => o.subjectId === build.id);
+  const failures = p.failures.filter((f) => f.subjectId === build.id || f.buildIds.includes(build.id));
+
+  return (
+    <div className="rounded-sm border border-border bg-surface-2 p-4">
+      <div className="label-mono mb-2">Why this build exists — full traceability</div>
+      <div className="space-y-2 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground">Source prompt</span>
+          <Link to="/projects/$projectId/prompts" params={{ projectId }}>
+            <Tag className="hover:text-primary">
+              {build.promptTitle} V{build.promptVersion}
+            </Tag>
+          </Link>
+          <Tag>{build.promptKind}</Tag>
+          {pkg ? (
+            <Link to="/projects/$projectId/context" params={{ projectId }}>
+              <Tag className="hover:text-primary">Context package {pkg.code}</Tag>
+            </Link>
+          ) : (
+            <Tag>Context package frozen inline</Tag>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground">Decisions</span>
+          {decisions.length ? (
+            decisions.map((k) => <Tag key={k.id}>{k.code} {k.title}</Tag>)
+          ) : (
+            <Tag>none linked</Tag>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground">Requirements</span>
+          {requirements.length ? (
+            requirements.map((k) => <Tag key={k.id}>{k.code} {k.title}</Tag>)
+          ) : (
+            <Tag>none linked</Tag>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground">Documents</span>
+          {documents.length ? (
+            documents.map((d) => <Tag key={d.id}>{d.title}</Tag>)
+          ) : (
+            <Tag>none linked</Tag>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground">Discussions</span>
+          {discussions.length ? (
+            discussions.map((d) => (
+              <Link
+                key={d.id}
+                to="/projects/$projectId/discussions/$discussionId"
+                params={{ projectId, discussionId: d.id }}
+              >
+                <Tag className="hover:text-primary">{d.title}</Tag>
+              </Link>
+            ))
+          ) : (
+            <Tag>none linked</Tag>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground">Outcome</span>
+          {outcomes.length ? (
+            outcomes.map((o) => (
+              <Tag key={o.id}>
+                {o.code} · {o.result}
+              </Tag>
+            ))
+          ) : (
+            <Link to="/projects/$projectId/outcomes" params={{ projectId }}>
+              <Tag className="hover:text-primary">not recorded — record it</Tag>
+            </Link>
+          )}
+          {failures.map((f) => (
+            <Tag key={f.id}>
+              {f.code} · {f.status}
+            </Tag>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
