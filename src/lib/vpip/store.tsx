@@ -60,6 +60,9 @@ interface Ctx {
   loaded: boolean;
   dirty: boolean;
   lastSavedAt: string | null;
+  lastLoadedAt: string | null;
+  loadError: string | null;
+  reload: () => Promise<void>;
   update: (fn: (ws: Workspace) => Workspace) => void;
   saveNow: () => Promise<void>;
   resetVault: () => Promise<void>;
@@ -73,24 +76,42 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const wsRef = useRef(ws);
   wsRef.current = ws;
+  // Writes are only allowed once a complete snapshot has been read. Writing is a
+  // full sync, so saving on top of a failed/incomplete load would delete rows.
+  const readableRef = useRef(false);
 
-  useEffect(() => {
-    let alive = true;
-    vaultRead<Workspace>()
-      .then((stored) => {
-        if (!alive) return;
-        if (stored) setWs({ ...emptyWorkspace(), ...stored });
-        setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
-    return () => {
-      alive = false;
-    };
+  const load = useCallback(async () => {
+    try {
+      const stored = await vaultRead<Workspace>();
+      const next = stored ? { ...emptyWorkspace(), ...stored } : emptyWorkspace();
+      wsRef.current = next;
+      setWs(next);
+      readableRef.current = true;
+      setLoadError(null);
+      setLastLoadedAt(now());
+      setDirty(false);
+    } catch (err) {
+      readableRef.current = false;
+      setLoadError(err instanceof Error ? err.message : String(err));
+      console.error("Vault load failed", err);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   const saveNow = useCallback(async () => {
+    if (!readableRef.current) {
+      console.warn("Vault save skipped: workspace was never loaded successfully");
+      return;
+    }
     try {
       await vaultWrite({ ...wsRef.current, savedAt: now() });
       setLastSavedAt(now());
@@ -111,22 +132,22 @@ export function VpipProvider({ children }: { children: ReactNode }) {
 
   // Real-time save (debounced) — every change reaches the vault immediately.
   useEffect(() => {
-    if (!loaded || !dirty) return;
+    if (!loaded || !dirty || loadError) return;
     const t = setTimeout(() => {
       void saveNow();
     }, 400);
     return () => clearTimeout(t);
-  }, [ws, dirty, loaded, saveNow]);
+  }, [ws, dirty, loaded, loadError, saveNow]);
 
-  // Auto save interval — a periodic guaranteed flush.
+  // Auto save interval — a periodic flush, only when there is unsaved work.
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || loadError) return;
     const ms = Math.max(5, ws.settings.autoSaveIntervalSec) * 1000;
     const i = setInterval(() => {
-      void saveNow();
+      if (dirty) void saveNow();
     }, ms);
     return () => clearInterval(i);
-  }, [loaded, ws.settings.autoSaveIntervalSec, saveNow]);
+  }, [loaded, loadError, dirty, ws.settings.autoSaveIntervalSec, saveNow]);
 
   const resetVault = useCallback(async () => {
     await vaultClear();
@@ -144,11 +165,33 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ ws, loaded, dirty, lastSavedAt, update, saveNow, resetVault, importWorkspace }),
-    [ws, loaded, dirty, lastSavedAt, update, saveNow, resetVault, importWorkspace],
+    () => ({
+      ws,
+      loaded,
+      dirty,
+      lastSavedAt,
+      lastLoadedAt,
+      loadError,
+      reload: load,
+      update,
+      saveNow,
+      resetVault,
+      importWorkspace,
+    }),
+    [ws, loaded, dirty, lastSavedAt, lastLoadedAt, loadError, load, update, saveNow, resetVault, importWorkspace],
   );
 
-  return <VpipContext.Provider value={value}>{children}</VpipContext.Provider>;
+  return (
+    <VpipContext.Provider value={value}>
+      {loaded ? (
+        children
+      ) : (
+        <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+          Loading project data…
+        </div>
+      )}
+    </VpipContext.Provider>
+  );
 }
 
 export function useVpip() {
