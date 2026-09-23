@@ -135,6 +135,34 @@ export async function vaultRead<T>(): Promise<T | null> {
     selectAll("vpip_intelligence", "created_at"),
   ]);
 
+  // Record exactly which rows this session has loaded; writes may only delete
+  // rows from this set.
+  const loaded: Array<[string, { data: Row[] }]> = [
+    ["vpip_projects", projects],
+    ["vpip_discussions", discussions],
+    ["vpip_knowledge", knowledge],
+    ["vpip_documents", documents],
+    ["vpip_prompts", prompts],
+    ["vpip_snapshots", snapshots],
+    ["vpip_build_sessions", buildSessions],
+    ["vpip_repositories", repositories],
+    ["vpip_repo_branches", repoBranches],
+    ["vpip_repo_commits", repoCommits],
+    ["vpip_artifacts", artifacts],
+    ["vpip_build_records", buildRecords],
+    ["vpip_change_records", changeRecords],
+    ["vpip_prompt_phases", promptPhases],
+    ["vpip_phase_runs", phaseRuns],
+    ["vpip_context_packages", contextPackages],
+    ["vpip_outcomes", outcomes],
+    ["vpip_failures", failures],
+    ["vpip_activity", activity],
+    ["vpip_intelligence", intelligence],
+  ];
+  for (const [table, res] of loaded) {
+    rememberIds(table, res.data.map((r) => r['id'] as string));
+  }
+
   const base = emptyWorkspace();
   const s = settings.data as Row | null;
 
@@ -590,22 +618,22 @@ function json(value: unknown) {
   return JSON.parse(JSON.stringify(value ?? null));
 }
 
+/**
+ * Ids this browser session is known to own, per table, as of the last read or
+ * write. Deletes are computed against this set — never against "everything in
+ * the table" — so a second open tab (or the editor preview) can no longer wipe
+ * records it simply had not loaded yet.
+ */
+const ownedIds: Record<string, Set<string>> = {};
+
+function rememberIds(table: string, ids: string[]) {
+  ownedIds[table] = new Set(ids);
+}
+
 async function syncTable(table: string, rows: Row[], keepIds: string[]) {
-  // Paginated + error-propagating: an incomplete id list would make the delete
-  // set wrong, and a silent failure here used to remove live rows.
-  const existingIds: string[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from(table as never)
-      .select("id")
-      .range(from, from + PAGE - 1);
-    if (error) throw new Error(`Failed to list ${table} ids: ${error.message}`);
-    const page = (data ?? []) as Row[];
-    existingIds.push(...page.map((r) => r['id'] as string));
-    if (page.length < PAGE) break;
-  }
   const keep = new Set(keepIds);
-  const removed = existingIds.filter((id) => !keep.has(id));
+  const known = ownedIds[table] ?? new Set<string>();
+  const removed = [...known].filter((id) => !keep.has(id));
   if (removed.length) {
     for (let i = 0; i < removed.length; i += 200) {
       const { error } = await supabase
@@ -615,6 +643,7 @@ async function syncTable(table: string, rows: Row[], keepIds: string[]) {
       if (error) throw new Error(`Failed to delete from ${table}: ${error.message}`);
     }
   }
+  rememberIds(table, keepIds);
   if (rows.length) {
     const { error } = await supabase.from(table as never).upsert(rows as never, { onConflict: "id" });
     if (error) throw error;
