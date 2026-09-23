@@ -54,9 +54,44 @@ function str(v: unknown, fallback = ""): string {
 
 /* ----------------------------------------------------------------- read */
 
+const PAGE = 1000;
+
+/**
+ * Reads a whole table, page by page. A partial read is never acceptable here:
+ * the workspace snapshot it feeds is written back as a full sync, so any row
+ * missing from the read would be deleted on the next save. Errors therefore
+ * propagate instead of degrading into an empty list.
+ */
+async function selectAll(
+  table: string,
+  orderCol: string,
+  ascending = false,
+): Promise<{ data: Row[] }> {
+  const out: Row[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from(table as never)
+      .select("*")
+      .order(orderCol, { ascending })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`Failed to read ${table}: ${error.message}`);
+    const page = (data ?? []) as Row[];
+    out.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return { data: out };
+}
+
 export async function vaultRead<T>(): Promise<T | null> {
+  const settingsRes = await supabase
+    .from("vpip_settings")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle();
+  if (settingsRes.error) throw new Error(`Failed to read vpip_settings: ${settingsRes.error.message}`);
+  const settings = settingsRes;
+
   const [
-    settings,
     projects,
     discussions,
     knowledge,
@@ -78,27 +113,26 @@ export async function vaultRead<T>(): Promise<T | null> {
     activity,
     intelligence,
   ] = await Promise.all([
-    supabase.from("vpip_settings").select("*").eq("id", 1).maybeSingle(),
-    supabase.from("vpip_projects").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_discussions").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_knowledge").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_documents").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_prompts").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_snapshots").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_build_sessions").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_repositories").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_repo_branches").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_repo_commits").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_artifacts").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_build_records").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_change_records").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_prompt_phases").select("*").order("phase_no", { ascending: true }),
-    supabase.from("vpip_phase_runs").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_context_packages").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_outcomes").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_failures").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_activity").select("*").order("created_at", { ascending: false }),
-    supabase.from("vpip_intelligence").select("*").order("created_at", { ascending: false }),
+    selectAll("vpip_projects", "created_at"),
+    selectAll("vpip_discussions", "created_at"),
+    selectAll("vpip_knowledge", "created_at"),
+    selectAll("vpip_documents", "created_at"),
+    selectAll("vpip_prompts", "created_at"),
+    selectAll("vpip_snapshots", "created_at"),
+    selectAll("vpip_build_sessions", "created_at"),
+    selectAll("vpip_repositories", "created_at"),
+    selectAll("vpip_repo_branches", "created_at"),
+    selectAll("vpip_repo_commits", "created_at"),
+    selectAll("vpip_artifacts", "created_at"),
+    selectAll("vpip_build_records", "created_at"),
+    selectAll("vpip_change_records", "created_at"),
+    selectAll("vpip_prompt_phases", "phase_no", true),
+    selectAll("vpip_phase_runs", "created_at"),
+    selectAll("vpip_context_packages", "created_at"),
+    selectAll("vpip_outcomes", "created_at"),
+    selectAll("vpip_failures", "created_at"),
+    selectAll("vpip_activity", "created_at"),
+    selectAll("vpip_intelligence", "created_at"),
   ]);
 
   const base = emptyWorkspace();
@@ -557,11 +591,29 @@ function json(value: unknown) {
 }
 
 async function syncTable(table: string, rows: Row[], keepIds: string[]) {
-  const { data: existing } = await supabase.from(table as never).select("id");
-  const existingIds = ((existing ?? []) as Row[]).map((r) => r['id'] as string);
-  const removed = existingIds.filter((id) => !keepIds.includes(id));
+  // Paginated + error-propagating: an incomplete id list would make the delete
+  // set wrong, and a silent failure here used to remove live rows.
+  const existingIds: string[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from(table as never)
+      .select("id")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`Failed to list ${table} ids: ${error.message}`);
+    const page = (data ?? []) as Row[];
+    existingIds.push(...page.map((r) => r['id'] as string));
+    if (page.length < PAGE) break;
+  }
+  const keep = new Set(keepIds);
+  const removed = existingIds.filter((id) => !keep.has(id));
   if (removed.length) {
-    await supabase.from(table as never).delete().in("id", removed);
+    for (let i = 0; i < removed.length; i += 200) {
+      const { error } = await supabase
+        .from(table as never)
+        .delete()
+        .in("id", removed.slice(i, i + 200));
+      if (error) throw new Error(`Failed to delete from ${table}: ${error.message}`);
+    }
   }
   if (rows.length) {
     const { error } = await supabase.from(table as never).upsert(rows as never, { onConflict: "id" });
