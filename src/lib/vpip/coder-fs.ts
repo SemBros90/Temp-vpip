@@ -384,7 +384,15 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
   }
   function findComponent(entry){
     var order = [], p;
-    if (entry) order.push(entry);
+    if (entry) {
+      try {
+        var entryExports = req(entry, './'+entry.split('/').pop());
+        var entryComponent = entryExports && (entryExports.default || entryExports.App);
+        if (typeof entryComponent === 'function') return { path: entry, comp: entryComponent };
+        if (/(^|\/)(main|index)\.[cm]?[jt]sx?$/.test(entry)) return { path: entry, started: true };
+      } catch (e) { console.error(entry+': '+(e && e.message ? e.message : String(e))); }
+      order.push(entry);
+    }
     for (p in sources) if (sources.hasOwnProperty(p) && order.indexOf(p) < 0) order.push(p);
     var summary = [];
     for (var i=0;i<order.length;i++){
@@ -405,6 +413,7 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     if (root && root.childNodes.length) return;
     var found = findComponent(window.__vpipEntry);
     var React = externals['react'], client = externals['react-dom/client'];
+    if (found.started) return;
     if (root && found.comp && React && client) {
       try { client.createRoot(root).render(React.createElement(found.comp)); }
       catch (e) { window.__vpipShowError(e); }
