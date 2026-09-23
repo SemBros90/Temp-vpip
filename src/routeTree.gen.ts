@@ -18,6 +18,7 @@ import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$p
 import { Route as ProjectsProjectIdArtifactsRouteImport } from './routes/projects.$projectId.artifacts'
 import { Route as ProjectsProjectIdAskRouteImport } from './routes/projects.$projectId.ask'
 import { Route as ProjectsProjectIdBuildsRouteImport } from './routes/projects.$projectId.builds'
+import { Route as ProjectsProjectIdContextRouteImport } from './routes/projects.$projectId.context'
 import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects.$projectId.documents'
 import { Route as ProjectsProjectIdExplorerRouteImport } from './routes/projects.$projectId.explorer'
 import { Route as ProjectsProjectIdInboxRouteImport } from './routes/projects.$projectId.inbox'
@@ -76,6 +77,12 @@ const ProjectsProjectIdBuildsRoute = ProjectsProjectIdBuildsRouteImport.update({
   path: '/builds',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdContextRoute =
+  ProjectsProjectIdContextRouteImport.update({
+    id: '/context',
+    path: '/context',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdDocumentsRoute =
   ProjectsProjectIdDocumentsRouteImport.update({
     id: '/documents',
@@ -150,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
+  '/projects/$projectId/context': typeof ProjectsProjectIdContextRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
@@ -171,6 +179,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
+  '/projects/$projectId/context': typeof ProjectsProjectIdContextRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
@@ -194,6 +203,7 @@ export interface FileRoutesById {
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
+  '/projects/$projectId/context': typeof ProjectsProjectIdContextRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
@@ -218,6 +228,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/builds'
+    | '/projects/$projectId/context'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/builds'
+    | '/projects/$projectId/context'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
@@ -261,6 +273,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/builds'
+    | '/projects/$projectId/context'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
@@ -348,6 +361,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdBuildsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/context': {
+      id: '/projects/$projectId/context'
+      path: '/context'
+      fullPath: '/projects/$projectId/context'
+      preLoaderRoute: typeof ProjectsProjectIdContextRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/documents': {
       id: '/projects/$projectId/documents'
       path: '/documents'
@@ -432,6 +452,7 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdArtifactsRoute: typeof ProjectsProjectIdArtifactsRoute
   ProjectsProjectIdAskRoute: typeof ProjectsProjectIdAskRoute
   ProjectsProjectIdBuildsRoute: typeof ProjectsProjectIdBuildsRoute
+  ProjectsProjectIdContextRoute: typeof ProjectsProjectIdContextRoute
   ProjectsProjectIdDocumentsRoute: typeof ProjectsProjectIdDocumentsRoute
   ProjectsProjectIdExplorerRoute: typeof ProjectsProjectIdExplorerRoute
   ProjectsProjectIdInboxRoute: typeof ProjectsProjectIdInboxRoute
@@ -450,6 +471,7 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdArtifactsRoute: ProjectsProjectIdArtifactsRoute,
   ProjectsProjectIdAskRoute: ProjectsProjectIdAskRoute,
   ProjectsProjectIdBuildsRoute: ProjectsProjectIdBuildsRoute,
+  ProjectsProjectIdContextRoute: ProjectsProjectIdContextRoute,
   ProjectsProjectIdDocumentsRoute: ProjectsProjectIdDocumentsRoute,
   ProjectsProjectIdExplorerRoute: ProjectsProjectIdExplorerRoute,
   ProjectsProjectIdInboxRoute: ProjectsProjectIdInboxRoute,
