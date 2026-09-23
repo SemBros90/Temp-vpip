@@ -47,7 +47,7 @@ function AskPage() {
   const ask = async () => {
     const q = question.trim();
     if (!q || busy) return;
-    if (!keys[provider]) {
+    if (!keys[provider] && !cfg.apiKey?.trim()) {
       toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }

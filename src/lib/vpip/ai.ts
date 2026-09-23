@@ -33,7 +33,13 @@ export async function streamChat(
   const res = await fetch(CHAT_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider, model: cfg.model, messages, stream: true }),
+    body: JSON.stringify({
+      provider,
+      model: cfg.model,
+      messages,
+      stream: true,
+      ...(cfg.apiKey?.trim() ? { apiKey: cfg.apiKey.trim() } : {}),
+    }),
     signal: signal ?? null,
   });
   if (!res.ok || !res.body) throw new AIError(await readError(res));
@@ -89,6 +95,7 @@ export async function testConnection(
         model: cfg.model,
         messages: [{ role: "user", content: "ping" }],
         stream: false,
+        ...(cfg.apiKey?.trim() ? { apiKey: cfg.apiKey.trim() } : {}),
       }),
     });
     if (!res.ok) return { ok: false, message: await readError(res) };

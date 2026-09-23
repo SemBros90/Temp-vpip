@@ -46,7 +46,7 @@ function DocumentsPage() {
   const [openId, setOpenId] = useState<string | null>(null);
 
   const generate = async () => {
-    if (!keys[provider]) {
+    if (!keys[provider] && !cfg.apiKey?.trim()) {
       toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }

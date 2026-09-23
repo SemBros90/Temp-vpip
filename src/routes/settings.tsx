@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, PlugZap, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { Download, Loader2, PlugZap, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { Tag } from "@/components/vpip/common";
@@ -77,19 +77,22 @@ function SettingsPage() {
                 <div key={id} className="space-y-2 border-b border-border pb-5 last:border-0 last:pb-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold">{PROVIDER_LABEL[id]}</span>
-                    <Tag>{configured ? "key configured" : "no key"}</Tag>
+                    <Tag>{cfg.apiKey?.trim() || configured ? "key configured" : "no key"}</Tag>
                     {cfg.status === "ok" ? <Tag>connected</Tag> : cfg.status === "error" ? <Tag>error</Tag> : null}
                     {ws.settings.defaultProvider === id ? <Tag>default</Tag> : null}
                   </div>
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_200px]">
                     <div>
                       <div className="label-mono mb-1">API key</div>
-                      <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-xs text-muted-foreground">
-                        <ShieldCheck className="size-3.5" />
-                        {configured
-                          ? "Stored securely on the server — never shown or sent to the browser."
-                          : "Not set. Ask Lovable to add your key and it is saved encrypted on the server."}
-                      </div>
+                      <Input
+                        type="password"
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="font-mono text-xs"
+                        placeholder={id === "openai" ? "sk-..." : "DeepSeek API key"}
+                        value={cfg.apiKey ?? ""}
+                        onChange={(e) => actions.setProvider(id, { apiKey: e.target.value })}
+                      />
                     </div>
                     <div>
                       <div className="label-mono mb-1">Model</div>
@@ -136,9 +139,9 @@ function SettingsPage() {
             })}
           </div>
           <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-            API keys are held in encrypted server storage and used only by this app's own backend when
-            it calls the engine. They are never stored in the project database, never sent to the
-            browser, and switching engines never changes your project memory.
+            Keys you type here are saved in the project database with the rest of your vault, so they
+            survive reload and follow the project to any device. Anyone with access to this project
+            can use them.
           </p>
         </section>
 

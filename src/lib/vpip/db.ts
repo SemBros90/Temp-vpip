@@ -1,6 +1,6 @@
 /**
  * VaultStore: the single persistence boundary of VPIP.
- * It now reads and writes the shared cloud database (Postgres) through the
+ * It reads and writes the shared cloud database (Postgres) through the
  * generated client. The rest of the app still works on one in-memory
  * `Workspace` object, so swapping this file is the only change needed to move
  * the vault somewhere else.
@@ -8,12 +8,26 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
   emptyWorkspace,
+  type AgentTask,
+  type BuildRequirement,
+  type Artifact,
+  type BuildRecord,
+  type BuildSession,
+  type ChangeRecord,
+  type CoderAction,
+  type CoderFile,
+  type CoderTurn,
+  type DbConnection,
   type Discussion,
   type GeneratedDocument,
   type GeneratedPrompt,
   type KnowledgeItem,
   type Project,
+  type RepoBranch,
+  type RepoCommit,
+  type Repository,
   type Snapshot,
+  type TerminalEntry,
   type Workspace,
 } from "./types";
 
@@ -23,19 +37,48 @@ function undef<T>(v: T | null | undefined): T | undefined {
   return v === null || v === undefined ? undefined : v;
 }
 
+function arr<T>(v: unknown): T[] {
+  return Array.isArray(v) ? (v as T[]) : [];
+}
+
+function str(v: unknown, fallback = ""): string {
+  return typeof v === "string" ? v : fallback;
+}
+
 /* ----------------------------------------------------------------- read */
 
 export async function vaultRead<T>(): Promise<T | null> {
-  const [settings, projects, discussions, knowledge, documents, prompts, snapshots] =
-    await Promise.all([
-      supabase.from("vpip_settings").select("*").eq("id", 1).maybeSingle(),
-      supabase.from("vpip_projects").select("*").order("created_at", { ascending: false }),
-      supabase.from("vpip_discussions").select("*").order("created_at", { ascending: false }),
-      supabase.from("vpip_knowledge").select("*").order("created_at", { ascending: false }),
-      supabase.from("vpip_documents").select("*").order("created_at", { ascending: false }),
-      supabase.from("vpip_prompts").select("*").order("created_at", { ascending: false }),
-      supabase.from("vpip_snapshots").select("*").order("created_at", { ascending: false }),
-    ]);
+  const [
+    settings,
+    projects,
+    discussions,
+    knowledge,
+    documents,
+    prompts,
+    snapshots,
+    buildSessions,
+    repositories,
+    repoBranches,
+    repoCommits,
+    artifacts,
+    buildRecords,
+    changeRecords,
+  ] = await Promise.all([
+    supabase.from("vpip_settings").select("*").eq("id", 1).maybeSingle(),
+    supabase.from("vpip_projects").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_discussions").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_knowledge").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_documents").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_prompts").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_snapshots").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_build_sessions").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_repositories").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_repo_branches").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_repo_commits").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_artifacts").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_build_records").select("*").order("created_at", { ascending: false }),
+    supabase.from("vpip_change_records").select("*").order("created_at", { ascending: false }),
+  ]);
 
   const base = emptyWorkspace();
   const s = settings.data as Row | null;
@@ -124,6 +167,7 @@ export async function vaultRead<T>(): Promise<T | null> {
     prompts: ((prompts.data ?? []) as Row[]).map((r): GeneratedPrompt => {
       const provider = undef(r['provider'] as GeneratedPrompt["provider"] | null);
       const model = undef(r['model'] as string | null);
+      const status = undef(r['status'] as GeneratedPrompt["status"] | null);
       return {
         id: r['id'] as string,
         projectId: r['project_id'] as string,
@@ -132,8 +176,13 @@ export async function vaultRead<T>(): Promise<T | null> {
         version: (r['version'] as number) ?? 1,
         markdown: (r['markdown'] as string) ?? "",
         createdAt: r['created_at'] as string,
+        linkedDecisionIds: arr<string>(r['linked_decision_ids']),
+        linkedRequirementIds: arr<string>(r['linked_requirement_ids']),
+        linkedDocumentIds: arr<string>(r['linked_document_ids']),
+        linkedDiscussionIds: arr<string>(r['linked_discussion_ids']),
         ...(provider !== undefined ? { provider } : {}),
         ...(model !== undefined ? { model } : {}),
+        ...(status !== undefined ? { status } : {}),
       };
     }),
     snapshots: ((snapshots.data ?? []) as Row[]).map(
@@ -147,12 +196,196 @@ export async function vaultRead<T>(): Promise<T | null> {
         createdAt: r['created_at'] as string,
       }),
     ),
+    buildSessions: ((buildSessions.data ?? []) as Row[]).map((r): BuildSession => {
+      const provider = undef(r['provider'] as BuildSession["provider"] | null);
+      const model = undef(r['model'] as string | null);
+      const note = undef(r['note'] as string | null);
+      const openedAt = undef(r['opened_at'] as string | null);
+      const counts = (r['counts'] as BuildSession["counts"]) ?? {
+        decisions: 0,
+        requirements: 0,
+        documents: 0,
+        discussions: 0,
+      };
+      return {
+        id: r['id'] as string,
+        code: r['code'] as string,
+        projectId: r['project_id'] as string,
+        promptId: r['prompt_id'] as string,
+        promptTitle: str(r['prompt_title']),
+        promptKind: r['prompt_kind'] as BuildSession["promptKind"],
+        promptVersion: (r['prompt_version'] as number) ?? 1,
+        status: r['status'] as BuildSession["status"],
+        contextPackage: str(r['context_package']),
+        counts,
+        createdAt: r['created_at'] as string,
+        updatedAt: r['updated_at'] as string,
+        turns: arr<CoderTurn>(r['turns']),
+        files: arr<CoderFile>(r['files']),
+        actions: arr<CoderAction>(r['actions']),
+        terminal: arr<TerminalEntry>(r['terminal']),
+        dbConnections: arr<DbConnection>(r['db_connections']),
+        agentTasks: arr<AgentTask>(r['agent_tasks']),
+        requirements: arr<BuildRequirement>(r['requirements']),
+        buildPlan: (r['build_plan'] as BuildSession["buildPlan"]) ?? undefined,
+        validation: (r['validation'] as BuildSession["validation"]) ?? undefined,
+        previewEntryPath: undef(r['preview_entry_path'] as string | null),
+        repositoryId: undef(r['repository_id'] as string | null),
+        repositoryFullName: undef(r['repository_full_name'] as string | null),
+        repositoryProvider: undef(r['repository_provider'] as BuildSession["repositoryProvider"] | null),
+        repositoryBranch: undef(r['repository_branch'] as string | null),
+        lastCommitSha: undef(r['last_commit_sha'] as string | null),
+        lastCommitAt: undef(r['last_commit_at'] as string | null),
+        ...(provider !== undefined ? { provider } : {}),
+        ...(model !== undefined ? { model } : {}),
+        ...(note !== undefined ? { note } : {}),
+        ...(openedAt !== undefined ? { openedAt } : {}),
+      };
+    }),
+    repositories: ((repositories.data ?? []) as Row[]).map(
+      (r): Repository => ({
+        id: r['id'] as string,
+        projectId: r['project_id'] as string,
+        provider: r['provider'] as Repository["provider"],
+        owner: str(r['owner']),
+        name: str(r['name']),
+        fullName: str(r['full_name']),
+        description: str(r['description']),
+        visibility: r['visibility'] as Repository["visibility"],
+        defaultBranch: str(r['default_branch'], "main"),
+        currentBranch: str(r['current_branch'], "main"),
+        htmlUrl: str(r['html_url']),
+        token: str(r['token']),
+        status: r['status'] as Repository["status"],
+        statusMessage: undef(r['status_message'] as string | null),
+        validatedAt: undef(r['validated_at'] as string | null),
+        lastCommitSha: undef(r['last_commit_sha'] as string | null),
+        lastCommitMessage: undef(r['last_commit_message'] as string | null),
+        lastCommitAt: undef(r['last_commit_at'] as string | null),
+        createdAt: r['created_at'] as string,
+        updatedAt: r['updated_at'] as string,
+      }),
+    ),
+    repoBranches: ((repoBranches.data ?? []) as Row[]).map(
+      (r): RepoBranch => ({
+        id: r['id'] as string,
+        repositoryId: r['repository_id'] as string,
+        name: str(r['name']),
+        sha: str(r['sha']),
+        baseBranch: undef(r['base_branch'] as string | null),
+        createdAt: r['created_at'] as string,
+      }),
+    ),
+    repoCommits: ((repoCommits.data ?? []) as Row[]).map(
+      (r): RepoCommit => ({
+        id: r['id'] as string,
+        repositoryId: r['repository_id'] as string,
+        projectId: r['project_id'] as string,
+        sha: str(r['sha']),
+        message: str(r['message']),
+        branch: str(r['branch']),
+        files: arr<string>(r['files']),
+        htmlUrl: undef(r['html_url'] as string | null),
+        author: str(r['author']),
+        buildSessionId: undef(r['build_session_id'] as string | null),
+        buildCode: undef(r['build_code'] as string | null),
+        promptId: undef(r['prompt_id'] as string | null),
+        promptTitle: undef(r['prompt_title'] as string | null),
+        promptVersion: undef(r['prompt_version'] as number | null),
+        decisionCodes: arr<string>(r['decision_codes']),
+        requirementCodes: arr<string>(r['requirement_codes']),
+        provider: r['provider'] as RepoCommit["provider"],
+        createdAt: r['created_at'] as string,
+      }),
+    ),
+    artifacts: ((artifacts.data ?? []) as Row[]).map(
+      (r): Artifact => ({
+        id: r['id'] as string,
+        code: r['code'] as string,
+        projectId: r['project_id'] as string,
+        type: r['type'] as Artifact["type"],
+        name: str(r['name']),
+        path: str(r['path']),
+        content: str(r['content']),
+        size: (r['size'] as number) ?? 0,
+        buildSessionId: undef(r['build_session_id'] as string | null),
+        buildCode: undef(r['build_code'] as string | null),
+        buildRecordId: undef(r['build_record_id'] as string | null),
+        buildRunCode: undef(r['build_run_code'] as string | null),
+        taskId: undef(r['task_id'] as string | null),
+        taskCode: undef(r['task_code'] as string | null),
+        promptId: undef(r['prompt_id'] as string | null),
+        promptTitle: undef(r['prompt_title'] as string | null),
+        promptVersion: undef(r['prompt_version'] as number | null),
+        decisionCodes: arr<string>(r['decision_codes']),
+        requirementCodes: arr<string>(r['requirement_codes']),
+        repositoryFullName: undef(r['repository_full_name'] as string | null),
+        branch: undef(r['branch'] as string | null),
+        commitSha: undef(r['commit_sha'] as string | null),
+        provider: undef(r['provider'] as Artifact["provider"] | null),
+        model: undef(r['model'] as string | null),
+        createdAt: r['created_at'] as string,
+        updatedAt: r['updated_at'] as string,
+      }),
+    ),
+    buildRecords: ((buildRecords.data ?? []) as Row[]).map(
+      (r): BuildRecord => ({
+        id: r['id'] as string,
+        code: r['code'] as string,
+        projectId: r['project_id'] as string,
+        buildSessionId: str(r['build_session_id']),
+        buildCode: str(r['build_code']),
+        repositoryId: undef(r['repository_id'] as string | null),
+        repositoryFullName: undef(r['repository_full_name'] as string | null),
+        branch: undef(r['branch'] as string | null),
+        commitSha: undef(r['commit_sha'] as string | null),
+        promptId: str(r['prompt_id']),
+        promptTitle: str(r['prompt_title']),
+        promptVersion: (r['prompt_version'] as number) ?? 1,
+        provider: undef(r['provider'] as BuildRecord["provider"] | null),
+        model: undef(r['model'] as string | null),
+        status: r['status'] as BuildRecord["status"],
+        startedAt: r['started_at'] as string,
+        endedAt: undef(r['ended_at'] as string | null),
+        summary: undef(r['summary'] as string | null),
+        output: undef(r['output'] as string | null),
+        logs: arr<string>(r['logs']),
+        artifactIds: arr<string>(r['artifact_ids']),
+        decisionCodes: arr<string>(r['decision_codes']),
+        requirementCodes: arr<string>(r['requirement_codes']),
+        createdAt: r['created_at'] as string,
+        updatedAt: r['updated_at'] as string,
+      }),
+    ),
+    changeRecords: ((changeRecords.data ?? []) as Row[]).map(
+      (r): ChangeRecord => ({
+        id: r['id'] as string,
+        projectId: r['project_id'] as string,
+        action: r['action'] as ChangeRecord["action"],
+        path: str(r['path']),
+        fromPath: undef(r['from_path'] as string | null),
+        buildSessionId: undef(r['build_session_id'] as string | null),
+        buildCode: undef(r['build_code'] as string | null),
+        buildRecordId: undef(r['build_record_id'] as string | null),
+        buildRunCode: undef(r['build_run_code'] as string | null),
+        taskId: undef(r['task_id'] as string | null),
+        taskCode: undef(r['task_code'] as string | null),
+        promptId: undef(r['prompt_id'] as string | null),
+        provider: undef(r['provider'] as ChangeRecord["provider"] | null),
+        model: undef(r['model'] as string | null),
+        createdAt: r['created_at'] as string,
+      }),
+    ),
   };
 
   return ws as unknown as T;
 }
 
 /* ---------------------------------------------------------------- write */
+
+function json(value: unknown) {
+  return JSON.parse(JSON.stringify(value ?? null));
+}
 
 async function syncTable(table: string, rows: Row[], keepIds: string[]) {
   const { data: existing } = await supabase.from(table as never).select("id");
@@ -179,7 +412,7 @@ export async function vaultWrite(value: unknown): Promise<void> {
       auto_save_interval_sec: ws.settings.autoSaveIntervalSec,
       project_root_label: ws.settings.projectRootLabel,
       backup_folder_label: ws.settings.backupFolderLabel,
-      providers: JSON.parse(JSON.stringify(ws.settings.providers)),
+      providers: json(ws.settings.providers),
       saved_at: new Date().toISOString(),
     },
     { onConflict: "id" },
@@ -187,8 +420,8 @@ export async function vaultWrite(value: unknown): Promise<void> {
   if (sErr) throw sErr;
 
   const projectIds = ws.projects.map((p) => p.id);
-  const inProject = <T extends { projectId: string }>(list: T[]) =>
-    list.filter((x) => projectIds.includes(x.projectId));
+  const inProject = <T extends { projectId: string }>(list: T[] | undefined) =>
+    (list ?? []).filter((x) => projectIds.includes(x.projectId));
 
   await syncTable(
     "vpip_projects",
@@ -212,8 +445,8 @@ export async function vaultWrite(value: unknown): Promise<void> {
       title: d.title,
       type: d.type,
       summary: d.summary ?? null,
-      messages: d.messages,
-      attachments: d.attachments,
+      messages: json(d.messages),
+      attachments: json(d.attachments),
       created_at: d.createdAt,
       updated_at: d.updatedAt,
     })),
@@ -233,11 +466,11 @@ export async function vaultWrite(value: unknown): Promise<void> {
       description: k.description,
       source_discussion_id: k.sourceDiscussionId ?? null,
       source_discussion_title: k.sourceDiscussionTitle ?? null,
-      source_messages: k.sourceMessages,
+      source_messages: json(k.sourceMessages),
       provider: k.provider ?? null,
       author: k.author,
-      revisions: k.revisions,
-      merged_from: k.mergedFrom ?? [],
+      revisions: json(k.revisions),
+      merged_from: json(k.mergedFrom ?? []),
       created_at: k.createdAt,
       updated_at: k.updatedAt,
     })),
@@ -273,6 +506,11 @@ export async function vaultWrite(value: unknown): Promise<void> {
       markdown: p.markdown,
       provider: p.provider ?? null,
       model: p.model ?? null,
+      status: p.status ?? "Draft",
+      linked_decision_ids: json(p.linkedDecisionIds ?? []),
+      linked_requirement_ids: json(p.linkedRequirementIds ?? []),
+      linked_document_ids: json(p.linkedDocumentIds ?? []),
+      linked_discussion_ids: json(p.linkedDiscussionIds ?? []),
       created_at: p.createdAt,
     })),
     prompts.map((p) => p.id),
@@ -291,6 +529,207 @@ export async function vaultWrite(value: unknown): Promise<void> {
       created_at: s.createdAt,
     })),
     snapshots.map((s) => s.id),
+  );
+
+  /* ---------------- Modules 11A–15: build, agent, repository, artifacts */
+
+  const buildSessions = inProject(ws.buildSessions);
+  await syncTable(
+    "vpip_build_sessions",
+    buildSessions.map((b) => ({
+      id: b.id,
+      code: b.code,
+      project_id: b.projectId,
+      prompt_id: b.promptId,
+      prompt_title: b.promptTitle,
+      prompt_kind: b.promptKind,
+      prompt_version: b.promptVersion,
+      provider: b.provider ?? null,
+      model: b.model ?? null,
+      status: b.status,
+      context_package: b.contextPackage,
+      counts: json(b.counts),
+      note: b.note ?? null,
+      turns: json(b.turns ?? []),
+      files: json(b.files ?? []),
+      actions: json(b.actions ?? []),
+      terminal: json(b.terminal ?? []),
+      db_connections: json(b.dbConnections ?? []),
+      agent_tasks: json(b.agentTasks ?? []),
+      requirements: json(b.requirements ?? []),
+      build_plan: b.buildPlan ? json(b.buildPlan) : null,
+      validation: b.validation ? json(b.validation) : null,
+      preview_entry_path: b.previewEntryPath ?? null,
+      repository_id: b.repositoryId ?? null,
+      repository_full_name: b.repositoryFullName ?? null,
+      repository_provider: b.repositoryProvider ?? null,
+      repository_branch: b.repositoryBranch ?? null,
+      last_commit_sha: b.lastCommitSha ?? null,
+      last_commit_at: b.lastCommitAt ?? null,
+      opened_at: b.openedAt ?? null,
+      created_at: b.createdAt,
+      updated_at: b.updatedAt,
+    })),
+    buildSessions.map((b) => b.id),
+  );
+
+  const repositories = inProject(ws.repositories);
+  await syncTable(
+    "vpip_repositories",
+    repositories.map((r) => ({
+      id: r.id,
+      project_id: r.projectId,
+      provider: r.provider,
+      owner: r.owner,
+      name: r.name,
+      full_name: r.fullName,
+      description: r.description,
+      visibility: r.visibility,
+      default_branch: r.defaultBranch,
+      current_branch: r.currentBranch,
+      html_url: r.htmlUrl,
+      token: r.token,
+      status: r.status,
+      status_message: r.statusMessage ?? null,
+      validated_at: r.validatedAt ?? null,
+      last_commit_sha: r.lastCommitSha ?? null,
+      last_commit_message: r.lastCommitMessage ?? null,
+      last_commit_at: r.lastCommitAt ?? null,
+      created_at: r.createdAt,
+      updated_at: r.updatedAt,
+    })),
+    repositories.map((r) => r.id),
+  );
+
+  const repoIds = repositories.map((r) => r.id);
+  const repoBranches = (ws.repoBranches ?? []).filter((b) => repoIds.includes(b.repositoryId));
+  await syncTable(
+    "vpip_repo_branches",
+    repoBranches.map((b) => ({
+      id: b.id,
+      repository_id: b.repositoryId,
+      name: b.name,
+      sha: b.sha,
+      base_branch: b.baseBranch ?? null,
+      created_at: b.createdAt,
+    })),
+    repoBranches.map((b) => b.id),
+  );
+
+  const repoCommits = inProject(ws.repoCommits);
+  await syncTable(
+    "vpip_repo_commits",
+    repoCommits.map((c) => ({
+      id: c.id,
+      repository_id: c.repositoryId,
+      project_id: c.projectId,
+      sha: c.sha,
+      message: c.message,
+      branch: c.branch,
+      files: json(c.files),
+      html_url: c.htmlUrl ?? null,
+      author: c.author,
+      build_session_id: c.buildSessionId ?? null,
+      build_code: c.buildCode ?? null,
+      prompt_id: c.promptId ?? null,
+      prompt_title: c.promptTitle ?? null,
+      prompt_version: c.promptVersion ?? null,
+      decision_codes: json(c.decisionCodes),
+      requirement_codes: json(c.requirementCodes),
+      provider: c.provider,
+      created_at: c.createdAt,
+    })),
+    repoCommits.map((c) => c.id),
+  );
+
+  const artifacts = inProject(ws.artifacts);
+  await syncTable(
+    "vpip_artifacts",
+    artifacts.map((a) => ({
+      id: a.id,
+      code: a.code,
+      project_id: a.projectId,
+      type: a.type,
+      name: a.name,
+      path: a.path,
+      content: a.content,
+      size: a.size,
+      build_session_id: a.buildSessionId ?? null,
+      build_code: a.buildCode ?? null,
+      build_record_id: a.buildRecordId ?? null,
+      build_run_code: a.buildRunCode ?? null,
+      task_id: a.taskId ?? null,
+      task_code: a.taskCode ?? null,
+      prompt_id: a.promptId ?? null,
+      prompt_title: a.promptTitle ?? null,
+      prompt_version: a.promptVersion ?? null,
+      decision_codes: json(a.decisionCodes),
+      requirement_codes: json(a.requirementCodes),
+      repository_full_name: a.repositoryFullName ?? null,
+      branch: a.branch ?? null,
+      commit_sha: a.commitSha ?? null,
+      provider: a.provider ?? null,
+      model: a.model ?? null,
+      created_at: a.createdAt,
+      updated_at: a.updatedAt,
+    })),
+    artifacts.map((a) => a.id),
+  );
+
+  const buildRecords = inProject(ws.buildRecords);
+  await syncTable(
+    "vpip_build_records",
+    buildRecords.map((b) => ({
+      id: b.id,
+      code: b.code,
+      project_id: b.projectId,
+      build_session_id: b.buildSessionId,
+      build_code: b.buildCode,
+      repository_id: b.repositoryId ?? null,
+      repository_full_name: b.repositoryFullName ?? null,
+      branch: b.branch ?? null,
+      commit_sha: b.commitSha ?? null,
+      prompt_id: b.promptId,
+      prompt_title: b.promptTitle,
+      prompt_version: b.promptVersion,
+      provider: b.provider ?? null,
+      model: b.model ?? null,
+      status: b.status,
+      started_at: b.startedAt,
+      ended_at: b.endedAt ?? null,
+      summary: b.summary ?? null,
+      output: b.output ?? null,
+      logs: json(b.logs),
+      artifact_ids: json(b.artifactIds),
+      decision_codes: json(b.decisionCodes),
+      requirement_codes: json(b.requirementCodes),
+      created_at: b.createdAt,
+      updated_at: b.updatedAt,
+    })),
+    buildRecords.map((b) => b.id),
+  );
+
+  const changeRecords = inProject(ws.changeRecords);
+  await syncTable(
+    "vpip_change_records",
+    changeRecords.map((c) => ({
+      id: c.id,
+      project_id: c.projectId,
+      action: c.action,
+      path: c.path,
+      from_path: c.fromPath ?? null,
+      build_session_id: c.buildSessionId ?? null,
+      build_code: c.buildCode ?? null,
+      build_record_id: c.buildRecordId ?? null,
+      build_run_code: c.buildRunCode ?? null,
+      task_id: c.taskId ?? null,
+      task_code: c.taskCode ?? null,
+      prompt_id: c.promptId ?? null,
+      provider: c.provider ?? null,
+      model: c.model ?? null,
+      created_at: c.createdAt,
+    })),
+    changeRecords.map((c) => c.id),
   );
 }
 

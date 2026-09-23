@@ -12,6 +12,7 @@ interface Body {
   model?: string;
   messages?: Array<{ role: string; content: string }>;
   stream?: boolean;
+  apiKey?: string;
 }
 
 function json(payload: unknown, status = 200) {
@@ -31,7 +32,7 @@ export const Route = createFileRoute("/api/ai/chat")({
           return json({ error: "Unknown AI engine." }, 400);
         }
         const conf = PROVIDERS[provider];
-        const key = process.env[conf.env];
+        const key = body.apiKey?.trim() || process.env[conf.env];
         if (!key) {
           return json(
             { error: `No ${provider === "openai" ? "OpenAI" : "DeepSeek"} API key is configured for this app.` },

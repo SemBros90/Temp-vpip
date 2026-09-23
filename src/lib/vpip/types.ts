@@ -158,6 +158,21 @@ export const PROMPT_KINDS: PromptKind[] = [
   "Custom Prompt",
 ];
 
+export type PromptStatus =
+  | "Draft"
+  | "Approved"
+  | "Ready For Coding"
+  | "Sent To Coder"
+  | "Archived";
+
+export const PROMPT_STATUSES: PromptStatus[] = [
+  "Draft",
+  "Approved",
+  "Ready For Coding",
+  "Sent To Coder",
+  "Archived",
+];
+
 export interface GeneratedPrompt {
   id: string;
   projectId: string;
@@ -167,6 +182,582 @@ export interface GeneratedPrompt {
   markdown: string;
   provider?: ProviderId;
   model?: string;
+  createdAt: string;
+  /** Module 11A — lifecycle + context links */
+  status?: PromptStatus;
+  linkedDecisionIds?: string[];
+  linkedRequirementIds?: string[];
+  linkedDocumentIds?: string[];
+  linkedDiscussionIds?: string[];
+}
+
+export type BuildStatus =
+  | "Queued"
+  | "Handed Off"
+  | "In Progress"
+  | "Completed"
+  | "Failed"
+  | "Cancelled";
+
+export const BUILD_STATUSES: BuildStatus[] = [
+  "Queued",
+  "Handed Off",
+  "In Progress",
+  "Completed",
+  "Failed",
+  "Cancelled",
+];
+
+export interface BuildSession {
+  id: string;
+  code: string;
+  projectId: string;
+  promptId: string;
+  promptTitle: string;
+  promptKind: PromptKind;
+  promptVersion: number;
+  provider?: ProviderId;
+  model?: string;
+  status: BuildStatus;
+  /** frozen context package handed to the coder */
+  contextPackage: string;
+  counts: {
+    decisions: number;
+    requirements: number;
+    documents: number;
+    discussions: number;
+  };
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Module 12 — AI Coder workspace conversation */
+  turns?: CoderTurn[];
+  openedAt?: string;
+  /** Module 12 — AI Coder workspace state */
+  files?: CoderFile[];
+  actions?: CoderAction[];
+  terminal?: TerminalEntry[];
+  dbConnections?: DbConnection[];
+  previewEntryPath?: string | undefined;
+  /** Module 14 — AI Development Agent tasks */
+  agentTasks?: AgentTask[];
+  /** Module 16 — build orchestration */
+  requirements?: BuildRequirement[];
+  buildPlan?: BuildPlan | undefined;
+  validation?: ValidationReport | undefined;
+  /** Module 13 — repository link */
+  repositoryId?: string | undefined;
+  repositoryFullName?: string | undefined;
+  repositoryProvider?: RepoProvider | undefined;
+  repositoryBranch?: string | undefined;
+  lastCommitSha?: string | undefined;
+  lastCommitAt?: string | undefined;
+}
+
+export type CoderActionKind =
+  | "Generate Code"
+  | "Modify Code"
+  | "Refactor Code"
+  | "Explain Code"
+  | "Review Code"
+  | "Architecture Review"
+  | "Security Review"
+  | "Performance Review"
+  | "Maintainability Review"
+  | "Error Analysis"
+  | "Log Analysis"
+  | "Fix Errors"
+  | "Apply Fix"
+  | "Create File"
+  | "Edit File"
+  | "Rename File"
+  | "Delete File"
+  | "Create Folder"
+  | "Delete Folder"
+  | "Restore Version"
+  | "Terminal Command"
+  | "Database Connection";
+
+export const CODER_CHAT_MODES: CoderActionKind[] = [
+  "Generate Code",
+  "Modify Code",
+  "Refactor Code",
+  "Explain Code",
+  "Review Code",
+  "Architecture Review",
+  "Security Review",
+  "Performance Review",
+  "Maintainability Review",
+  "Error Analysis",
+  "Log Analysis",
+  "Fix Errors",
+];
+
+export type CodeArtifact =
+  | "Page"
+  | "Component"
+  | "Layout"
+  | "Form"
+  | "API"
+  | "Service"
+  | "Utility"
+  | "SQL"
+  | "Documentation";
+
+export const CODE_ARTIFACTS: CodeArtifact[] = [
+  "Page",
+  "Component",
+  "Layout",
+  "Form",
+  "API",
+  "Service",
+  "Utility",
+  "SQL",
+  "Documentation",
+];
+
+export interface CoderFileVersion {
+  id: string;
+  seq: number;
+  content: string;
+  note: string;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  createdAt: string;
+  trace?: CoderTrace | undefined;
+}
+
+export interface CoderFile {
+  id: string;
+  path: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  versions: CoderFileVersion[];
+}
+
+export interface CoderAction {
+  id: string;
+  seq: number;
+  kind: CoderActionKind;
+  summary: string;
+  filesModified: string[];
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  createdAt: string;
+  trace: CoderTrace;
+}
+
+export type LogStream = "terminal" | "build" | "error" | "preview";
+
+export interface TerminalEntry {
+  id: string;
+  stream: LogStream;
+  command?: string | undefined;
+  output: string;
+  exitCode?: number | undefined;
+  createdAt: string;
+}
+
+export type DbEngine = "SQLite" | "PostgreSQL" | "MySQL" | "Supabase";
+
+export const DB_ENGINES: DbEngine[] = ["SQLite", "PostgreSQL", "MySQL", "Supabase"];
+
+/** Connection fields are whatever the user supplies. Nothing is defaulted or hardcoded. */
+export const DB_FIELDS: Record<DbEngine, string[]> = {
+  SQLite: ["file"],
+  PostgreSQL: ["host", "port", "database", "user", "password"],
+  MySQL: ["host", "port", "database", "user", "password"],
+  Supabase: ["url", "anonKey"],
+};
+
+export interface DbConnection {
+  id: string;
+  engine: DbEngine;
+  label: string;
+  config: Record<string, string>;
+  createdAt: string;
+}
+
+/** Every coding action traces back to prompt, decisions, requirements and build. */
+export interface CoderTrace {
+  buildCode: string;
+  promptId: string;
+  promptVersion: number;
+  decisionCodes: string[];
+  requirementCodes: string[];
+  documentIds: string[];
+  discussionIds: string[];
+}
+
+export interface CoderTurn {
+  id: string;
+  seq: number;
+  role: "user" | "assistant";
+  content: string;
+  provider?: ProviderId;
+  model?: string;
+  createdAt: string;
+  trace: CoderTrace;
+}
+
+/* ------------------------------ Module 14 — AI Development Agent */
+
+export type AgentTaskType =
+  | "Feature Build"
+  | "Enhancement"
+  | "Refactor"
+  | "Bug Fix"
+  | "Documentation"
+  | "Review";
+
+export const AGENT_TASK_TYPES: AgentTaskType[] = [
+  "Feature Build",
+  "Enhancement",
+  "Refactor",
+  "Bug Fix",
+  "Documentation",
+  "Review",
+];
+
+export type AgentTaskStatus =
+  | "Pending"
+  | "Running"
+  | "Waiting"
+  | "Completed"
+  | "Failed"
+  | "Cancelled";
+
+export const AGENT_TASK_STATUSES: AgentTaskStatus[] = [
+  "Pending",
+  "Running",
+  "Waiting",
+  "Completed",
+  "Failed",
+  "Cancelled",
+];
+
+export type AgentFileAction =
+  | "Create File"
+  | "Update File"
+  | "Delete File"
+  | "Rename File"
+  | "Create Folder"
+  | "Delete Folder";
+
+export interface AgentPlanFile {
+  path: string;
+  reason: string;
+}
+
+/** The execution plan the agent must show and have approved before touching files. */
+export interface AgentPlan {
+  create: AgentPlanFile[];
+  modify: AgentPlanFile[];
+  delete: AgentPlanFile[];
+  dependencies: string[];
+  risks: string[];
+  scope: string;
+  markdown: string;
+}
+
+/** Every file change made by the agent. */
+export interface AgentChange {
+  id: string;
+  taskId: string;
+  buildCode: string;
+  promptId: string;
+  path: string;
+  action: AgentFileAction;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  createdAt: string;
+}
+
+export interface AgentTask {
+  id: string;
+  code: string;
+  buildSessionId: string;
+  projectId: string;
+  promptId: string;
+  promptTitle: string;
+  promptVersion: number;
+  type: AgentTaskType;
+  status: AgentTaskStatus;
+  instruction: string;
+  plan?: AgentPlan | undefined;
+  approvedAt?: string | undefined;
+  /** agent output */
+  transcript?: string | undefined;
+  changeSummary?: string | undefined;
+  buildSummary?: string | undefined;
+  technicalNotes?: string | undefined;
+  error?: string | undefined;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+  changes: AgentChange[];
+  trace: CoderTrace;
+}
+
+/* ------------------------------------ Module 16 — Build Orchestration */
+
+export type RequirementStatus =
+  | "Not Started"
+  | "In Progress"
+  | "Completed"
+  | "Failed"
+  | "Blocked";
+
+export const REQUIREMENT_STATUSES: RequirementStatus[] = [
+  "Not Started",
+  "In Progress",
+  "Completed",
+  "Failed",
+  "Blocked",
+];
+
+/** One extracted, uniquely coded requirement of a build session. */
+export interface BuildRequirement {
+  id: string;
+  code: string;
+  title: string;
+  detail: string;
+  status: RequirementStatus;
+  /** traceability matrix — files that satisfy this requirement */
+  files: string[];
+  buildSessionId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BuildPlanFile {
+  path: string;
+  purpose: string;
+  requirements: string[];
+}
+
+export interface BuildPlan {
+  files: BuildPlanFile[];
+  dependencies: string[];
+  buildOrder: string[];
+  moduleMap: { path: string; imports: string[] }[];
+  markdown: string;
+  createdAt: string;
+}
+
+export type ValidationKind = "Dependency" | "Startup" | "Import" | "Export" | "Syntax";
+
+export type ValidationStatus = "Pass" | "Fail" | "Unknown";
+
+export interface ValidationIssue {
+  kind: ValidationKind;
+  severity: "error" | "warning";
+  path?: string;
+  message: string;
+}
+
+export interface ValidationReport {
+  at: string;
+  issues: ValidationIssue[];
+  dependencyStatus: ValidationStatus;
+  startupStatus: ValidationStatus;
+  compileStatus: ValidationStatus;
+  missingDependencies: string[];
+}
+
+export interface BuildHealth {
+  requirementsTotal: number;
+  requirementsComplete: number;
+  requirementsFailed: number;
+  requirementsBlocked: number;
+  filesPlanned: number;
+  filesCreated: number;
+  dependenciesMissing: number;
+  compileStatus: ValidationStatus;
+  startupStatus: ValidationStatus;
+  dependencyStatus: ValidationStatus;
+  errorCount: number;
+  completion: number;
+  buildComplete: boolean;
+}
+
+
+/* ------------------------------------------- Module 13 — Repositories */
+
+export type RepoProvider = "GitHub";
+
+export type RepoVisibility = "public" | "private";
+
+export type RepoConnectionStatus = "Connected" | "Not Validated" | "Invalid" | "Disconnected";
+
+export interface Repository {
+  id: string;
+  projectId: string;
+  provider: RepoProvider;
+  owner: string;
+  name: string;
+  fullName: string;
+  description: string;
+  visibility: RepoVisibility;
+  defaultBranch: string;
+  currentBranch: string;
+  htmlUrl: string;
+  /** User supplied access token. Never hardcoded, never defaulted. */
+  token: string;
+  status: RepoConnectionStatus;
+  statusMessage?: string | undefined;
+  validatedAt?: string | undefined;
+  lastCommitSha?: string | undefined;
+  lastCommitMessage?: string | undefined;
+  lastCommitAt?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RepoBranch {
+  id: string;
+  repositoryId: string;
+  name: string;
+  sha: string;
+  baseBranch?: string | undefined;
+  createdAt: string;
+}
+
+export interface RepoCommit {
+  id: string;
+  repositoryId: string;
+  projectId: string;
+  sha: string;
+  message: string;
+  branch: string;
+  files: string[];
+  htmlUrl?: string | undefined;
+  author: string;
+  /** traceability — Requirement → Decision → Prompt → Build → Commit → Repository */
+  buildSessionId?: string | undefined;
+  buildCode?: string | undefined;
+  promptId?: string | undefined;
+  promptTitle?: string | undefined;
+  promptVersion?: number | undefined;
+  decisionCodes: string[];
+  requirementCodes: string[];
+  provider: RepoProvider;
+  createdAt: string;
+}
+
+/* ------------------------- Module 15 — Artifact and Build Management */
+
+export type ArtifactType =
+  | "Source Files"
+  | "Generated Files"
+  | "Documentation"
+  | "SQL Scripts"
+  | "Configuration Files"
+  | "Build Outputs"
+  | "Logs"
+  | "Reports";
+
+export const ARTIFACT_TYPES: ArtifactType[] = [
+  "Source Files",
+  "Generated Files",
+  "Documentation",
+  "SQL Scripts",
+  "Configuration Files",
+  "Build Outputs",
+  "Logs",
+  "Reports",
+];
+
+/** Permanent record of a development output. Always traceable. */
+export interface Artifact {
+  id: string;
+  code: string;
+  projectId: string;
+  type: ArtifactType;
+  name: string;
+  path: string;
+  content: string;
+  size: number;
+  /** traceability */
+  buildSessionId?: string | undefined;
+  buildCode?: string | undefined;
+  buildRecordId?: string | undefined;
+  buildRunCode?: string | undefined;
+  taskId?: string | undefined;
+  taskCode?: string | undefined;
+  promptId?: string | undefined;
+  promptTitle?: string | undefined;
+  promptVersion?: number | undefined;
+  decisionCodes: string[];
+  requirementCodes: string[];
+  repositoryFullName?: string | undefined;
+  branch?: string | undefined;
+  commitSha?: string | undefined;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BuildRecordStatus = "Queued" | "Running" | "Completed" | "Failed" | "Cancelled";
+
+export const BUILD_RECORD_STATUSES: BuildRecordStatus[] = [
+  "Queued",
+  "Running",
+  "Completed",
+  "Failed",
+  "Cancelled",
+];
+
+export interface BuildRecord {
+  id: string;
+  code: string;
+  projectId: string;
+  buildSessionId: string;
+  buildCode: string;
+  repositoryId?: string | undefined;
+  repositoryFullName?: string | undefined;
+  branch?: string | undefined;
+  commitSha?: string | undefined;
+  promptId: string;
+  promptTitle: string;
+  promptVersion: number;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  status: BuildRecordStatus;
+  startedAt: string;
+  endedAt?: string | undefined;
+  summary?: string | undefined;
+  output?: string | undefined;
+  logs: string[];
+  artifactIds: string[];
+  decisionCodes: string[];
+  requirementCodes: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ChangeAction = "Created" | "Modified" | "Deleted" | "Renamed";
+
+export const CHANGE_ACTIONS: ChangeAction[] = ["Created", "Modified", "Deleted", "Renamed"];
+
+export interface ChangeRecord {
+  id: string;
+  projectId: string;
+  action: ChangeAction;
+  path: string;
+  fromPath?: string | undefined;
+  buildSessionId?: string | undefined;
+  buildCode?: string | undefined;
+  buildRecordId?: string | undefined;
+  buildRunCode?: string | undefined;
+  taskId?: string | undefined;
+  taskCode?: string | undefined;
+  promptId?: string | undefined;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
   createdAt: string;
 }
 
@@ -190,7 +781,8 @@ export interface Project {
 }
 
 export interface ProviderConfig {
-  /** API keys are NOT stored here — they live in encrypted server storage. */
+  /** Stored in the project database at the user's request. */
+  apiKey?: string;
   model: string;
   status: "unknown" | "ok" | "error";
   statusMessage?: string;
@@ -215,6 +807,15 @@ export interface Workspace {
   documents: GeneratedDocument[];
   prompts: GeneratedPrompt[];
   snapshots: Snapshot[];
+  buildSessions: BuildSession[];
+  /** Module 13 */
+  repositories: Repository[];
+  repoBranches: RepoBranch[];
+  repoCommits: RepoCommit[];
+  /** Module 15 */
+  artifacts: Artifact[];
+  buildRecords: BuildRecord[];
+  changeRecords: ChangeRecord[];
   savedAt?: string;
 }
 
@@ -254,5 +855,12 @@ export function emptyWorkspace(): Workspace {
     documents: [],
     prompts: [],
     snapshots: [],
+    buildSessions: [],
+    repositories: [],
+    repoBranches: [],
+    repoCommits: [],
+    artifacts: [],
+    buildRecords: [],
+    changeRecords: [],
   };
 }

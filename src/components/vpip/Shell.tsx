@@ -4,10 +4,13 @@ import {
   BrainCircuit,
   Camera,
   FileText,
+  GitBranch,
+  HardDriveDownload,
   Inbox,
   LayoutDashboard,
   Library,
   MessagesSquare,
+  Package,
   Search,
   Settings as SettingsIcon,
   Sparkles,
@@ -27,6 +30,9 @@ const projectNav = [
   { to: "/projects/$projectId/ask", label: "Ask Project Memory", icon: BrainCircuit },
   { to: "/projects/$projectId/documents", label: "Documents", icon: FileText },
   { to: "/projects/$projectId/prompts", label: "Prompts", icon: Sparkles },
+  { to: "/projects/$projectId/builds", label: "Build Sessions", icon: HardDriveDownload },
+  { to: "/projects/$projectId/repositories", label: "Repositories", icon: GitBranch },
+  { to: "/projects/$projectId/artifacts", label: "Artifacts & Builds", icon: Package },
   { to: "/projects/$projectId/snapshots", label: "Snapshots", icon: Camera },
 ] as const;
 

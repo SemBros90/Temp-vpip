@@ -109,7 +109,7 @@ function DiscussionPage() {
   const send = async () => {
     const text = input.trim();
     if ((!text && pending.length === 0) || busy) return;
-    if (!keys[provider]) {
+    if (!keys[provider] && !cfg.apiKey?.trim()) {
       toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }
@@ -175,7 +175,7 @@ function DiscussionPage() {
   };
 
   const runExtraction = async () => {
-    if (!keys[provider]) {
+    if (!keys[provider] && !cfg.apiKey?.trim()) {
       toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }
@@ -209,7 +209,7 @@ function DiscussionPage() {
   };
 
   const runSummary = async () => {
-    if (!keys[provider]) {
+    if (!keys[provider] && !cfg.apiKey?.trim()) {
       toast.error(`No ${PROVIDER_LABEL[provider]} key is configured. See Settings.`);
       return;
     }

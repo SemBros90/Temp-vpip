@@ -15,13 +15,17 @@ import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projec
 import { Route as ApiAiChatRouteImport } from './routes/api/ai.chat'
 import { Route as ApiAiStatusRouteImport } from './routes/api/ai.status'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
+import { Route as ProjectsProjectIdArtifactsRouteImport } from './routes/projects.$projectId.artifacts'
 import { Route as ProjectsProjectIdAskRouteImport } from './routes/projects.$projectId.ask'
+import { Route as ProjectsProjectIdBuildsRouteImport } from './routes/projects.$projectId.builds'
 import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects.$projectId.documents'
 import { Route as ProjectsProjectIdExplorerRouteImport } from './routes/projects.$projectId.explorer'
 import { Route as ProjectsProjectIdInboxRouteImport } from './routes/projects.$projectId.inbox'
 import { Route as ProjectsProjectIdPromptsRouteImport } from './routes/projects.$projectId.prompts'
 import { Route as ProjectsProjectIdRegisterRouteImport } from './routes/projects.$projectId.register'
+import { Route as ProjectsProjectIdRepositoriesRouteImport } from './routes/projects.$projectId.repositories'
 import { Route as ProjectsProjectIdSnapshotsRouteImport } from './routes/projects.$projectId.snapshots'
+import { Route as ProjectsProjectIdCoderBuildIdRouteImport } from './routes/projects.$projectId.coder.$buildId'
 import { Route as ProjectsProjectIdDiscussionsIndexRouteImport } from './routes/projects.$projectId.discussions.index'
 import { Route as ProjectsProjectIdDiscussionsDiscussionIdRouteImport } from './routes/projects.$projectId.discussions.$discussionId'
 
@@ -55,9 +59,20 @@ const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdArtifactsRoute =
+  ProjectsProjectIdArtifactsRouteImport.update({
+    id: '/artifacts',
+    path: '/artifacts',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdAskRoute = ProjectsProjectIdAskRouteImport.update({
   id: '/ask',
   path: '/ask',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
+const ProjectsProjectIdBuildsRoute = ProjectsProjectIdBuildsRouteImport.update({
+  id: '/builds',
+  path: '/builds',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
 const ProjectsProjectIdDocumentsRoute =
@@ -89,10 +104,22 @@ const ProjectsProjectIdRegisterRoute =
     path: '/register',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdRepositoriesRoute =
+  ProjectsProjectIdRepositoriesRouteImport.update({
+    id: '/repositories',
+    path: '/repositories',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdSnapshotsRoute =
   ProjectsProjectIdSnapshotsRouteImport.update({
     id: '/snapshots',
     path: '/snapshots',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdCoderBuildIdRoute =
+  ProjectsProjectIdCoderBuildIdRouteImport.update({
+    id: '/coder/$buildId',
+    path: '/coder/$buildId',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
 const ProjectsProjectIdDiscussionsIndexRoute =
@@ -114,14 +141,18 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
+  '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
+  '/projects/$projectId/repositories': typeof ProjectsProjectIdRepositoriesRoute
   '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/coder/$buildId': typeof ProjectsProjectIdCoderBuildIdRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
@@ -130,14 +161,18 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
+  '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
+  '/projects/$projectId/repositories': typeof ProjectsProjectIdRepositoriesRoute
   '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/coder/$buildId': typeof ProjectsProjectIdCoderBuildIdRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
@@ -148,14 +183,18 @@ export interface FileRoutesById {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
+  '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
+  '/projects/$projectId/repositories': typeof ProjectsProjectIdRepositoriesRoute
   '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/coder/$buildId': typeof ProjectsProjectIdCoderBuildIdRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
@@ -167,14 +206,18 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/api/ai/chat'
     | '/api/ai/status'
+    | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
+    | '/projects/$projectId/builds'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
     | '/projects/$projectId/prompts'
     | '/projects/$projectId/register'
+    | '/projects/$projectId/repositories'
     | '/projects/$projectId/snapshots'
     | '/projects/$projectId/'
+    | '/projects/$projectId/coder/$buildId'
     | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions/'
   fileRoutesByTo: FileRoutesByTo
@@ -183,14 +226,18 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/ai/chat'
     | '/api/ai/status'
+    | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
+    | '/projects/$projectId/builds'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
     | '/projects/$projectId/prompts'
     | '/projects/$projectId/register'
+    | '/projects/$projectId/repositories'
     | '/projects/$projectId/snapshots'
     | '/projects/$projectId'
+    | '/projects/$projectId/coder/$buildId'
     | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions'
   id:
@@ -200,14 +247,18 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/api/ai/chat'
     | '/api/ai/status'
+    | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
+    | '/projects/$projectId/builds'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
     | '/projects/$projectId/prompts'
     | '/projects/$projectId/register'
+    | '/projects/$projectId/repositories'
     | '/projects/$projectId/snapshots'
     | '/projects/$projectId/'
+    | '/projects/$projectId/coder/$buildId'
     | '/projects/$projectId/discussions/$discussionId'
     | '/projects/$projectId/discussions/'
   fileRoutesById: FileRoutesById
@@ -264,11 +315,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdIndexRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/artifacts': {
+      id: '/projects/$projectId/artifacts'
+      path: '/artifacts'
+      fullPath: '/projects/$projectId/artifacts'
+      preLoaderRoute: typeof ProjectsProjectIdArtifactsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/ask': {
       id: '/projects/$projectId/ask'
       path: '/ask'
       fullPath: '/projects/$projectId/ask'
       preLoaderRoute: typeof ProjectsProjectIdAskRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/builds': {
+      id: '/projects/$projectId/builds'
+      path: '/builds'
+      fullPath: '/projects/$projectId/builds'
+      preLoaderRoute: typeof ProjectsProjectIdBuildsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/documents': {
@@ -306,11 +371,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRegisterRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/repositories': {
+      id: '/projects/$projectId/repositories'
+      path: '/repositories'
+      fullPath: '/projects/$projectId/repositories'
+      preLoaderRoute: typeof ProjectsProjectIdRepositoriesRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/snapshots': {
       id: '/projects/$projectId/snapshots'
       path: '/snapshots'
       fullPath: '/projects/$projectId/snapshots'
       preLoaderRoute: typeof ProjectsProjectIdSnapshotsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/coder/$buildId': {
+      id: '/projects/$projectId/coder/$buildId'
+      path: '/coder/$buildId'
+      fullPath: '/projects/$projectId/coder/$buildId'
+      preLoaderRoute: typeof ProjectsProjectIdCoderBuildIdRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/discussions/': {
@@ -331,27 +410,35 @@ declare module '@tanstack/react-router' {
 }
 
 interface ProjectsProjectIdRouteChildren {
+  ProjectsProjectIdArtifactsRoute: typeof ProjectsProjectIdArtifactsRoute
   ProjectsProjectIdAskRoute: typeof ProjectsProjectIdAskRoute
+  ProjectsProjectIdBuildsRoute: typeof ProjectsProjectIdBuildsRoute
   ProjectsProjectIdDocumentsRoute: typeof ProjectsProjectIdDocumentsRoute
   ProjectsProjectIdExplorerRoute: typeof ProjectsProjectIdExplorerRoute
   ProjectsProjectIdInboxRoute: typeof ProjectsProjectIdInboxRoute
   ProjectsProjectIdPromptsRoute: typeof ProjectsProjectIdPromptsRoute
   ProjectsProjectIdRegisterRoute: typeof ProjectsProjectIdRegisterRoute
+  ProjectsProjectIdRepositoriesRoute: typeof ProjectsProjectIdRepositoriesRoute
   ProjectsProjectIdSnapshotsRoute: typeof ProjectsProjectIdSnapshotsRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
+  ProjectsProjectIdCoderBuildIdRoute: typeof ProjectsProjectIdCoderBuildIdRoute
   ProjectsProjectIdDiscussionsDiscussionIdRoute: typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
   ProjectsProjectIdDiscussionsIndexRoute: typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
+  ProjectsProjectIdArtifactsRoute: ProjectsProjectIdArtifactsRoute,
   ProjectsProjectIdAskRoute: ProjectsProjectIdAskRoute,
+  ProjectsProjectIdBuildsRoute: ProjectsProjectIdBuildsRoute,
   ProjectsProjectIdDocumentsRoute: ProjectsProjectIdDocumentsRoute,
   ProjectsProjectIdExplorerRoute: ProjectsProjectIdExplorerRoute,
   ProjectsProjectIdInboxRoute: ProjectsProjectIdInboxRoute,
   ProjectsProjectIdPromptsRoute: ProjectsProjectIdPromptsRoute,
   ProjectsProjectIdRegisterRoute: ProjectsProjectIdRegisterRoute,
+  ProjectsProjectIdRepositoriesRoute: ProjectsProjectIdRepositoriesRoute,
   ProjectsProjectIdSnapshotsRoute: ProjectsProjectIdSnapshotsRoute,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
+  ProjectsProjectIdCoderBuildIdRoute: ProjectsProjectIdCoderBuildIdRoute,
   ProjectsProjectIdDiscussionsDiscussionIdRoute:
     ProjectsProjectIdDiscussionsDiscussionIdRoute,
   ProjectsProjectIdDiscussionsIndexRoute:

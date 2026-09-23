@@ -12,6 +12,18 @@ import { vaultClear, vaultRead, vaultWrite } from "./db";
 import {
   emptyWorkspace,
   KNOWLEDGE_PREFIX,
+  type AgentChange,
+  type AgentTask,
+  type Artifact,
+  type BuildRecord,
+  type BuildSession,
+  type ChangeRecord,
+  type CoderAction,
+  type CoderFile,
+  type CoderTrace,
+  type CoderTurn,
+  type DbConnection,
+  type TerminalEntry,
   type Discussion,
   type GeneratedDocument,
   type GeneratedPrompt,
@@ -19,6 +31,10 @@ import {
   type KnowledgeType,
   type Message,
   type Project,
+  type RepoBranch,
+  type RepoCommit,
+  type RepoProvider,
+  type Repository,
   type Settings,
   type Snapshot,
   type Workspace,
@@ -174,6 +190,15 @@ export function useVpipActions() {
           documents: w.documents.filter((d) => d.projectId !== id),
           prompts: w.prompts.filter((p) => p.projectId !== id),
           snapshots: w.snapshots.filter((s) => s.projectId !== id),
+          buildSessions: (w.buildSessions ?? []).filter((b) => b.projectId !== id),
+          repositories: (w.repositories ?? []).filter((r) => r.projectId !== id),
+          repoBranches: (w.repoBranches ?? []).filter((b) =>
+            (w.repositories ?? []).some((r) => r.id === b.repositoryId && r.projectId !== id),
+          ),
+          repoCommits: (w.repoCommits ?? []).filter((c) => c.projectId !== id),
+          artifacts: (w.artifacts ?? []).filter((a) => a.projectId !== id),
+          buildRecords: (w.buildRecords ?? []).filter((r) => r.projectId !== id),
+          changeRecords: (w.changeRecords ?? []).filter((c) => c.projectId !== id),
         }));
       },
 
@@ -330,7 +355,17 @@ export function useVpipActions() {
       addPrompt(p: Omit<GeneratedPrompt, "id" | "createdAt" | "version">): GeneratedPrompt {
         const version =
           ws.prompts.filter((x) => x.projectId === p.projectId && x.kind === p.kind).length + 1;
-        const full: GeneratedPrompt = { ...p, id: uid(), version, createdAt: now() };
+        const full: GeneratedPrompt = {
+          status: "Draft",
+          linkedDecisionIds: [],
+          linkedRequirementIds: [],
+          linkedDocumentIds: [],
+          linkedDiscussionIds: [],
+          ...p,
+          id: uid(),
+          version,
+          createdAt: now(),
+        };
         const snap: Snapshot = {
           id: uid(),
           projectId: p.projectId,
@@ -349,7 +384,805 @@ export function useVpipActions() {
         return full;
       },
       deletePrompt(id: string) {
-        update((w) => ({ ...w, prompts: w.prompts.filter((p) => p.id !== id) }));
+        update((w) => ({
+          ...w,
+          prompts: w.prompts.filter((p) => p.id !== id),
+          buildSessions: (w.buildSessions ?? []).filter((b) => b.promptId !== id),
+        }));
+      },
+      updatePrompt(id: string, patch: Partial<GeneratedPrompt>) {
+        update((w) => ({
+          ...w,
+          prompts: w.prompts.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+        }));
+      },
+
+      /* build sessions — Module 11A handoff */
+      createBuildSession(
+        s: Omit<BuildSession, "id" | "code" | "createdAt" | "updatedAt">,
+      ): BuildSession {
+        const existing = (ws.buildSessions ?? []).filter((b) => b.projectId === s.projectId);
+        const maxNum = existing.reduce((m, b) => {
+          const n = Number(b.code.split("-")[1] ?? 0);
+          return Number.isFinite(n) && n > m ? n : m;
+        }, 0);
+        const session: BuildSession = {
+          ...s,
+          id: uid(),
+          code: `BUILD-${String(maxNum + 1).padStart(3, "0")}`,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        update((w) =>
+          touchProject(
+            { ...w, buildSessions: [session, ...(w.buildSessions ?? [])] },
+            s.projectId,
+          ),
+        );
+        return session;
+      },
+      appendCoderTurn(
+        buildId: string,
+        turn: Omit<CoderTurn, "id" | "seq" | "createdAt">,
+      ): CoderTurn {
+        const session = (ws.buildSessions ?? []).find((b) => b.id === buildId);
+        const seq = (session?.turns?.at(-1)?.seq ?? 0) + 1;
+        const full: CoderTurn = { ...turn, id: uid(), seq, createdAt: now() };
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? { ...b, turns: [...(b.turns ?? []), full], updatedAt: now() }
+              : b,
+          ),
+        }));
+        return full;
+      },
+      patchCoderTurn(buildId: string, turnId: string, content: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  turns: (b.turns ?? []).map((t) =>
+                    t.id === turnId ? { ...t, content } : t,
+                  ),
+                }
+              : b,
+          ),
+        }));
+      },
+      markBuildOpened(buildId: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId ? { ...b, openedAt: now() } : b,
+          ),
+        }));
+      },
+      updateBuildSession(id: string, patch: Partial<BuildSession>) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === id ? { ...b, ...patch, updatedAt: now() } : b,
+          ),
+        }));
+      },
+      /* ------------------------ Module 16 — build orchestration */
+      patchBuildRequirement(
+        buildId: string,
+        requirementId: string,
+        patch: Partial<import("./types").BuildRequirement>,
+      ) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  requirements: (b.requirements ?? []).map((r) =>
+                    r.id === requirementId ? { ...r, ...patch, updatedAt: now() } : r,
+                  ),
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+      },
+      deleteBuildSession(id: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).filter((b) => b.id !== id),
+        }));
+      },
+      /* ------------------------------ Module 12 — AI Coder workspace */
+      writeCoderFile(
+        buildId: string,
+        path: string,
+        content: string,
+        meta: {
+          note: string;
+          trace: CoderTrace;
+          provider?: import("./types").ProviderId;
+          model?: string;
+        },
+      ) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) => {
+            if (b.id !== buildId) return b;
+            const files = b.files ?? [];
+            const existing = files.find((f) => f.path === path);
+            const version = {
+              id: uid(),
+              seq: (existing?.versions.at(-1)?.seq ?? 0) + 1,
+              content,
+              note: meta.note,
+              provider: meta.provider,
+              model: meta.model,
+              createdAt: now(),
+              trace: meta.trace,
+            };
+            const next: CoderFile = existing
+              ? { ...existing, content, updatedAt: now(), versions: [...existing.versions, version] }
+              : {
+                  id: uid(),
+                  path,
+                  content,
+                  createdAt: now(),
+                  updatedAt: now(),
+                  versions: [version],
+                };
+            return {
+              ...b,
+              files: existing ? files.map((f) => (f.path === path ? next : f)) : [...files, next],
+              previewEntryPath: b.previewEntryPath ?? (path.endsWith(".html") ? path : undefined),
+              updatedAt: now(),
+            };
+          }),
+        }));
+      },
+      renameCoderPath(buildId: string, fromPath: string, toPath: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  files: (b.files ?? []).map((f) =>
+                    f.path === fromPath || f.path.startsWith(`${fromPath}/`)
+                      ? { ...f, path: toPath + f.path.slice(fromPath.length), updatedAt: now() }
+                      : f,
+                  ),
+                  previewEntryPath:
+                    b.previewEntryPath === fromPath ? toPath : b.previewEntryPath,
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+      },
+      deleteCoderPath(buildId: string, path: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  files: (b.files ?? []).filter(
+                    (f) => f.path !== path && !f.path.startsWith(`${path}/`),
+                  ),
+                  previewEntryPath:
+                    b.previewEntryPath && b.previewEntryPath.startsWith(path)
+                      ? undefined
+                      : b.previewEntryPath,
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+      },
+      restoreCoderVersion(buildId: string, path: string, versionId: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) => {
+            if (b.id !== buildId) return b;
+            return {
+              ...b,
+              files: (b.files ?? []).map((f) => {
+                if (f.path !== path) return f;
+                const v = f.versions.find((x) => x.id === versionId);
+                if (!v) return f;
+                return {
+                  ...f,
+                  content: v.content,
+                  updatedAt: now(),
+                  versions: [
+                    ...f.versions,
+                    {
+                      ...v,
+                      id: uid(),
+                      seq: (f.versions.at(-1)?.seq ?? 0) + 1,
+                      note: `Restored V${v.seq}`,
+                      createdAt: now(),
+                    },
+                  ],
+                };
+              }),
+              updatedAt: now(),
+            };
+          }),
+        }));
+      },
+      logCoderAction(
+        buildId: string,
+        action: Omit<CoderAction, "id" | "seq" | "createdAt">,
+      ): CoderAction {
+        const session = (ws.buildSessions ?? []).find((b) => b.id === buildId);
+        const full: CoderAction = {
+          ...action,
+          id: uid(),
+          seq: (session?.actions?.at(-1)?.seq ?? 0) + 1,
+          createdAt: now(),
+        };
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? { ...b, actions: [...(b.actions ?? []), full], updatedAt: now() }
+              : b,
+          ),
+        }));
+        return full;
+      },
+      appendLog(buildId: string, entry: Omit<TerminalEntry, "id" | "createdAt">) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  terminal: [
+                    ...(b.terminal ?? []),
+                    { ...entry, id: uid(), createdAt: now() },
+                  ].slice(-400),
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+      },
+      clearLogs(buildId: string, stream: TerminalEntry["stream"]) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? { ...b, terminal: (b.terminal ?? []).filter((t) => t.stream !== stream) }
+              : b,
+          ),
+        }));
+      },
+      addDbConnection(buildId: string, conn: Omit<DbConnection, "id" | "createdAt">) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  dbConnections: [
+                    ...(b.dbConnections ?? []),
+                    { ...conn, id: uid(), createdAt: now() },
+                  ],
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+      },
+      removeDbConnection(buildId: string, connId: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  dbConnections: (b.dbConnections ?? []).filter((c) => c.id !== connId),
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+      },
+      setPreviewEntry(buildId: string, path: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId ? { ...b, previewEntryPath: path } : b,
+          ),
+        }));
+      },
+      /* --------------------------- Module 14 — AI Development Agent */
+      createAgentTask(
+        buildId: string,
+        task: Omit<AgentTask, "id" | "code" | "createdAt" | "updatedAt" | "changes">,
+      ): AgentTask {
+        const session = (ws.buildSessions ?? []).find((b) => b.id === buildId);
+        const seq = (session?.agentTasks?.length ?? 0) + 1;
+        const full: AgentTask = {
+          ...task,
+          id: uid(),
+          code: `TASK-${String(seq).padStart(3, "0")}`,
+          changes: [],
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? { ...b, agentTasks: [...(b.agentTasks ?? []), full], updatedAt: now() }
+              : b,
+          ),
+        }));
+        return full;
+      },
+      updateAgentTask(buildId: string, taskId: string, patch: Partial<AgentTask>) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  agentTasks: (b.agentTasks ?? []).map((t) =>
+                    t.id === taskId ? { ...t, ...patch, updatedAt: now() } : t,
+                  ),
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+      },
+      /** No execution before approval — this is the only gate that opens it. */
+      approveAgentTask(buildId: string, taskId: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  agentTasks: (b.agentTasks ?? []).map((t) =>
+                    t.id === taskId
+                      ? { ...t, approvedAt: now(), status: "Running", updatedAt: now() }
+                      : t,
+                  ),
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+      },
+      recordAgentChange(
+        buildId: string,
+        taskId: string,
+        change: Omit<AgentChange, "id" | "createdAt" | "taskId">,
+      ) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? {
+                  ...b,
+                  agentTasks: (b.agentTasks ?? []).map((t) =>
+                    t.id === taskId
+                      ? {
+                          ...t,
+                          changes: [
+                            ...t.changes,
+                            { ...change, taskId, id: uid(), createdAt: now() },
+                          ],
+                          updatedAt: now(),
+                        }
+                      : t,
+                  ),
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+      },
+      deleteAgentTask(buildId: string, taskId: string) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId
+              ? { ...b, agentTasks: (b.agentTasks ?? []).filter((t) => t.id !== taskId) }
+              : b,
+          ),
+        }));
+      },
+      /* ------------------------------ Module 13 — Repository Management */
+      addRepository(
+        repo: Omit<Repository, "id" | "createdAt" | "updatedAt">,
+      ): Repository {
+        const full: Repository = { ...repo, id: uid(), createdAt: now(), updatedAt: now() };
+        update((w) =>
+          touchProject(
+            { ...w, repositories: [full, ...(w.repositories ?? [])] },
+            repo.projectId,
+          ),
+        );
+        return full;
+      },
+      updateRepository(id: string, patch: Partial<Repository>) {
+        update((w) => ({
+          ...w,
+          repositories: (w.repositories ?? []).map((r) =>
+            r.id === id ? { ...r, ...patch, updatedAt: now() } : r,
+          ),
+        }));
+      },
+      /** Disconnect — drops the stored credentials and the project link. */
+      removeRepository(id: string) {
+        update((w) => ({
+          ...w,
+          repositories: (w.repositories ?? []).filter((r) => r.id !== id),
+          repoBranches: (w.repoBranches ?? []).filter((b) => b.repositoryId !== id),
+          repoCommits: (w.repoCommits ?? []).filter((c) => c.repositoryId !== id),
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.repositoryId === id
+              ? {
+                  ...b,
+                  repositoryId: undefined,
+                  repositoryFullName: undefined,
+                  repositoryProvider: undefined,
+                  repositoryBranch: undefined,
+                }
+              : b,
+          ),
+        }));
+      },
+      /** Replace the known branch list for a repository (fetch / refresh). */
+      syncRepoBranches(
+        repositoryId: string,
+        branches: Array<{ name: string; sha: string }>,
+      ) {
+        update((w) => {
+          const existing = (w.repoBranches ?? []).filter((b) => b.repositoryId === repositoryId);
+          const next: RepoBranch[] = branches.map((b) => {
+            const prior = existing.find((x) => x.name === b.name);
+            return {
+              id: prior?.id ?? uid(),
+              repositoryId,
+              name: b.name,
+              sha: b.sha,
+              baseBranch: prior?.baseBranch,
+              createdAt: prior?.createdAt ?? now(),
+            };
+          });
+          return {
+            ...w,
+            repoBranches: [
+              ...(w.repoBranches ?? []).filter((b) => b.repositoryId !== repositoryId),
+              ...next,
+            ],
+          };
+        });
+      },
+      addRepoBranch(branch: Omit<RepoBranch, "id" | "createdAt">) {
+        update((w) => ({
+          ...w,
+          repoBranches: [
+            ...(w.repoBranches ?? []),
+            { ...branch, id: uid(), createdAt: now() },
+          ],
+        }));
+      },
+      addRepoCommit(commit: Omit<RepoCommit, "id" | "createdAt">): RepoCommit {
+        const full: RepoCommit = { ...commit, id: uid(), createdAt: now() };
+        update((w) => ({
+          ...w,
+          repoCommits: [full, ...(w.repoCommits ?? [])],
+          repositories: (w.repositories ?? []).map((r) =>
+            r.id === commit.repositoryId
+              ? {
+                  ...r,
+                  lastCommitSha: commit.sha,
+                  lastCommitMessage: commit.message,
+                  lastCommitAt: now(),
+                  currentBranch: commit.branch,
+                  updatedAt: now(),
+                }
+              : r,
+          ),
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            commit.buildSessionId && b.id === commit.buildSessionId
+              ? {
+                  ...b,
+                  repositoryId: commit.repositoryId,
+                  repositoryProvider: commit.provider,
+                  repositoryBranch: commit.branch,
+                  lastCommitSha: commit.sha,
+                  lastCommitAt: now(),
+                  updatedAt: now(),
+                }
+              : b,
+          ),
+        }));
+        return full;
+      },
+      /** Build Session integration — record repository, branch and provider. */
+      linkBuildRepository(
+        buildId: string,
+        link: {
+          repositoryId: string;
+          repositoryFullName: string;
+          repositoryProvider: RepoProvider;
+          repositoryBranch: string;
+        },
+      ) {
+        update((w) => ({
+          ...w,
+          buildSessions: (w.buildSessions ?? []).map((b) =>
+            b.id === buildId ? { ...b, ...link, updatedAt: now() } : b,
+          ),
+        }));
+      },
+      /* ------------------- Module 15 — Artifact and Build Management */
+      addArtifact(a: Omit<Artifact, "id" | "code" | "createdAt" | "updatedAt">): Artifact {
+        const used = (ws.artifacts ?? []).filter((x) => x.projectId === a.projectId).reduce(
+          (m, x) => {
+            const n = Number(x.code.split("-")[1] ?? 0);
+            return Number.isFinite(n) && n > m ? n : m;
+          },
+          0,
+        );
+        const full: Artifact = {
+          ...a,
+          id: uid(),
+          code: `ART-${String(used + 1).padStart(3, "0")}`,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        update((w) => ({ ...w, artifacts: [full, ...(w.artifacts ?? [])] }));
+        return full;
+      },
+      updateArtifact(id: string, patch: Partial<Artifact>) {
+        update((w) => ({
+          ...w,
+          artifacts: (w.artifacts ?? []).map((a) =>
+            a.id === id ? { ...a, ...patch, updatedAt: now() } : a,
+          ),
+        }));
+      },
+      deleteArtifact(id: string) {
+        update((w) => ({
+          ...w,
+          artifacts: (w.artifacts ?? []).filter((a) => a.id !== id),
+          buildRecords: (w.buildRecords ?? []).map((r) =>
+            r.artifactIds.includes(id)
+              ? { ...r, artifactIds: r.artifactIds.filter((x) => x !== id) }
+              : r,
+          ),
+        }));
+      },
+      startBuildRecord(
+        r: Omit<BuildRecord, "id" | "code" | "createdAt" | "updatedAt">,
+      ): BuildRecord {
+        const used = (ws.buildRecords ?? [])
+          .filter((x) => x.projectId === r.projectId)
+          .reduce((m, x) => {
+            const n = Number(x.code.split("-")[1] ?? 0);
+            return Number.isFinite(n) && n > m ? n : m;
+          }, 0);
+        const full: BuildRecord = {
+          ...r,
+          id: uid(),
+          code: `RUN-${String(used + 1).padStart(3, "0")}`,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        update((w) => ({ ...w, buildRecords: [full, ...(w.buildRecords ?? [])] }));
+        return full;
+      },
+      updateBuildRecord(id: string, patch: Partial<BuildRecord>) {
+        update((w) => ({
+          ...w,
+          buildRecords: (w.buildRecords ?? []).map((r) =>
+            r.id === id ? { ...r, ...patch, updatedAt: now() } : r,
+          ),
+        }));
+      },
+      appendBuildRecordLog(id: string, line: string) {
+        update((w) => ({
+          ...w,
+          buildRecords: (w.buildRecords ?? []).map((r) =>
+            r.id === id
+              ? { ...r, logs: [...r.logs, line].slice(-400), updatedAt: now() }
+              : r,
+          ),
+        }));
+      },
+      attachArtifactsToBuildRecord(id: string, artifactIds: string[]) {
+        update((w) => ({
+          ...w,
+          buildRecords: (w.buildRecords ?? []).map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  artifactIds: [...new Set([...r.artifactIds, ...artifactIds])],
+                  updatedAt: now(),
+                }
+              : r,
+          ),
+        }));
+      },
+      deleteBuildRecord(id: string) {
+        update((w) => ({
+          ...w,
+          buildRecords: (w.buildRecords ?? []).filter((r) => r.id !== id),
+        }));
+      },
+      /**
+       * One capture run: opens a build record, stores every output as an
+       * artifact (updating an existing one at the same path), writes the
+       * change history and closes the record.
+       */
+      captureBuild(input: {
+        record: Omit<BuildRecord, "id" | "code" | "createdAt" | "updatedAt">;
+        items: Array<Omit<Artifact, "id" | "code" | "createdAt" | "updatedAt">>;
+        summary: string;
+        output: string;
+      }) {
+        update((w) => {
+          const projectId = input.record.projectId;
+          const artifacts = w.artifacts ?? [];
+          const runSeq =
+            (w.buildRecords ?? [])
+              .filter((r) => r.projectId === projectId)
+              .reduce((m, r) => {
+                const n = Number(r.code.split("-")[1] ?? 0);
+                return Number.isFinite(n) && n > m ? n : m;
+              }, 0) + 1;
+          const runCode = `RUN-${String(runSeq).padStart(3, "0")}`;
+          const recordId = uid();
+
+          let artSeq = artifacts
+            .filter((a) => a.projectId === projectId)
+            .reduce((m, a) => {
+              const n = Number(a.code.split("-")[1] ?? 0);
+              return Number.isFinite(n) && n > m ? n : m;
+            }, 0);
+
+          const nextArtifacts = [...artifacts];
+          const changes: ChangeRecord[] = [];
+          const ids: string[] = [];
+
+          for (const item of input.items) {
+            const idx = nextArtifacts.findIndex(
+              (a) =>
+                a.projectId === projectId &&
+                a.path === item.path &&
+                a.buildSessionId === item.buildSessionId,
+            );
+            if (idx >= 0) {
+              const prior = nextArtifacts[idx]!;
+              const updated: Artifact = {
+                ...prior,
+                ...item,
+                buildRecordId: recordId,
+                buildRunCode: runCode,
+                id: prior.id,
+                code: prior.code,
+                createdAt: prior.createdAt,
+                updatedAt: now(),
+              };
+              nextArtifacts[idx] = updated;
+              ids.push(prior.id);
+              if (prior.content !== item.content) {
+                changes.push({
+                  id: uid(),
+                  projectId,
+                  action: "Modified",
+                  path: item.path,
+                  buildSessionId: item.buildSessionId,
+                  buildCode: item.buildCode,
+                  buildRecordId: recordId,
+                  buildRunCode: runCode,
+                  taskId: item.taskId,
+                  taskCode: item.taskCode,
+                  promptId: item.promptId,
+                  provider: item.provider,
+                  model: item.model,
+                  createdAt: now(),
+                });
+              }
+            } else {
+              artSeq += 1;
+              const created: Artifact = {
+                ...item,
+                buildRecordId: recordId,
+                buildRunCode: runCode,
+                id: uid(),
+                code: `ART-${String(artSeq).padStart(3, "0")}`,
+                createdAt: now(),
+                updatedAt: now(),
+              };
+              nextArtifacts.unshift(created);
+              ids.push(created.id);
+              changes.push({
+                id: uid(),
+                projectId,
+                action: "Created",
+                path: item.path,
+                buildSessionId: item.buildSessionId,
+                buildCode: item.buildCode,
+                buildRecordId: recordId,
+                buildRunCode: runCode,
+                taskId: item.taskId,
+                taskCode: item.taskCode,
+                promptId: item.promptId,
+                provider: item.provider,
+                model: item.model,
+                createdAt: now(),
+              });
+            }
+          }
+
+          // Outputs previously captured for this session that are gone now.
+          const livePaths = new Set(input.items.map((i) => i.path));
+          for (const prior of artifacts) {
+            if (
+              prior.projectId === projectId &&
+              prior.buildSessionId === input.record.buildSessionId &&
+              !livePaths.has(prior.path) &&
+              !changes.some((c) => c.path === prior.path && c.action === "Deleted")
+            ) {
+              changes.push({
+                id: uid(),
+                projectId,
+                action: "Deleted",
+                path: prior.path,
+                buildSessionId: prior.buildSessionId,
+                buildCode: prior.buildCode,
+                buildRecordId: recordId,
+                buildRunCode: runCode,
+                promptId: prior.promptId,
+                createdAt: now(),
+              });
+            }
+          }
+
+          const record: BuildRecord = {
+            ...input.record,
+            id: recordId,
+            code: runCode,
+            status: "Completed",
+            endedAt: now(),
+            summary: input.summary,
+            output: input.output,
+            artifactIds: ids,
+            logs: [
+              ...input.record.logs,
+              `${runCode} captured ${ids.length} artifacts`,
+              `${changes.length} change records written`,
+            ],
+            createdAt: now(),
+            updatedAt: now(),
+          };
+
+          return {
+            ...w,
+            artifacts: nextArtifacts,
+            buildRecords: [record, ...(w.buildRecords ?? [])],
+            changeRecords: [...changes, ...(w.changeRecords ?? [])],
+          };
+        });
+      },
+      recordChange(c: Omit<ChangeRecord, "id" | "createdAt">): ChangeRecord {
+        const full: ChangeRecord = { ...c, id: uid(), createdAt: now() };
+        update((w) => ({ ...w, changeRecords: [full, ...(w.changeRecords ?? [])] }));
+        return full;
       },
       addSnapshot(s: Omit<Snapshot, "id" | "createdAt">) {
         update((w) => ({
@@ -403,6 +1236,13 @@ export function useProject(projectId: string) {
       documents: ws.documents.filter((d) => d.projectId === projectId),
       prompts: ws.prompts.filter((p) => p.projectId === projectId),
       snapshots: ws.snapshots.filter((s) => s.projectId === projectId),
+      buildSessions: (ws.buildSessions ?? []).filter((b) => b.projectId === projectId),
+      repositories: (ws.repositories ?? []).filter((r) => r.projectId === projectId),
+      repoCommits: (ws.repoCommits ?? []).filter((c) => c.projectId === projectId),
+      repoBranches: ws.repoBranches ?? [],
+      artifacts: (ws.artifacts ?? []).filter((a) => a.projectId === projectId),
+      buildRecords: (ws.buildRecords ?? []).filter((r) => r.projectId === projectId),
+      changeRecords: (ws.changeRecords ?? []).filter((c) => c.projectId === projectId),
     };
   }, [ws, projectId]);
 }
