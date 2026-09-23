@@ -1328,7 +1328,8 @@ function CoderPage() {
                       </div>
                     )}
                   </div>
-                {previewLogsOpen ? <div className="h-24 shrink-0 overflow-y-auto border-t border-border bg-surface-2 p-2 font-mono text-[11px]">
+                  {previewLogsOpen ? (
+                    <div className="h-24 shrink-0 overflow-y-auto border-t border-border bg-surface-2 p-2 font-mono text-[11px]">
                     <div className="label-mono mb-1">Preview logs</div>
                     {previewLogs.length === 0 ? (
                       <span className="text-muted-foreground">no output</span>
@@ -1336,10 +1337,11 @@ function CoderPage() {
                       previewLogs.map((l, i) => (
                         <div key={i} className={l.kind === "error" ? "text-destructive" : ""}>
                           {l.text}
-                </div> : null}
+                          </div>
                       ))
                     )}
-                  </div>
+                    </div>
+                  ) : null}
                 </TabsContent>
 
                 <TabsContent value="database" className="min-h-0 flex-1 overflow-y-auto p-3">
