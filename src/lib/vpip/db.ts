@@ -135,6 +135,34 @@ export async function vaultRead<T>(): Promise<T | null> {
     selectAll("vpip_intelligence", "created_at"),
   ]);
 
+  // Record exactly which rows this session has loaded; writes may only delete
+  // rows from this set.
+  const loaded: Array<[string, { data: Row[] }]> = [
+    ["vpip_projects", projects],
+    ["vpip_discussions", discussions],
+    ["vpip_knowledge", knowledge],
+    ["vpip_documents", documents],
+    ["vpip_prompts", prompts],
+    ["vpip_snapshots", snapshots],
+    ["vpip_build_sessions", buildSessions],
+    ["vpip_repositories", repositories],
+    ["vpip_repo_branches", repoBranches],
+    ["vpip_repo_commits", repoCommits],
+    ["vpip_artifacts", artifacts],
+    ["vpip_build_records", buildRecords],
+    ["vpip_change_records", changeRecords],
+    ["vpip_prompt_phases", promptPhases],
+    ["vpip_phase_runs", phaseRuns],
+    ["vpip_context_packages", contextPackages],
+    ["vpip_outcomes", outcomes],
+    ["vpip_failures", failures],
+    ["vpip_activity", activity],
+    ["vpip_intelligence", intelligence],
+  ];
+  for (const [table, res] of loaded) {
+    rememberIds(table, res.data.map((r) => r['id'] as string));
+  }
+
   const base = emptyWorkspace();
   const s = settings.data as Row | null;
 
