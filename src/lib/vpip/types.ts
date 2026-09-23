@@ -1,4 +1,4 @@
-export type ProviderId = "openai" | "deepseek";
+export type ProviderId = "openai" | "deepseek" | "perplexity" | "Gemini" | "Claude";
 
 export type DiscussionType =
   | "General"
@@ -1065,11 +1065,17 @@ export interface Workspace {
 export const PROVIDER_LABEL: Record<ProviderId, string> = {
   openai: "OpenAI",
   deepseek: "DeepSeek",
+  perplexity: "Perplexity",
+  Gemini: "Gemini",
+  Claude: "Claude",
 };
 
 export const PROVIDER_MODELS: Record<ProviderId, string[]> = {
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini"],
   deepseek: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-pro"],
+  perplexity: ["kimi-k3", "openai/gpt-5.5"],
+  Gemini: ["gemini-pro", "gemini-1.5-pro"],
+  Claude: ["claude-3-5-sonnet", "claude-3-haiku"]
 };
 
 export function emptyWorkspace(): Workspace {
@@ -1088,6 +1094,18 @@ export function emptyWorkspace(): Workspace {
         },
         deepseek: {
           model: "deepseek-chat",
+          status: "unknown",
+        },
+        perplexity: {
+          model: "pplx-7b",
+          status: "unknown",
+        },
+        Gemini: {
+          model: "gemini-pro",
+          status: "unknown",
+        },
+        Claude: {
+          model: "claude-3-5-sonnet",
           status: "unknown",
         },
       },

@@ -89,7 +89,7 @@ function SettingsPage() {
                         autoComplete="off"
                         spellCheck={false}
                         className="font-mono text-xs"
-                        placeholder={id === "openai" ? "sk-..." : "DeepSeek API key"}
+                        placeholder={id === "openai" ? "sk-..." : `${PROVIDER_LABEL[id]} API key`}
                         value={cfg.apiKey ?? ""}
                         onChange={(e) => actions.setProvider(id, { apiKey: e.target.value })}
                       />

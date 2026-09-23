@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-type ProviderId = "openai" | "deepseek";
+type ProviderId = "openai" | "deepseek" | "perplexity" | "Gemini" | "Claude";
 
 const PROVIDERS: Record<ProviderId, { baseUrl: string; env: string }> = {
   openai: { baseUrl: "https://api.openai.com/v1", env: "OPENAI_API_KEY" },
   deepseek: { baseUrl: "https://api.deepseek.com/v1", env: "DEEPSEEK_API_KEY" },
+  perplexity: { baseUrl: "https://api.perplexity.ai/v1", env: "PERPLEXITY_API_KEY" },
+  Gemini: { baseUrl: "https://api.gemini.com/v1", env: "GEMINI_API_KEY" },
+  Claude: { baseUrl: "https://api.claude.com/v1", env: "CLAUDE_API_KEY" },
 };
 
 interface Body {
