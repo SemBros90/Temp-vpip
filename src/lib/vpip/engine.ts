@@ -23,7 +23,7 @@ export interface ProjectMemory {
 /* ------------------------------------------------- context retrieval */
 
 export interface ContextHit {
-  kind: "Discussion" | "Decision" | "Requirement" | "Idea" | "Risk" | "Question" | "Assumption" | "Document" | "Prompt";
+  kind: "Discussion" | "Document" | "Prompt" | KnowledgeType;
   id: string;
   label: string;
   excerpt: string;

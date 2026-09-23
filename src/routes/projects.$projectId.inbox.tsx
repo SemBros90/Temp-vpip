@@ -37,6 +37,8 @@ const DISCUSSION_TYPE_FOR: Record<KnowledgeType, DiscussionType> = {
   Risk: "Risk",
   Question: "General",
   Assumption: "General",
+  "Lesson Learned": "General",
+  "Failure Cause": "Risk",
 };
 
 export const Route = createFileRoute("/projects/$projectId/inbox")({
