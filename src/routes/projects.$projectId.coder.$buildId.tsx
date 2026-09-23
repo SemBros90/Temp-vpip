@@ -291,6 +291,15 @@ function CoderPage() {
   const problems = validateFiles(realFiles);
   const previewDoc = buildPreviewDoc(files, session.previewEntryPath);
 
+  /** Open the live preview as a standalone page in a new browser tab. */
+  const openPreviewInTab = useCallback(() => {
+    if (!previewDoc) return;
+    const url = URL.createObjectURL(new Blob([previewDoc], { type: "text/html" }));
+    window.open(url, "_blank", "noopener");
+    // Reclaim the blob once the new tab has had time to load it.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }, [previewDoc]);
+
   /* ------------------------------- Module 16 — build orchestration */
 
   const requirements = session.requirements ?? [];
