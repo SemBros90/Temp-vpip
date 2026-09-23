@@ -35,6 +35,13 @@ import {
   type RepoCommit,
   type RepoProvider,
   type Repository,
+  type ActivityRecord,
+  type ContextPackageRecord,
+  type FailureRecord,
+  type IntelligenceRecord,
+  type OutcomeRecord,
+  type PhaseRun,
+  type PromptPhase,
   type Settings,
   type Snapshot,
   type Workspace,
@@ -203,6 +210,13 @@ export function useVpipActions() {
           artifacts: (w.artifacts ?? []).filter((a) => a.projectId !== id),
           buildRecords: (w.buildRecords ?? []).filter((r) => r.projectId !== id),
           changeRecords: (w.changeRecords ?? []).filter((c) => c.projectId !== id),
+          promptPhases: (w.promptPhases ?? []).filter((x) => x.projectId !== id),
+          phaseRuns: (w.phaseRuns ?? []).filter((x) => x.projectId !== id),
+          contextPackages: (w.contextPackages ?? []).filter((x) => x.projectId !== id),
+          outcomes: (w.outcomes ?? []).filter((x) => x.projectId !== id),
+          failures: (w.failures ?? []).filter((x) => x.projectId !== id),
+          activity: (w.activity ?? []).filter((x) => x.projectId !== id),
+          intelligence: (w.intelligence ?? []).filter((x) => x.projectId !== id),
         }));
       },
 
@@ -296,6 +310,8 @@ export function useVpipActions() {
                   ...k,
                   ...patch,
                   updatedAt: now(),
+                  version: (k.version ?? 1) + 1,
+                  reasonForChange: note,
                   revisions: [
                     ...k.revisions,
                     { at: now(), note, author: w.settings.author },
@@ -1195,6 +1211,233 @@ export function useVpipActions() {
         }));
       },
 
+      /* ==================== V-03 — phased prompt execution */
+      setPromptPhases(
+        projectId: string,
+        promptId: string,
+        phases: Array<{ phaseNo: number; title: string; markdown: string }>,
+      ): PromptPhase[] {
+        const created: PromptPhase[] = phases.map((p) => ({
+          id: uid(),
+          projectId,
+          promptId,
+          phaseNo: p.phaseNo,
+          title: p.title,
+          markdown: p.markdown,
+          status: "Pending",
+          createdAt: now(),
+          updatedAt: now(),
+        }));
+        update((w) => ({
+          ...w,
+          promptPhases: [
+            ...(w.promptPhases ?? []).filter((x) => x.promptId !== promptId),
+            ...created,
+          ],
+        }));
+        return created;
+      },
+      updatePromptPhase(id: string, patch: Partial<PromptPhase>) {
+        update((w) => ({
+          ...w,
+          promptPhases: (w.promptPhases ?? []).map((p) =>
+            p.id === id ? { ...p, ...patch, updatedAt: now() } : p,
+          ),
+        }));
+      },
+      deletePromptPhases(promptId: string) {
+        update((w) => ({
+          ...w,
+          promptPhases: (w.promptPhases ?? []).filter((p) => p.promptId !== promptId),
+          phaseRuns: (w.phaseRuns ?? []).filter((r) => r.promptId !== promptId),
+        }));
+      },
+      startPhaseRun(phase: PromptPhase, provider?: PhaseRun["provider"], model?: string): PhaseRun {
+        const attempt =
+          (ws.phaseRuns ?? []).filter((r) => r.phaseId === phase.id).length + 1;
+        const run: PhaseRun = {
+          id: uid(),
+          projectId: phase.projectId,
+          phaseId: phase.id,
+          promptId: phase.promptId,
+          attempt,
+          status: "Running",
+          provider,
+          model,
+          startedAt: now(),
+          createdAt: now(),
+        };
+        update((w) => ({
+          ...w,
+          phaseRuns: [run, ...(w.phaseRuns ?? [])],
+          promptPhases: (w.promptPhases ?? []).map((p) =>
+            p.id === phase.id
+              ? { ...p, status: "Running", startedAt: now(), provider, model, updatedAt: now() }
+              : p,
+          ),
+        }));
+        return run;
+      },
+      finishPhaseRun(
+        runId: string,
+        phaseId: string,
+        result: { status: PhaseRun["status"]; output?: string; error?: string },
+      ) {
+        update((w) => ({
+          ...w,
+          phaseRuns: (w.phaseRuns ?? []).map((r) =>
+            r.id === runId
+              ? {
+                  ...r,
+                  status: result.status,
+                  endedAt: now(),
+                  output: result.output,
+                  error: result.error,
+                }
+              : r,
+          ),
+          promptPhases: (w.promptPhases ?? []).map((p) =>
+            p.id === phaseId
+              ? {
+                  ...p,
+                  status: result.status,
+                  endedAt: now(),
+                  output: result.output,
+                  error: result.error,
+                  updatedAt: now(),
+                }
+              : p,
+          ),
+        }));
+      },
+
+      /* ==================== V-05 — context packages */
+      addContextPackage(
+        c: Omit<ContextPackageRecord, "id" | "code" | "createdAt" | "updatedAt">,
+      ): ContextPackageRecord {
+        const used = (ws.contextPackages ?? [])
+          .filter((x) => x.projectId === c.projectId)
+          .reduce((m, x) => {
+            const n = Number(x.code.split("-")[1] ?? 0);
+            return Number.isFinite(n) && n > m ? n : m;
+          }, 0);
+        const full: ContextPackageRecord = {
+          ...c,
+          id: uid(),
+          code: `CTX-${String(used + 1).padStart(3, "0")}`,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        update((w) => ({ ...w, contextPackages: [full, ...(w.contextPackages ?? [])] }));
+        return full;
+      },
+      deleteContextPackage(id: string) {
+        update((w) => ({
+          ...w,
+          contextPackages: (w.contextPackages ?? []).filter((c) => c.id !== id),
+        }));
+      },
+
+      /* ==================== V-06 — outcome learning */
+      addOutcome(o: Omit<OutcomeRecord, "id" | "code" | "createdAt" | "updatedAt">): OutcomeRecord {
+        const used = (ws.outcomes ?? [])
+          .filter((x) => x.projectId === o.projectId)
+          .reduce((m, x) => {
+            const n = Number(x.code.split("-")[1] ?? 0);
+            return Number.isFinite(n) && n > m ? n : m;
+          }, 0);
+        const full: OutcomeRecord = {
+          ...o,
+          id: uid(),
+          code: `OUT-${String(used + 1).padStart(3, "0")}`,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        update((w) => ({ ...w, outcomes: [full, ...(w.outcomes ?? [])] }));
+        return full;
+      },
+      updateOutcome(id: string, patch: Partial<OutcomeRecord>) {
+        update((w) => ({
+          ...w,
+          outcomes: (w.outcomes ?? []).map((o) =>
+            o.id === id ? { ...o, ...patch, updatedAt: now() } : o,
+          ),
+        }));
+      },
+      deleteOutcome(id: string) {
+        update((w) => ({ ...w, outcomes: (w.outcomes ?? []).filter((o) => o.id !== id) }));
+      },
+
+      /* ==================== V-07 — failure analysis */
+      addFailure(f: Omit<FailureRecord, "id" | "code" | "createdAt" | "updatedAt">): FailureRecord {
+        const used = (ws.failures ?? [])
+          .filter((x) => x.projectId === f.projectId)
+          .reduce((m, x) => {
+            const n = Number(x.code.split("-")[1] ?? 0);
+            return Number.isFinite(n) && n > m ? n : m;
+          }, 0);
+        const full: FailureRecord = {
+          ...f,
+          id: uid(),
+          code: `FAIL-${String(used + 1).padStart(3, "0")}`,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        update((w) => ({ ...w, failures: [full, ...(w.failures ?? [])] }));
+        return full;
+      },
+      updateFailure(id: string, patch: Partial<FailureRecord>) {
+        update((w) => ({
+          ...w,
+          failures: (w.failures ?? []).map((f) =>
+            f.id === id ? { ...f, ...patch, updatedAt: now() } : f,
+          ),
+        }));
+      },
+      deleteFailure(id: string) {
+        update((w) => ({ ...w, failures: (w.failures ?? []).filter((f) => f.id !== id) }));
+      },
+
+      /* ==================== V-11 — multi-AI collaboration ledger */
+      logActivity(a: Omit<ActivityRecord, "id" | "createdAt">): ActivityRecord {
+        const full: ActivityRecord = { ...a, id: uid(), createdAt: now() };
+        update((w) => ({ ...w, activity: [full, ...(w.activity ?? [])].slice(0, 2000) }));
+        return full;
+      },
+
+      /* ==================== V-15 — organizational knowledge */
+      addIntelligence(
+        i: Omit<IntelligenceRecord, "id" | "code" | "createdAt" | "updatedAt">,
+      ): IntelligenceRecord {
+        const used = (ws.intelligence ?? []).reduce((m, x) => {
+          const n = Number(x.code.split("-")[1] ?? 0);
+          return Number.isFinite(n) && n > m ? n : m;
+        }, 0);
+        const full: IntelligenceRecord = {
+          ...i,
+          id: uid(),
+          code: `PAT-${String(used + 1).padStart(3, "0")}`,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        update((w) => ({ ...w, intelligence: [full, ...(w.intelligence ?? [])] }));
+        return full;
+      },
+      updateIntelligence(id: string, patch: Partial<IntelligenceRecord>) {
+        update((w) => ({
+          ...w,
+          intelligence: (w.intelligence ?? []).map((x) =>
+            x.id === id ? { ...x, ...patch, updatedAt: now() } : x,
+          ),
+        }));
+      },
+      deleteIntelligence(id: string) {
+        update((w) => ({
+          ...w,
+          intelligence: (w.intelligence ?? []).filter((x) => x.id !== id),
+        }));
+      },
+
       /* settings */
       setSettings(patch: Partial<Settings>) {
         update((w) => ({ ...w, settings: { ...w.settings, ...patch } }));
@@ -1247,6 +1490,13 @@ export function useProject(projectId: string) {
       artifacts: (ws.artifacts ?? []).filter((a) => a.projectId === projectId),
       buildRecords: (ws.buildRecords ?? []).filter((r) => r.projectId === projectId),
       changeRecords: (ws.changeRecords ?? []).filter((c) => c.projectId === projectId),
+      promptPhases: (ws.promptPhases ?? []).filter((p) => p.projectId === projectId),
+      phaseRuns: (ws.phaseRuns ?? []).filter((r) => r.projectId === projectId),
+      contextPackages: (ws.contextPackages ?? []).filter((c) => c.projectId === projectId),
+      outcomes: (ws.outcomes ?? []).filter((o) => o.projectId === projectId),
+      failures: (ws.failures ?? []).filter((f) => f.projectId === projectId),
+      activity: (ws.activity ?? []).filter((a) => a.projectId === projectId),
+      intelligence: (ws.intelligence ?? []).filter((i) => i.projectId === projectId),
     };
   }, [ws, projectId]);
 }
