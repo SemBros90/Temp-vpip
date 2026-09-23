@@ -28,7 +28,8 @@ export const Route = createFileRoute("/diagnostics")({
 function Diagnostics() {
   const { ws, loaded, dirty, lastSavedAt, lastLoadedAt, loadError, reload, saveNow } = useVpip();
 
-  const count = (t: string) => ws.knowledge.filter((k) => k.type === t && k.status === "Approved").length;
+  const count = (t: string) =>
+    ws.knowledge.filter((k) => k.type === t && k.status === "approved").length;
   const rows: Array<[string, string]> = [
     ["Storage provider", "Cloud database (Postgres) — single source of truth"],
     ["Local browser storage", "Only the coder panel layout (vpip-coder-layout)"],
