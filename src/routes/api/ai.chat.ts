@@ -7,8 +7,8 @@ interface ProviderDef {
   /** Full chat endpoint, not just the base. */
   url: string;
   env: string;
-  /** Anthropic speaks its own Messages protocol. */
-  dialect: "openai" | "anthropic";
+  /** Anthropic speaks its own Messages protocol; Perplexity moved to the Responses protocol. */
+  dialect: "openai" | "anthropic" | "responses";
 }
 
 const PROVIDERS: Record<ProviderId, ProviderDef> = {
@@ -26,9 +26,10 @@ const PROVIDERS: Record<ProviderId, ProviderDef> = {
   },
   perplexity: {
     label: "Perplexity",
-    url: "https://api.perplexity.ai/chat/completions",
+    // Sonar is now the Agent API: chat/completions is retired.
+    url: "https://api.perplexity.ai/v1/responses",
     env: "PERPLEXITY_API_KEY",
-    dialect: "openai",
+    dialect: "responses",
   },
   Gemini: {
     label: "Gemini",
