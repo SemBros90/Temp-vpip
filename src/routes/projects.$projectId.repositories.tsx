@@ -16,7 +16,7 @@ import {
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { ExtractButton } from "@/components/vpip/ExtractButton";
-import { repositorySource, artifactSource } from "@/lib/vpip/upgrade";
+import { repositorySource } from "@/lib/vpip/upgrade";
 import { EmptyState, Tag, relTime } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
