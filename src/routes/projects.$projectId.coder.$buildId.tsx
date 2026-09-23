@@ -17,6 +17,9 @@ import {
   Loader2,
   MessagesSquare,
   Monitor,
+  PanelLeft,
+  PanelLeftClose,
+  PanelsTopLeft,
   Pencil,
   RefreshCw,
   RotateCcw,
@@ -28,6 +31,13 @@ import {
   Trash2,
   Waypoints,
 } from "lucide-react";
+import {
+  Group,
+  Panel,
+  Separator as ResizeSeparator,
+  type GroupImperativeHandle,
+  type PanelImperativeHandle,
+} from "react-resizable-panels";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { EmptyState, EnginePicker, Tag, relTime, useEngine } from "@/components/vpip/common";
@@ -36,6 +46,25 @@ import { Markdown } from "@/lib/vpip/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+} from "@/components/ai-elements/prompt-input";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
@@ -139,6 +168,10 @@ function CoderPage() {
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const workspaceRef = useRef<GroupImperativeHandle | null>(null);
+  const filesPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [bottomOpen, setBottomOpen] = useState(false);
 
   const session = p.buildSessions.find((b) => b.id === buildId);
   const files = useMemo(() => session?.files ?? [], [session?.files]);
@@ -160,6 +193,17 @@ function CoderPage() {
   useEffect(() => {
     inputRef.current?.focus();
   }, [buildId]);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem("vpip-coder-layout");
+    if (!raw) return;
+    try {
+      const layout = JSON.parse(raw) as Record<string, number>;
+      workspaceRef.current?.setLayout(layout);
+    } catch {
+      window.localStorage.removeItem("vpip-coder-layout");
+    }
+  }, []);
 
   useEffect(() => {
     setDraft(selected?.content ?? "");
@@ -584,6 +628,36 @@ function CoderPage() {
       scroll={false}
       actions={
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            title={filesOpen ? "Close files" : "Open files"}
+            onClick={() => {
+              if (filesPanelRef.current?.isCollapsed()) filesPanelRef.current.expand();
+              else filesPanelRef.current?.collapse();
+            }}
+          >
+            {filesOpen ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
+            Files
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            title="Reset to 20% chat and 80% preview"
+            onClick={() => workspaceRef.current?.setLayout({ files: 0, chat: 20, preview: 80 })}
+          >
+            <PanelsTopLeft className="size-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => setBottomOpen((open) => !open)}
+          >
+            <TerminalIcon className="size-4" /> {bottomOpen ? "Close logs" : "Logs"}
+          </Button>
           <Select
             value={session.status}
             onValueChange={(v) =>
@@ -605,10 +679,27 @@ function CoderPage() {
         </div>
       }
     >
-      <div className="grid h-full min-h-0 grid-rows-[1fr_260px]">
-        <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[280px_1fr_380px]">
+      <div className={bottomOpen ? "grid h-full min-h-0 grid-rows-[1fr_240px]" : "h-full min-h-0"}>
+        <Group
+          groupRef={workspaceRef}
+          id="vpip-coder-workspace"
+          orientation="horizontal"
+          defaultLayout={{ files: 0, chat: 20, preview: 80 }}
+          onLayoutChanged={(layout) => window.localStorage.setItem("vpip-coder-layout", JSON.stringify(layout))}
+          className="hidden min-h-0 lg:flex"
+        >
           {/* ---------------------------------------------- left panel */}
-          <aside className="flex min-h-0 flex-col border-r border-border bg-surface">
+          <Panel
+            id="files"
+            panelRef={filesPanelRef}
+            defaultSize="0%"
+            minSize="240px"
+            maxSize="420px"
+            collapsedSize="0%"
+            collapsible
+            onResize={(size) => setFilesOpen(size.asPercentage > 0)}
+          >
+          <aside className="flex size-full min-h-0 flex-col border-r border-border bg-surface">
             <Tabs
               value={leftTab}
               onValueChange={setLeftTab}
@@ -808,16 +899,21 @@ function CoderPage() {
               </TabsContent>
             </Tabs>
           </aside>
+          </Panel>
+          <ResizeSeparator className="group relative w-px bg-border outline-none transition-colors hover:bg-primary focus-visible:bg-primary data-[separator=active]:bg-primary">
+            <span className="absolute inset-y-0 -left-1.5 w-3" />
+          </ResizeSeparator>
 
           {/* -------------------------------------------- center panel */}
-          <section className="flex min-h-0 flex-col">
+          <Panel id="chat" defaultSize="20%" minSize="300px" maxSize="55%">
+          <section className="flex size-full min-h-0 flex-col bg-background">
             <Tabs
               value={centerTab}
               onValueChange={setCenterTab}
               className="flex min-h-0 flex-1 flex-col gap-0"
             >
-              <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-                <TabsList>
+              <div className="flex min-w-0 items-center gap-2 overflow-x-auto border-b border-border px-2 py-2">
+                <TabsList className="h-8 w-max shrink-0">
                   <TabsTrigger value="chat" className="text-xs">
                     Coding chat
                   </TabsTrigger>
@@ -840,17 +936,15 @@ function CoderPage() {
                     Actions
                   </TabsTrigger>
                 </TabsList>
-                {selected ? (
-                  <span className="label-mono truncate">{selected.path}</span>
-                ) : null}
               </div>
 
               {/* chat */}
               <TabsContent value="chat" className="flex min-h-0 flex-1 flex-col gap-0">
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                  <div className="mx-auto max-w-3xl space-y-5">
+                <Conversation className="min-h-0">
+                  <ConversationContent className="gap-5 px-4 py-5">
                     {turns.length === 0 && streaming === null ? (
-                      <EmptyState
+                      <ConversationEmptyState
+                        icon={<BrainCircuit className="size-7" />}
                         title="The coder is loaded and waiting"
                         description="It holds the prompt, the linked decisions, requirements, documents and discussions of this build session, plus the session file tree. Pick a mode and ask it to build."
                       />
@@ -864,26 +958,20 @@ function CoderPage() {
                     ))}
 
                     {streaming !== null ? (
-                      <div className="space-y-2">
-                        <div className="label-mono flex items-center gap-1.5">
-                          <Sparkles className="size-3.5" /> AI Coder · {PROVIDER_LABEL[provider]} ·{" "}
-                          {mode}
-                        </div>
-                        {streaming ? (
-                          <Markdown source={streaming} />
-                        ) : (
-                          <div className="label-mono flex items-center gap-1.5">
-                            <Loader2 className="size-3.5 animate-spin" /> Thinking…
-                          </div>
-                        )}
-                      </div>
+                        <Message from="assistant">
+                          <div className="label-mono">AI Coder · {PROVIDER_LABEL[provider]} · {mode}</div>
+                          <MessageContent>
+                            {streaming ? <MessageResponse>{streaming}</MessageResponse> : <Shimmer>Thinking…</Shimmer>}
+                          </MessageContent>
+                        </Message>
                     ) : null}
                     <div ref={bottomRef} />
-                  </div>
-                </div>
+                  </ConversationContent>
+                  <ConversationScrollButton />
+                </Conversation>
 
-                <div className="shrink-0 border-t border-border bg-surface px-6 py-3">
-                  <div className="mx-auto max-w-3xl space-y-2">
+                <div className="shrink-0 border-t border-border bg-surface p-3">
+                  <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <Select value={mode} onValueChange={(v) => setMode(v as CoderActionKind)}>
                         <SelectTrigger className="h-8 w-[190px]">
@@ -911,46 +999,31 @@ function CoderPage() {
                       </Select>
                       {selected ? <Tag>open: {fileName(selected.path)}</Tag> : null}
                     </div>
-                    <Textarea
+                    <PromptInput
+                      onSubmit={() => void send()}
+                      className="bg-surface-2"
+                    >
+                    <PromptInputTextarea
                       ref={inputRef}
-                      rows={3}
-                      className="resize-none bg-surface-2"
+                      className="min-h-24 resize-none"
                       placeholder="e.g. build the invoice form for R-002 respecting D-001"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                          e.preventDefault();
-                          void send();
-                        }
-                      }}
                     />
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="label-mono">
+                    <PromptInputFooter>
+                      <PromptInputTools className="min-w-0">
+                      <div className="label-mono truncate">
                         Traceable to {session.code} · {linked.decisions.length} decisions ·{" "}
                         {linked.requirements.length} requirements
                       </div>
-                      <div className="flex gap-2">
-                        {busy ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8"
-                            onClick={() => abortRef.current?.abort()}
-                          >
-                            <Square className="size-4" /> Stop
-                          </Button>
-                        ) : null}
-                        <Button size="sm" className="h-8" onClick={() => void send()} disabled={busy}>
-                          {busy ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <CornerDownLeft className="size-4" />
-                          )}
-                          Send to coder
-                        </Button>
-                      </div>
-                    </div>
+                      </PromptInputTools>
+                      <PromptInputSubmit
+                        status={busy ? (streaming ? "streaming" : "submitted") : "ready"}
+                        disabled={!input.trim() && !busy}
+                        onStop={() => abortRef.current?.abort()}
+                      />
+                    </PromptInputFooter>
+                    </PromptInput>
                   </div>
                 </div>
               </TabsContent>
@@ -1111,9 +1184,14 @@ function CoderPage() {
               </TabsContent>
             </Tabs>
           </section>
+          </Panel>
+          <ResizeSeparator className="group relative w-px bg-border outline-none transition-colors hover:bg-primary focus-visible:bg-primary data-[separator=active]:bg-primary">
+            <span className="absolute inset-y-0 -left-1.5 w-3" />
+          </ResizeSeparator>
 
           {/* --------------------------------------------- right panel */}
-          <aside className="flex min-h-0 flex-col border-l border-border bg-surface">
+          <Panel id="preview" defaultSize="80%" minSize="35%">
+          <aside className="flex size-full min-h-0 flex-col bg-surface">
             <Tabs
               value={rightTab}
               onValueChange={setRightTab}
@@ -1219,10 +1297,33 @@ function CoderPage() {
               </TabsContent>
             </Tabs>
           </aside>
+          </Panel>
+        </Group>
+
+        <div className="grid h-full min-h-0 grid-rows-[minmax(320px,45%)_1fr] lg:hidden">
+          <section className="flex min-h-0 flex-col border-b border-border bg-surface">
+            <div className="label-mono border-b border-border px-3 py-2">Coding chat</div>
+            <Conversation className="min-h-0">
+              <ConversationContent className="gap-4 p-3">
+                {turns.map((turn) => <TurnBubble key={turn.id} turn={turn} />)}
+                {streaming !== null ? <Message from="assistant"><MessageContent>{streaming ? <MessageResponse>{streaming}</MessageResponse> : <Shimmer>Thinking…</Shimmer>}</MessageContent></Message> : null}
+              </ConversationContent>
+              <ConversationScrollButton />
+            </Conversation>
+            <div className="border-t border-border p-2">
+              <PromptInput onSubmit={() => void send()} className="bg-surface-2">
+                <PromptInputTextarea value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask the coder to build or change something…" />
+                <PromptInputFooter className="justify-end"><PromptInputSubmit status={busy ? "streaming" : "ready"} disabled={!input.trim() && !busy} onStop={() => abortRef.current?.abort()} /></PromptInputFooter>
+              </PromptInput>
+            </div>
+          </section>
+          <section className="min-h-0 bg-surface">
+            {previewDoc ? <iframe key={`mobile-${previewKey}`} title="Live preview" srcDoc={previewDoc} sandbox="allow-scripts allow-forms" className="size-full border-0 bg-background" /> : <ConversationEmptyState title="Nothing to preview" description="Generated files will appear here." />}
+          </section>
         </div>
 
         {/* ------------------------------------------------ bottom panel */}
-        <div className="flex min-h-0 flex-col border-t border-border bg-surface">
+        {bottomOpen ? <div className="flex min-h-0 flex-col border-t border-border bg-surface">
           <Tabs
             value={bottomTab}
             onValueChange={setBottomTab}
@@ -1284,7 +1385,7 @@ function CoderPage() {
               )}
             </TabsContent>
           </Tabs>
-        </div>
+        </div> : null}
       </div>
     </Shell>
   );
@@ -1638,16 +1739,14 @@ function TurnBubble({ turn }: { turn: CoderTurn }) {
   const isUser = turn.role === "user";
   const proposed = isUser ? [] : parseProposedFiles(turn.content);
   return (
-    <div className="space-y-2">
+    <Message from={isUser ? "user" : "assistant"}>
       <div className="label-mono flex flex-wrap items-center gap-1.5">
         {isUser ? "You" : "AI Coder"} · {relTime(turn.createdAt)}
         {turn.provider ? <span>· {PROVIDER_LABEL[turn.provider]}</span> : null}
       </div>
-      {isUser ? (
-        <div className="panel whitespace-pre-wrap bg-surface-2 p-3 text-sm">{turn.content}</div>
-      ) : (
-        <Markdown source={turn.content} />
-      )}
+      <MessageContent>
+        {isUser ? <div className="whitespace-pre-wrap">{turn.content}</div> : <MessageResponse>{turn.content}</MessageResponse>}
+      </MessageContent>
 
       {proposed.length ? (
         <div className="panel space-y-2 p-3">
@@ -1672,6 +1771,6 @@ function TurnBubble({ turn }: { turn: CoderTurn }) {
           <Tag key={c}>{c}</Tag>
         ))}
       </div>
-    </div>
+    </Message>
   );
 }
