@@ -2,12 +2,47 @@ import { createFileRoute } from "@tanstack/react-router";
 
 type ProviderId = "openai" | "deepseek" | "perplexity" | "Gemini" | "Claude";
 
-const PROVIDERS: Record<ProviderId, { baseUrl: string; env: string }> = {
-  openai: { baseUrl: "https://api.openai.com/v1", env: "OPENAI_API_KEY" },
-  deepseek: { baseUrl: "https://api.deepseek.com/v1", env: "DEEPSEEK_API_KEY" },
-  perplexity: { baseUrl: "https://api.perplexity.ai/v1", env: "PERPLEXITY_API_KEY" },
-  Gemini: { baseUrl: "https://api.gemini.com/v1", env: "GEMINI_API_KEY" },
-  Claude: { baseUrl: "https://api.claude.com/v1", env: "CLAUDE_API_KEY" },
+interface ProviderDef {
+  label: string;
+  /** Full chat endpoint, not just the base. */
+  url: string;
+  env: string;
+  /** Anthropic speaks its own Messages protocol. */
+  dialect: "openai" | "anthropic";
+}
+
+const PROVIDERS: Record<ProviderId, ProviderDef> = {
+  openai: {
+    label: "OpenAI",
+    url: "https://api.openai.com/v1/chat/completions",
+    env: "OPENAI_API_KEY",
+    dialect: "openai",
+  },
+  deepseek: {
+    label: "DeepSeek",
+    url: "https://api.deepseek.com/v1/chat/completions",
+    env: "DEEPSEEK_API_KEY",
+    dialect: "openai",
+  },
+  perplexity: {
+    label: "Perplexity",
+    url: "https://api.perplexity.ai/chat/completions",
+    env: "PERPLEXITY_API_KEY",
+    dialect: "openai",
+  },
+  Gemini: {
+    label: "Gemini",
+    // Google's OpenAI-compatible surface — same request/response shape.
+    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    env: "GEMINI_API_KEY",
+    dialect: "openai",
+  },
+  Claude: {
+    label: "Claude",
+    url: "https://api.anthropic.com/v1/messages",
+    env: "ANTHROPIC_API_KEY",
+    dialect: "anthropic",
+  },
 };
 
 interface Body {
@@ -25,6 +60,45 @@ function json(payload: unknown, status = 200) {
   });
 }
 
+function sseFrame(text: string) {
+  return `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`;
+}
+
+/** Re-shapes Anthropic's SSE stream into the chunk shape the app already reads. */
+function anthropicToOpenAiStream(body: ReadableStream<Uint8Array>) {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        buffer += decoder.decode(chunk, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(payload) as {
+              type?: string;
+              delta?: { text?: string };
+            };
+            const text = evt.type === "content_block_delta" ? (evt.delta?.text ?? "") : "";
+            if (text) controller.enqueue(encoder.encode(sseFrame(text)));
+          } catch {
+            /* ignore partial frames */
+          }
+        }
+      },
+      flush(controller) {
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      },
+    }),
+  );
+}
+
 export const Route = createFileRoute("/api/ai/chat")({
   server: {
     handlers: {
@@ -38,7 +112,9 @@ export const Route = createFileRoute("/api/ai/chat")({
         const key = body.apiKey?.trim() || process.env[conf.env];
         if (!key) {
           return json(
-            { error: `No ${provider === "openai" ? "OpenAI" : "DeepSeek"} API key is configured for this app.` },
+            {
+              error: `No ${conf.label} API key is configured. Add one in Settings, or ask for ${conf.env} to be stored on the server.`,
+            },
             400,
           );
         }
@@ -47,24 +123,46 @@ export const Route = createFileRoute("/api/ai/chat")({
         }
 
         const stream = body.stream !== false;
+        const anthropic = conf.dialect === "anthropic";
+
+        const systemText = body.messages
+          .filter((m) => m.role === "system")
+          .map((m) => m.content)
+          .join("\n\n");
+        const turns = body.messages.filter((m) => m.role !== "system");
+
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (anthropic) {
+          headers["x-api-key"] = key;
+          headers["anthropic-version"] = "2023-06-01";
+        } else {
+          headers["Authorization"] = `Bearer ${key}`;
+        }
+
+        const payload = anthropic
+          ? {
+              model: body.model,
+              max_tokens: 8192,
+              stream,
+              ...(systemText ? { system: systemText } : {}),
+              messages: turns.map((m) => ({
+                role: m.role === "assistant" ? "assistant" : "user",
+                content: m.content,
+              })),
+            }
+          : { model: body.model, messages: body.messages, stream };
+
         let upstream: Response;
         try {
-          upstream = await fetch(`${conf.baseUrl}/chat/completions`, {
+          upstream = await fetch(conf.url, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${key}`,
-            },
-            body: JSON.stringify({
-              model: body.model,
-              messages: body.messages,
-              stream,
-            }),
+            headers,
+            body: JSON.stringify(payload),
             signal: request.signal,
           });
         } catch (err) {
           return json(
-            { error: err instanceof Error ? err.message : "The engine could not be reached." },
+            { error: err instanceof Error ? err.message : `${conf.label} could not be reached.` },
             502,
           );
         }
@@ -72,34 +170,50 @@ export const Route = createFileRoute("/api/ai/chat")({
         if (!upstream.ok || !upstream.body) {
           let detail = "";
           try {
-            const errBody = (await upstream.json()) as { error?: { message?: string } };
-            detail = errBody?.error?.message ?? "";
+            const errBody = (await upstream.json()) as {
+              error?: { message?: string };
+              message?: string;
+            };
+            detail = errBody?.error?.message ?? errBody?.message ?? "";
           } catch {
             detail = await upstream.text().catch(() => "");
           }
           const message =
-            upstream.status === 401
-              ? "The stored API key was rejected by the provider."
-              : upstream.status === 429
-                ? "Rate limited or out of credit with the provider."
-                : `${upstream.status} ${upstream.statusText}${detail ? ` — ${detail}` : ""}`;
+            upstream.status === 401 || upstream.status === 403
+              ? `The ${conf.label} API key was rejected.`
+              : upstream.status === 404
+                ? `${conf.label} does not know the model "${body.model}".`
+                : upstream.status === 429
+                  ? `Rate limited or out of credit with ${conf.label}.`
+                  : `${upstream.status} ${upstream.statusText}${detail ? ` — ${detail}` : ""}`;
           return json({ error: message }, upstream.status === 401 ? 401 : 502);
         }
 
         if (!stream) {
+          if (anthropic) {
+            const data = (await upstream.json()) as {
+              content?: Array<{ text?: string }>;
+            };
+            return json({
+              content: (data.content ?? []).map((c) => c.text ?? "").join(""),
+            });
+          }
           const data = (await upstream.json()) as {
             choices?: Array<{ message?: { content?: string } }>;
           };
           return json({ content: data.choices?.[0]?.message?.content ?? "" });
         }
 
-        return new Response(upstream.body, {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive",
+        return new Response(
+          anthropic ? anthropicToOpenAiStream(upstream.body) : upstream.body,
+          {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+            },
           },
-        });
+        );
       },
     },
   },
