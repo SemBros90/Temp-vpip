@@ -400,7 +400,23 @@ async function syncTable(table: string, rows: Row[], keepIds: string[]) {
   }
 }
 
-export async function vaultWrite(value: unknown): Promise<void> {
+// Writes are serialised: concurrent flushes (debounced save + auto-save interval)
+// could interleave a parent delete with a child upsert and trip a foreign key.
+let writeChain: Promise<void> = Promise.resolve();
+
+export function vaultWrite(value: unknown): Promise<void> {
+  const run = writeChain.then(
+    () => writeWorkspace(value),
+    () => writeWorkspace(value),
+  );
+  writeChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function writeWorkspace(value: unknown): Promise<void> {
   const ws = value as Workspace;
   if (!ws || !Array.isArray(ws.projects)) return;
 
