@@ -29,7 +29,9 @@ export type KnowledgeType =
   | "Idea"
   | "Risk"
   | "Question"
-  | "Assumption";
+  | "Assumption"
+  | "Lesson Learned"
+  | "Failure Cause";
 
 export const KNOWLEDGE_TYPES: KnowledgeType[] = [
   "Decision",
@@ -38,6 +40,8 @@ export const KNOWLEDGE_TYPES: KnowledgeType[] = [
   "Risk",
   "Question",
   "Assumption",
+  "Lesson Learned",
+  "Failure Cause",
 ];
 
 export const KNOWLEDGE_PREFIX: Record<KnowledgeType, string> = {
@@ -47,7 +51,28 @@ export const KNOWLEDGE_PREFIX: Record<KnowledgeType, string> = {
   Risk: "K",
   Question: "Q",
   Assumption: "A",
+  "Lesson Learned": "L",
+  "Failure Cause": "F",
 };
+
+/** V-13 — knowledge can now be extracted from any project object. */
+export type KnowledgeSourceKind =
+  | "Discussion"
+  | "Document"
+  | "Prompt"
+  | "Build Session"
+  | "Repository"
+  | "Artifact";
+
+export const KNOWLEDGE_SOURCE_KINDS: KnowledgeSourceKind[] = [
+  "Discussion",
+  "Document",
+  "Prompt",
+  "Build Session",
+  "Repository",
+  "Artifact",
+];
+
 
 export type KnowledgeStatus = "candidate" | "approved" | "rejected";
 
@@ -89,6 +114,9 @@ export interface Discussion {
   summary?: string;
   messages: Message[];
   attachments: Attachment[];
+  /** V-08 — discussion feedback loop */
+  reopenedAt?: string | undefined;
+  reopenContext?: string[];
 }
 
 export interface KnowledgeItem {
@@ -108,6 +136,12 @@ export interface KnowledgeItem {
   updatedAt: string;
   revisions: Revision[];
   mergedFrom?: string[];
+  /** V-09 — knowledge improvement loop */
+  version?: number;
+  reasonForChange?: string | undefined;
+  /** V-13 — universal extraction origin */
+  sourceKind?: KnowledgeSourceKind;
+  sourceRefId?: string | undefined;
 }
 
 export type DocumentKind =
@@ -221,6 +255,10 @@ export interface BuildSession {
   status: BuildStatus;
   /** frozen context package handed to the coder */
   contextPackage: string;
+  /** V-04 / V-05 — full source traceability */
+  contextPackageId?: string | undefined;
+  sourceDocumentIds?: string[];
+  sourceDiscussionIds?: string[];
   counts: {
     decisions: number;
     requirements: number;
@@ -644,6 +682,9 @@ export interface RepoCommit {
   decisionCodes: string[];
   requirementCodes: string[];
   provider: RepoProvider;
+  /** V-10 — repository intelligence */
+  releaseTag?: string | undefined;
+  releaseName?: string | undefined;
   createdAt: string;
 }
 
@@ -761,6 +802,200 @@ export interface ChangeRecord {
   createdAt: string;
 }
 
+/* ============================ V-03 — phased prompt execution */
+
+export type PhaseStatus = "Pending" | "Running" | "Completed" | "Failed";
+
+export const PHASE_STATUSES: PhaseStatus[] = ["Pending", "Running", "Completed", "Failed"];
+
+export interface PromptPhase {
+  id: string;
+  projectId: string;
+  promptId: string;
+  phaseNo: number;
+  title: string;
+  markdown: string;
+  status: PhaseStatus;
+  startedAt?: string | undefined;
+  endedAt?: string | undefined;
+  output?: string | undefined;
+  error?: string | undefined;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  buildSessionId?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PhaseRun {
+  id: string;
+  projectId: string;
+  phaseId: string;
+  promptId: string;
+  attempt: number;
+  status: PhaseStatus;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  startedAt: string;
+  endedAt?: string | undefined;
+  output?: string | undefined;
+  error?: string | undefined;
+  createdAt: string;
+}
+
+/* ============================ V-05 — context packages */
+
+export interface ContextPackageRecord {
+  id: string;
+  projectId: string;
+  code: string;
+  title: string;
+  promptId?: string | undefined;
+  promptTitle?: string | undefined;
+  promptVersion?: number | undefined;
+  markdown: string;
+  counts: Record<string, number>;
+  decisionIds: string[];
+  requirementIds: string[];
+  documentIds: string[];
+  discussionIds: string[];
+  promptIds: string[];
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ============================ V-06 — outcome learning */
+
+export type OutcomeSubject = "Build" | "Agent Run" | "Prompt Execution";
+
+export const OUTCOME_SUBJECTS: OutcomeSubject[] = ["Build", "Agent Run", "Prompt Execution"];
+
+export type OutcomeResult = "Success" | "Partial Success" | "Failure";
+
+export const OUTCOME_RESULTS: OutcomeResult[] = ["Success", "Partial Success", "Failure"];
+
+export interface OutcomeRecord {
+  id: string;
+  projectId: string;
+  code: string;
+  subjectType: OutcomeSubject;
+  subjectId: string;
+  subjectLabel: string;
+  result: OutcomeResult;
+  notes: string;
+  lessons: string;
+  recommendations: string;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ============================ V-07 — failure analysis */
+
+export type FailureSubject = "Build" | "Agent" | "Prompt" | "Requirement Gap";
+
+export const FAILURE_SUBJECTS: FailureSubject[] = ["Build", "Agent", "Prompt", "Requirement Gap"];
+
+export type FailureStatus = "Open" | "Resolved";
+
+export interface FailureRecord {
+  id: string;
+  projectId: string;
+  code: string;
+  subjectType: FailureSubject;
+  subjectId: string;
+  subjectLabel: string;
+  title: string;
+  rootCause: string;
+  resolution: string;
+  lessons: string;
+  status: FailureStatus;
+  buildIds: string[];
+  promptIds: string[];
+  requirementCodes: string[];
+  decisionCodes: string[];
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ============================ V-11 — multi-AI collaboration ledger */
+
+export type CollabAction =
+  | "Created"
+  | "Reviewed"
+  | "Implemented"
+  | "Validated"
+  | "Executed"
+  | "Extracted"
+  | "Recorded";
+
+export const COLLAB_ACTIONS: CollabAction[] = [
+  "Created",
+  "Reviewed",
+  "Implemented",
+  "Validated",
+  "Executed",
+  "Extracted",
+  "Recorded",
+];
+
+export interface ActivityRecord {
+  id: string;
+  projectId: string;
+  subjectType: string;
+  subjectId: string;
+  subjectLabel: string;
+  action: CollabAction;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  author: string;
+  note: string;
+  createdAt: string;
+}
+
+/* ============================ V-15 — organizational knowledge */
+
+export type PatternType =
+  | "Success Pattern"
+  | "Failure Pattern"
+  | "Reusable Decision"
+  | "Reusable Requirement"
+  | "Reusable Prompt Structure";
+
+export const PATTERN_TYPES: PatternType[] = [
+  "Success Pattern",
+  "Failure Pattern",
+  "Reusable Decision",
+  "Reusable Requirement",
+  "Reusable Prompt Structure",
+];
+
+export interface IntelligenceRecord {
+  id: string;
+  projectId: string;
+  code: string;
+  patternType: PatternType;
+  title: string;
+  description: string;
+  tags: string[];
+  sourceProjectId?: string | undefined;
+  sourceProjectName?: string | undefined;
+  sourceKind?: string | undefined;
+  sourceId?: string | undefined;
+  provider?: ProviderId | undefined;
+  model?: string | undefined;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Snapshot {
   id: string;
   projectId: string;
@@ -816,6 +1051,14 @@ export interface Workspace {
   artifacts: Artifact[];
   buildRecords: BuildRecord[];
   changeRecords: ChangeRecord[];
+  /** Upgrade pack V-02 … V-15 */
+  promptPhases: PromptPhase[];
+  phaseRuns: PhaseRun[];
+  contextPackages: ContextPackageRecord[];
+  outcomes: OutcomeRecord[];
+  failures: FailureRecord[];
+  activity: ActivityRecord[];
+  intelligence: IntelligenceRecord[];
   savedAt?: string;
 }
 
@@ -862,5 +1105,12 @@ export function emptyWorkspace(): Workspace {
     artifacts: [],
     buildRecords: [],
     changeRecords: [],
+    promptPhases: [],
+    phaseRuns: [],
+    contextPackages: [],
+    outcomes: [],
+    failures: [],
+    activity: [],
+    intelligence: [],
   };
 }

@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      vpip_activity: {
+        Row: {
+          action: string
+          author: string
+          created_at: string
+          id: string
+          model: string | null
+          note: string
+          project_id: string
+          provider: string | null
+          subject_id: string
+          subject_label: string
+          subject_type: string
+        }
+        Insert: {
+          action?: string
+          author?: string
+          created_at: string
+          id: string
+          model?: string | null
+          note?: string
+          project_id: string
+          provider?: string | null
+          subject_id?: string
+          subject_label?: string
+          subject_type?: string
+        }
+        Update: {
+          action?: string
+          author?: string
+          created_at?: string
+          id?: string
+          model?: string | null
+          note?: string
+          project_id?: string
+          provider?: string | null
+          subject_id?: string
+          subject_label?: string
+          subject_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_activity_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vpip_artifacts: {
         Row: {
           branch: string | null
@@ -208,6 +258,7 @@ export type Database = {
           build_plan: Json | null
           code: string
           context_package: string
+          context_package_id: string | null
           counts: Json
           created_at: string
           db_connections: Json
@@ -230,6 +281,8 @@ export type Database = {
           repository_id: string | null
           repository_provider: string | null
           requirements: Json
+          source_discussion_ids: Json
+          source_document_ids: Json
           status: string
           terminal: Json
           turns: Json
@@ -242,6 +295,7 @@ export type Database = {
           build_plan?: Json | null
           code: string
           context_package?: string
+          context_package_id?: string | null
           counts?: Json
           created_at: string
           db_connections?: Json
@@ -264,6 +318,8 @@ export type Database = {
           repository_id?: string | null
           repository_provider?: string | null
           requirements?: Json
+          source_discussion_ids?: Json
+          source_document_ids?: Json
           status?: string
           terminal?: Json
           turns?: Json
@@ -276,6 +332,7 @@ export type Database = {
           build_plan?: Json | null
           code?: string
           context_package?: string
+          context_package_id?: string | null
           counts?: Json
           created_at?: string
           db_connections?: Json
@@ -298,6 +355,8 @@ export type Database = {
           repository_id?: string | null
           repository_provider?: string | null
           requirements?: Json
+          source_discussion_ids?: Json
+          source_document_ids?: Json
           status?: string
           terminal?: Json
           turns?: Json
@@ -376,6 +435,77 @@ export type Database = {
           },
         ]
       }
+      vpip_context_packages: {
+        Row: {
+          code: string
+          counts: Json
+          created_at: string
+          decision_ids: Json
+          discussion_ids: Json
+          document_ids: Json
+          id: string
+          markdown: string
+          model: string | null
+          project_id: string
+          prompt_id: string | null
+          prompt_ids: Json
+          prompt_title: string | null
+          prompt_version: number | null
+          provider: string | null
+          requirement_ids: Json
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          code?: string
+          counts?: Json
+          created_at: string
+          decision_ids?: Json
+          discussion_ids?: Json
+          document_ids?: Json
+          id: string
+          markdown?: string
+          model?: string | null
+          project_id: string
+          prompt_id?: string | null
+          prompt_ids?: Json
+          prompt_title?: string | null
+          prompt_version?: number | null
+          provider?: string | null
+          requirement_ids?: Json
+          title?: string
+          updated_at: string
+        }
+        Update: {
+          code?: string
+          counts?: Json
+          created_at?: string
+          decision_ids?: Json
+          discussion_ids?: Json
+          document_ids?: Json
+          id?: string
+          markdown?: string
+          model?: string | null
+          project_id?: string
+          prompt_id?: string | null
+          prompt_ids?: Json
+          prompt_title?: string | null
+          prompt_version?: number | null
+          provider?: string | null
+          requirement_ids?: Json
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_context_packages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vpip_discussions: {
         Row: {
           attachments: Json
@@ -383,6 +513,8 @@ export type Database = {
           id: string
           messages: Json
           project_id: string
+          reopen_context: Json
+          reopened_at: string | null
           summary: string | null
           title: string
           type: string
@@ -394,6 +526,8 @@ export type Database = {
           id: string
           messages?: Json
           project_id: string
+          reopen_context?: Json
+          reopened_at?: string | null
           summary?: string | null
           title: string
           type?: string
@@ -405,6 +539,8 @@ export type Database = {
           id?: string
           messages?: Json
           project_id?: string
+          reopen_context?: Json
+          reopened_at?: string | null
           summary?: string | null
           title?: string
           type?: string
@@ -464,6 +600,148 @@ export type Database = {
           },
         ]
       }
+      vpip_failures: {
+        Row: {
+          author: string
+          build_ids: Json
+          code: string
+          created_at: string
+          decision_codes: Json
+          id: string
+          lessons: string
+          model: string | null
+          project_id: string
+          prompt_ids: Json
+          provider: string | null
+          requirement_codes: Json
+          resolution: string
+          root_cause: string
+          status: string
+          subject_id: string
+          subject_label: string
+          subject_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author?: string
+          build_ids?: Json
+          code?: string
+          created_at: string
+          decision_codes?: Json
+          id: string
+          lessons?: string
+          model?: string | null
+          project_id: string
+          prompt_ids?: Json
+          provider?: string | null
+          requirement_codes?: Json
+          resolution?: string
+          root_cause?: string
+          status?: string
+          subject_id?: string
+          subject_label?: string
+          subject_type?: string
+          title?: string
+          updated_at: string
+        }
+        Update: {
+          author?: string
+          build_ids?: Json
+          code?: string
+          created_at?: string
+          decision_codes?: Json
+          id?: string
+          lessons?: string
+          model?: string | null
+          project_id?: string
+          prompt_ids?: Json
+          provider?: string | null
+          requirement_codes?: Json
+          resolution?: string
+          root_cause?: string
+          status?: string
+          subject_id?: string
+          subject_label?: string
+          subject_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_failures_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_intelligence: {
+        Row: {
+          author: string
+          code: string
+          created_at: string
+          description: string
+          id: string
+          model: string | null
+          pattern_type: string
+          project_id: string
+          provider: string | null
+          source_id: string | null
+          source_kind: string | null
+          source_project_id: string | null
+          source_project_name: string | null
+          tags: Json
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author?: string
+          code?: string
+          created_at: string
+          description?: string
+          id: string
+          model?: string | null
+          pattern_type?: string
+          project_id: string
+          provider?: string | null
+          source_id?: string | null
+          source_kind?: string | null
+          source_project_id?: string | null
+          source_project_name?: string | null
+          tags?: Json
+          title?: string
+          updated_at: string
+        }
+        Update: {
+          author?: string
+          code?: string
+          created_at?: string
+          description?: string
+          id?: string
+          model?: string | null
+          pattern_type?: string
+          project_id?: string
+          provider?: string | null
+          source_id?: string | null
+          source_kind?: string | null
+          source_project_id?: string | null
+          source_project_name?: string | null
+          tags?: Json
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_intelligence_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vpip_knowledge: {
         Row: {
           author: string
@@ -474,14 +752,18 @@ export type Database = {
           merged_from: Json
           project_id: string
           provider: string | null
+          reason_for_change: string | null
           revisions: Json
           source_discussion_id: string | null
           source_discussion_title: string | null
+          source_kind: string
           source_messages: Json
+          source_ref_id: string | null
           status: string
           title: string
           type: string
           updated_at: string
+          version: number
         }
         Insert: {
           author?: string
@@ -492,14 +774,18 @@ export type Database = {
           merged_from?: Json
           project_id: string
           provider?: string | null
+          reason_for_change?: string | null
           revisions?: Json
           source_discussion_id?: string | null
           source_discussion_title?: string | null
+          source_kind?: string
           source_messages?: Json
+          source_ref_id?: string | null
           status?: string
           title: string
           type: string
           updated_at?: string
+          version?: number
         }
         Update: {
           author?: string
@@ -510,18 +796,140 @@ export type Database = {
           merged_from?: Json
           project_id?: string
           provider?: string | null
+          reason_for_change?: string | null
           revisions?: Json
           source_discussion_id?: string | null
           source_discussion_title?: string | null
+          source_kind?: string
           source_messages?: Json
+          source_ref_id?: string | null
           status?: string
           title?: string
           type?: string
           updated_at?: string
+          version?: number
         }
         Relationships: [
           {
             foreignKeyName: "vpip_knowledge_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_outcomes: {
+        Row: {
+          author: string
+          code: string
+          created_at: string
+          id: string
+          lessons: string
+          model: string | null
+          notes: string
+          project_id: string
+          provider: string | null
+          recommendations: string
+          result: string
+          subject_id: string
+          subject_label: string
+          subject_type: string
+          updated_at: string
+        }
+        Insert: {
+          author?: string
+          code?: string
+          created_at: string
+          id: string
+          lessons?: string
+          model?: string | null
+          notes?: string
+          project_id: string
+          provider?: string | null
+          recommendations?: string
+          result?: string
+          subject_id?: string
+          subject_label?: string
+          subject_type?: string
+          updated_at: string
+        }
+        Update: {
+          author?: string
+          code?: string
+          created_at?: string
+          id?: string
+          lessons?: string
+          model?: string | null
+          notes?: string
+          project_id?: string
+          provider?: string | null
+          recommendations?: string
+          result?: string
+          subject_id?: string
+          subject_label?: string
+          subject_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_outcomes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_phase_runs: {
+        Row: {
+          attempt: number
+          created_at: string
+          ended_at: string | null
+          error: string | null
+          id: string
+          model: string | null
+          output: string | null
+          phase_id: string
+          project_id: string
+          prompt_id: string
+          provider: string | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          attempt?: number
+          created_at: string
+          ended_at?: string | null
+          error?: string | null
+          id: string
+          model?: string | null
+          output?: string | null
+          phase_id: string
+          project_id: string
+          prompt_id?: string
+          provider?: string | null
+          started_at: string
+          status?: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          ended_at?: string | null
+          error?: string | null
+          id?: string
+          model?: string | null
+          output?: string | null
+          phase_id?: string
+          project_id?: string
+          prompt_id?: string
+          provider?: string | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_phase_runs_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "vpip_projects"
@@ -555,6 +963,71 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      vpip_prompt_phases: {
+        Row: {
+          build_session_id: string | null
+          created_at: string
+          ended_at: string | null
+          error: string | null
+          id: string
+          markdown: string
+          model: string | null
+          output: string | null
+          phase_no: number
+          project_id: string
+          prompt_id: string
+          provider: string | null
+          started_at: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          build_session_id?: string | null
+          created_at: string
+          ended_at?: string | null
+          error?: string | null
+          id: string
+          markdown?: string
+          model?: string | null
+          output?: string | null
+          phase_no?: number
+          project_id: string
+          prompt_id: string
+          provider?: string | null
+          started_at?: string | null
+          status?: string
+          title?: string
+          updated_at: string
+        }
+        Update: {
+          build_session_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          error?: string | null
+          id?: string
+          markdown?: string
+          model?: string | null
+          output?: string | null
+          phase_no?: number
+          project_id?: string
+          prompt_id?: string
+          provider?: string | null
+          started_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_prompt_phases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vpip_prompts: {
         Row: {
@@ -668,6 +1141,8 @@ export type Database = {
           prompt_title: string | null
           prompt_version: number | null
           provider: string | null
+          release_name: string | null
+          release_tag: string | null
           repository_id: string
           requirement_codes: Json
           sha: string
@@ -689,6 +1164,8 @@ export type Database = {
           prompt_title?: string | null
           prompt_version?: number | null
           provider?: string | null
+          release_name?: string | null
+          release_tag?: string | null
           repository_id: string
           requirement_codes?: Json
           sha: string
@@ -710,6 +1187,8 @@ export type Database = {
           prompt_title?: string | null
           prompt_version?: number | null
           provider?: string | null
+          release_name?: string | null
+          release_tag?: string | null
           repository_id?: string
           requirement_codes?: Json
           sha?: string

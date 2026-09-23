@@ -54,6 +54,8 @@ const typeTone: Record<KnowledgeType, string> = {
   Risk: "text-destructive border-destructive/40 bg-destructive/10",
   Question: "text-warning border-warning/40 bg-warning/10",
   Assumption: "text-muted-foreground border-border-strong bg-muted",
+  "Lesson Learned": "text-success border-success/40 bg-success/10",
+  "Failure Cause": "text-destructive border-destructive/40 bg-destructive/10",
 };
 
 export function TypeTag({ type, className }: { type: KnowledgeType; className?: string }) {
