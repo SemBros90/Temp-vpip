@@ -91,7 +91,7 @@ function OutcomesPage() {
       author,
     });
     if (oLessons.trim()) {
-      actions.addKnowledge({
+      actions.addKnowledge([{
         projectId,
         type: "Lesson Learned",
         status: "candidate",
@@ -102,7 +102,7 @@ function OutcomesPage() {
         sourceMessages: [],
         provider,
         author,
-      });
+      }]);
     }
     actions.logActivity({
       projectId,
@@ -159,7 +159,7 @@ function OutcomesPage() {
       model: cfg.model,
       author,
     });
-    actions.addKnowledge({
+    actions.addKnowledge([{
       projectId,
       type: "Failure Cause",
       status: "candidate",
@@ -170,7 +170,7 @@ function OutcomesPage() {
       sourceMessages: [],
       provider,
       author,
-    });
+    }]);
     actions.logActivity({
       projectId,
       subjectType: "Failure",
