@@ -249,6 +249,15 @@ function DiscussionPage() {
           </Button>
           <Button
             variant="outline"
+            size="sm"
+            className="h-8"
+            title="Reopen this discussion to review decisions, requirements, prompts and builds"
+            onClick={reopen}
+          >
+            <RotateCcw className="size-4" /> Reopen
+          </Button>
+          <Button
+            variant="outline"
             size="icon"
             className="size-8"
             title="Export discussion as Markdown"
