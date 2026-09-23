@@ -188,8 +188,20 @@ const PREVIEW_BRIDGE = `<script>
 
 const MODULE_RE = /\.(tsx|ts|jsx|js|mjs)$/;
 
+/**
+ * Build tooling that belongs to a real Node toolchain, not to the in-browser
+ * preview. These files import packages like "vite" that the preview can never
+ * supply, so they are excluded from compilation, execution and validation.
+ */
+export const TOOLING_RE =
+  /(^|\/)(vite|vitest|tailwind|postcss|rollup|webpack|next|astro|svelte|eslint|prettier|jest|babel|drizzle|playwright|cypress|tsup|craco)\.config\.[cm]?[jt]sx?$/i;
+
+export function isToolingFile(path: string) {
+  return TOOLING_RE.test(path) || /\.(test|spec)\.[cm]?[jt]sx?$/i.test(path);
+}
+
 function isModule(path: string) {
-  return MODULE_RE.test(path) && !path.endsWith(".d.ts");
+  return MODULE_RE.test(path) && !path.endsWith(".d.ts") && !isToolingFile(path);
 }
 
 /** Compiles the session's TS/TSX/JS modules to a browser-runnable registry. */
