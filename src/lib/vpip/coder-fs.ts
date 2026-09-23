@@ -456,8 +456,15 @@ export function buildPreviewDoc(files: CoderFile[], entryPath?: string): string 
   let doc = html.content
     .replace(/<script[^>]*\ssrc=["'](?!https?:)[^"']+["'][^>]*>\s*<\/script>/gi, "")
     .replace(/<link[^>]*rel=["']stylesheet["'][^>]*href=["'](?!https?:)[^"']+["'][^>]*>/gi, "");
-  const head = `${PREVIEW_BRIDGE}${styleTag}`;
-  doc = doc.includes("</head>") ? doc.replace("</head>", `${head}\n</head>`) : `${head}\n${doc}`;
+  // The bridge must run before any of the document's own scripts, so it is
+  // injected right after <head> rather than at the end of it.
+  doc = doc.includes("<head")
+    ? doc.replace(/<head[^>]*>/i, (m) => `${m}\n${PREVIEW_BRIDGE}`)
+    : `${PREVIEW_BRIDGE}\n${doc}`;
+  doc = doc.includes("</head>")
+    ? doc.replace("</head>", `${styleTag}\n</head>`)
+    : `${doc}\n${styleTag}`;
+
   if (scripts) {
     doc = doc.includes("</body>")
       ? doc.replace("</body>", `${scripts}\n</body>`)
