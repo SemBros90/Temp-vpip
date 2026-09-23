@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  BrainCircuit,
   Check,
   ChevronDown,
   ChevronRight,
@@ -17,6 +18,9 @@ import {
   Loader2,
   MessagesSquare,
   Monitor,
+  PanelLeft,
+  PanelLeftClose,
+  PanelsTopLeft,
   Pencil,
   RefreshCw,
   RotateCcw,
@@ -28,6 +32,13 @@ import {
   Trash2,
   Waypoints,
 } from "lucide-react";
+import {
+  Group,
+  Panel,
+  Separator as ResizeSeparator,
+  type GroupImperativeHandle,
+  type PanelImperativeHandle,
+} from "react-resizable-panels";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { EmptyState, EnginePicker, Tag, relTime, useEngine } from "@/components/vpip/common";
@@ -36,6 +47,21 @@ import { Markdown } from "@/lib/vpip/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+} from "@/components/ai-elements/prompt-input";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
@@ -139,13 +165,17 @@ function CoderPage() {
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const workspaceRef = useRef<GroupImperativeHandle | null>(null);
+  const filesPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const chatPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
+  const [bottomOpen, setBottomOpen] = useState(false);
+  const [previewLogsOpen, setPreviewLogsOpen] = useState(false);
 
   const session = p.buildSessions.find((b) => b.id === buildId);
   const files = useMemo(() => session?.files ?? [], [session?.files]);
-  const realFiles = useMemo(
-    () => files.filter((f) => fileName(f.path) !== FOLDER_KEEP),
-    [files],
-  );
+  const realFiles = useMemo(() => files.filter((f) => fileName(f.path) !== FOLDER_KEEP), [files]);
   const selected = files.find((f) => f.path === selectedPath) ?? null;
 
   const opened = useRef(false);
@@ -162,6 +192,17 @@ function CoderPage() {
   }, [buildId]);
 
   useEffect(() => {
+    const raw = window.localStorage.getItem("vpip-coder-layout");
+    if (!raw) return;
+    try {
+      const layout = JSON.parse(raw) as Record<string, number>;
+      workspaceRef.current?.setLayout(layout);
+    } catch {
+      window.localStorage.removeItem("vpip-coder-layout");
+    }
+  }, []);
+
+  useEffect(() => {
     setDraft(selected?.content ?? "");
   }, [selected?.path, selected?.updatedAt, selected?.content]);
 
@@ -173,7 +214,10 @@ function CoderPage() {
     const onMessage = (e: MessageEvent) => {
       const data = e.data as { __vpipPreview?: boolean; kind?: string; text?: string };
       if (!data?.__vpipPreview) return;
-      setPreviewLogs((l) => [...l.slice(-120), { kind: data.kind ?? "log", text: data.text ?? "" }]);
+      setPreviewLogs((l) => [
+        ...l.slice(-120),
+        { kind: data.kind ?? "log", text: data.text ?? "" },
+      ]);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -203,7 +247,6 @@ function CoderPage() {
     setInput(promptBody);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, promptBody]);
-
 
   const trace: CoderTrace | null = session
     ? {
@@ -301,7 +344,9 @@ function CoderPage() {
       }
       actions.updateBuildSession(session.id, { buildPlan: plan });
       setCenterTab("build");
-      toast.success(`Build plan ready — ${plan.files.length} files, ${plan.dependencies.length} dependencies`);
+      toast.success(
+        `Build plan ready — ${plan.files.length} files, ${plan.dependencies.length} dependencies`,
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Build planning failed");
     } finally {
@@ -334,7 +379,6 @@ function CoderPage() {
     setCenterTab("chat");
     toast.info("Repair task loaded — send it to fix the root cause before new features");
   };
-
 
   /* ------------------------------------------------------- file actions */
 
@@ -421,10 +465,14 @@ function CoderPage() {
       .filter((l) => l.stream === "error" || l.stream === "build")
       .map((l) => `[${l.stream}] ${l.command ? `$ ${l.command}\n` : ""}${l.output}`)
       .join("\n");
-    const errorText = [logText, problems.join("\n"), previewLogs
-      .filter((l) => l.kind === "error")
-      .map((l) => `[preview] ${l.text}`)
-      .join("\n")]
+    const errorText = [
+      logText,
+      problems.join("\n"),
+      previewLogs
+        .filter((l) => l.kind === "error")
+        .map((l) => `[preview] ${l.text}`)
+        .join("\n"),
+    ]
       .filter(Boolean)
       .join("\n");
 
@@ -481,7 +529,11 @@ function CoderPage() {
         model: cfg.model,
         trace,
       });
-      log(mode, text.slice(0, 160), generated.map((file) => file.path));
+      log(
+        mode,
+        text.slice(0, 160),
+        generated.map((file) => file.path),
+      );
       if (generated.length) {
         setSelectedPath(generated[0]?.path ?? null);
         setRightTab("preview");
@@ -508,7 +560,11 @@ function CoderPage() {
       const post = validateBuild(nextFiles);
       actions.updateBuildSession(session.id, {
         validation: post,
-        requirements: attachFiles(requirements, generated.map((f) => f.path), at),
+        requirements: attachFiles(
+          requirements,
+          generated.map((f) => f.path),
+          at,
+        ),
         ...(session.status === "Handed Off" || session.status === "Queued"
           ? { status: "In Progress" as BuildStatus }
           : {}),
@@ -584,6 +640,51 @@ function CoderPage() {
       scroll={false}
       actions={
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            title={filesOpen ? "Close files" : "Open files"}
+            onClick={() => {
+              if (filesPanelRef.current?.isCollapsed()) {
+                workspaceRef.current?.setLayout({ files: 22, chat: 28, preview: 50 });
+              } else {
+                workspaceRef.current?.setLayout({ files: 0, chat: 20, preview: 80 });
+              }
+            }}
+          >
+            {filesOpen ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
+            Files
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            title="Reset to 20% chat and 80% preview"
+            onClick={() => workspaceRef.current?.setLayout({ files: 0, chat: 20, preview: 80 })}
+          >
+            <PanelsTopLeft className="size-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            title={chatOpen ? "Maximize preview" : "Restore coding chat"}
+            onClick={() => {
+              if (chatPanelRef.current?.isCollapsed()) chatPanelRef.current.expand();
+              else chatPanelRef.current?.collapse();
+            }}
+          >
+            <MessagesSquare className="size-4" /> {chatOpen ? "Max preview" : "Chat"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => setBottomOpen((open) => !open)}
+          >
+            <TerminalIcon className="size-4" /> {bottomOpen ? "Close logs" : "Logs"}
+          </Button>
           <Select
             value={session.status}
             onValueChange={(v) =>
@@ -605,686 +706,786 @@ function CoderPage() {
         </div>
       }
     >
-      <div className="grid h-full min-h-0 grid-rows-[1fr_260px]">
-        <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[280px_1fr_380px]">
+      <div className={bottomOpen ? "grid h-full min-h-0 grid-rows-[1fr_240px]" : "h-full min-h-0"}>
+        <Group
+          groupRef={workspaceRef}
+          id="vpip-coder-workspace"
+          orientation="horizontal"
+          defaultLayout={{ files: 0, chat: 20, preview: 80 }}
+          onLayoutChanged={(layout) =>
+            window.localStorage.setItem("vpip-coder-layout", JSON.stringify(layout))
+          }
+          className="hidden min-h-0 xl:flex"
+        >
           {/* ---------------------------------------------- left panel */}
-          <aside className="flex min-h-0 flex-col border-r border-border bg-surface">
-            <Tabs
-              value={leftTab}
-              onValueChange={setLeftTab}
-              className="flex min-h-0 flex-1 flex-col gap-0"
-            >
-              <div className="border-b border-border px-2 py-2">
-                <TabsList className="w-full">
-                  <TabsTrigger value="explorer" className="text-xs">
-                    Files
-                  </TabsTrigger>
-                  <TabsTrigger value="search" className="text-xs">
-                    Search
-                  </TabsTrigger>
-                  <TabsTrigger value="context" className="text-xs">
-                    Context
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="explorer" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                <div className="mb-2 flex items-center gap-1">
-                  <Button size="sm" variant="outline" className="h-7 flex-1" onClick={createFile}>
-                    <FilePlus2 className="size-3.5" /> File
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-7 flex-1" onClick={createFolder}>
-                    <FolderPlus className="size-3.5" /> Folder
-                  </Button>
+          <Panel
+            id="files"
+            panelRef={filesPanelRef}
+            defaultSize="0%"
+            minSize="240px"
+            maxSize="420px"
+            collapsedSize="0%"
+            collapsible
+            onResize={(size) => setFilesOpen(size.asPercentage > 0)}
+          >
+            <aside className="flex size-full min-h-0 flex-col border-r border-border bg-surface">
+              <Tabs
+                value={leftTab}
+                onValueChange={setLeftTab}
+                className="flex min-h-0 flex-1 flex-col gap-0"
+              >
+                <div className="border-b border-border px-2 py-2">
+                  <TabsList className="w-full">
+                    <TabsTrigger value="explorer" className="text-xs">
+                      Files
+                    </TabsTrigger>
+                    <TabsTrigger value="search" className="text-xs">
+                      Search
+                    </TabsTrigger>
+                    <TabsTrigger value="context" className="text-xs">
+                      Context
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
-                {realFiles.length === 0 && files.length === 0 ? (
-                  <p className="px-1 py-3 text-xs text-muted-foreground">
-                    No files yet. Ask the coder to generate them, or create one.
-                  </p>
-                ) : (
-                  <FileTree
-                    nodes={buildTree(files)}
-                    selectedPath={selectedPath}
-                    onSelect={(path) => {
-                      setSelectedPath(path);
-                      setCenterTab("editor");
-                    }}
-                    onRename={renamePath}
-                    onDelete={deletePath}
-                  />
-                )}
-              </TabsContent>
 
-              <TabsContent value="search" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search files and contents"
-                  className="mb-2 h-8"
-                />
-                <div className="space-y-1">
-                  {searchFiles(realFiles, query).map((h, i) => (
-                    <button
-                      key={`${h.path}-${h.line}-${i}`}
-                      className="block w-full rounded-md px-2 py-1 text-left text-xs hover:bg-surface-2"
-                      onClick={() => {
-                        setSelectedPath(h.path);
+                <TabsContent value="explorer" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                  <div className="mb-2 flex items-center gap-1">
+                    <Button size="sm" variant="outline" className="h-7 flex-1" onClick={createFile}>
+                      <FilePlus2 className="size-3.5" /> File
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 flex-1"
+                      onClick={createFolder}
+                    >
+                      <FolderPlus className="size-3.5" /> Folder
+                    </Button>
+                  </div>
+                  {realFiles.length === 0 && files.length === 0 ? (
+                    <p className="px-1 py-3 text-xs text-muted-foreground">
+                      No files yet. Ask the coder to generate them, or create one.
+                    </p>
+                  ) : (
+                    <FileTree
+                      nodes={buildTree(files)}
+                      selectedPath={selectedPath}
+                      onSelect={(path) => {
+                        setSelectedPath(path);
                         setCenterTab("editor");
                       }}
-                    >
-                      <span className="font-mono text-[11px] text-muted-foreground">
-                        {h.path}
-                        {h.line ? `:${h.line}` : ""}
-                      </span>
-                      <span className="block truncate">{h.text}</span>
-                    </button>
-                  ))}
-                  {query && searchFiles(realFiles, query).length === 0 ? (
-                    <p className="px-2 text-xs text-muted-foreground">No matches.</p>
-                  ) : null}
-                  {!query ? (
-                    <p className="px-2 text-xs text-muted-foreground">
-                      <Search className="mr-1 inline size-3" /> Type to search this session.
-                    </p>
-                  ) : null}
-                </div>
-              </TabsContent>
+                      onRename={renamePath}
+                      onDelete={deletePath}
+                    />
+                  )}
+                </TabsContent>
 
-              <TabsContent value="context" className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-                <Link
-                  to="/projects/$projectId/builds"
-                  params={{ projectId }}
-                  className="label-mono mb-3 inline-flex items-center gap-1.5 hover:text-foreground"
-                >
-                  <ArrowLeft className="size-3.5" /> Build sessions
-                </Link>
-                <div className="space-y-3">
-                  <Section icon={TerminalIcon} label="Originating prompt">
-                    {prompt ? (
-                      <div className="space-y-1">
-                        <div className="truncate text-sm">{prompt.title}</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          <Tag>{prompt.kind}</Tag>
-                          <Tag>V{prompt.version}</Tag>
-                          <Tag>{prompt.status ?? "Draft"}</Tag>
-                        </div>
-                        <Link
-                          to="/projects/$projectId/prompts"
-                          params={{ projectId }}
-                          className="label-mono underline"
-                        >
-                          open in Prompts
-                        </Link>
-                      </div>
-                    ) : (
-                      <Empty text="Prompt was deleted; the frozen package still applies." />
-                    )}
-                  </Section>
-
-                  {promptBody ? (
-                    <Section icon={TerminalIcon} label="Prompt text sent to the coder">
-                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-2 text-xs text-muted-foreground">
-                        {promptBody}
-                      </pre>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-2 h-8 w-full"
+                <TabsContent value="search" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                  <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search files and contents"
+                    className="mb-2 h-8"
+                  />
+                  <div className="space-y-1">
+                    {searchFiles(realFiles, query).map((h, i) => (
+                      <button
+                        key={`${h.path}-${h.line}-${i}`}
+                        className="block w-full rounded-md px-2 py-1 text-left text-xs hover:bg-surface-2"
                         onClick={() => {
-                          setInput(promptBody);
-                          setCenterTab("chat");
-                          inputRef.current?.focus();
-                          toast.success("Prompt loaded into the coding chat");
+                          setSelectedPath(h.path);
+                          setCenterTab("editor");
                         }}
                       >
-                        <CornerDownLeft className="size-4" /> Load prompt into chat
-                      </Button>
-                    </Section>
-                  ) : null}
+                        <span className="font-mono text-[11px] text-muted-foreground">
+                          {h.path}
+                          {h.line ? `:${h.line}` : ""}
+                        </span>
+                        <span className="block truncate">{h.text}</span>
+                      </button>
+                    ))}
+                    {query && searchFiles(realFiles, query).length === 0 ? (
+                      <p className="px-2 text-xs text-muted-foreground">No matches.</p>
+                    ) : null}
+                    {!query ? (
+                      <p className="px-2 text-xs text-muted-foreground">
+                        <Search className="mr-1 inline size-3" /> Type to search this session.
+                      </p>
+                    ) : null}
+                  </div>
+                </TabsContent>
 
-
-                  <Section icon={Gavel} label={`Decisions (${linked.decisions.length})`}>
-                    {linked.decisions.length === 0 ? (
-                      <Empty text="No decisions linked." />
-                    ) : (
-                      linked.decisions.map((d) => (
-                        <div key={d.id} className="text-sm">
-                          <span className="font-mono text-xs text-muted-foreground">{d.code}</span>{" "}
-                          {d.title}
-                        </div>
-                      ))
-                    )}
-                  </Section>
-
-                  <Section icon={ListChecks} label={`Requirements (${linked.requirements.length})`}>
-                    {linked.requirements.length === 0 ? (
-                      <Empty text="No requirements linked." />
-                    ) : (
-                      linked.requirements.map((r) => (
-                        <div key={r.id} className="text-sm">
-                          <span className="font-mono text-xs text-muted-foreground">{r.code}</span>{" "}
-                          {r.title}
-                        </div>
-                      ))
-                    )}
-                  </Section>
-
-                  <Section icon={FileText} label={`Documents (${linked.documents.length})`}>
-                    {linked.documents.length === 0 ? (
-                      <Empty text="No documents linked." />
-                    ) : (
-                      linked.documents.map((d) => (
-                        <div key={d.id} className="truncate text-sm">
-                          {d.title}
-                        </div>
-                      ))
-                    )}
-                  </Section>
-
-                  <Section icon={MessagesSquare} label={`Discussions (${linked.discussions.length})`}>
-                    {linked.discussions.length === 0 ? (
-                      <Empty text="No discussions linked." />
-                    ) : (
-                      linked.discussions.map((d) => (
-                        <div key={d.id} className="truncate text-sm">
-                          {d.title} <span className="label-mono">({d.type})</span>
-                        </div>
-                      ))
-                    )}
-                  </Section>
-
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 w-full"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(session.contextPackage);
-                      toast.success("Context package copied");
-                    }}
+                <TabsContent value="context" className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+                  <Link
+                    to="/projects/$projectId/builds"
+                    params={{ projectId }}
+                    className="label-mono mb-3 inline-flex items-center gap-1.5 hover:text-foreground"
                   >
-                    <Copy className="size-4" /> Copy context package
-                  </Button>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </aside>
+                    <ArrowLeft className="size-3.5" /> Build sessions
+                  </Link>
+                  <div className="space-y-3">
+                    <Section icon={TerminalIcon} label="Originating prompt">
+                      {prompt ? (
+                        <div className="space-y-1">
+                          <div className="truncate text-sm">{prompt.title}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Tag>{prompt.kind}</Tag>
+                            <Tag>V{prompt.version}</Tag>
+                            <Tag>{prompt.status ?? "Draft"}</Tag>
+                          </div>
+                          <Link
+                            to="/projects/$projectId/prompts"
+                            params={{ projectId }}
+                            className="label-mono underline"
+                          >
+                            open in Prompts
+                          </Link>
+                        </div>
+                      ) : (
+                        <Empty text="Prompt was deleted; the frozen package still applies." />
+                      )}
+                    </Section>
+
+                    {promptBody ? (
+                      <Section icon={TerminalIcon} label="Prompt text sent to the coder">
+                        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-2 text-xs text-muted-foreground">
+                          {promptBody}
+                        </pre>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 h-8 w-full"
+                          onClick={() => {
+                            setInput(promptBody);
+                            setCenterTab("chat");
+                            inputRef.current?.focus();
+                            toast.success("Prompt loaded into the coding chat");
+                          }}
+                        >
+                          <CornerDownLeft className="size-4" /> Load prompt into chat
+                        </Button>
+                      </Section>
+                    ) : null}
+
+                    <Section icon={Gavel} label={`Decisions (${linked.decisions.length})`}>
+                      {linked.decisions.length === 0 ? (
+                        <Empty text="No decisions linked." />
+                      ) : (
+                        linked.decisions.map((d) => (
+                          <div key={d.id} className="text-sm">
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {d.code}
+                            </span>{" "}
+                            {d.title}
+                          </div>
+                        ))
+                      )}
+                    </Section>
+
+                    <Section
+                      icon={ListChecks}
+                      label={`Requirements (${linked.requirements.length})`}
+                    >
+                      {linked.requirements.length === 0 ? (
+                        <Empty text="No requirements linked." />
+                      ) : (
+                        linked.requirements.map((r) => (
+                          <div key={r.id} className="text-sm">
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {r.code}
+                            </span>{" "}
+                            {r.title}
+                          </div>
+                        ))
+                      )}
+                    </Section>
+
+                    <Section icon={FileText} label={`Documents (${linked.documents.length})`}>
+                      {linked.documents.length === 0 ? (
+                        <Empty text="No documents linked." />
+                      ) : (
+                        linked.documents.map((d) => (
+                          <div key={d.id} className="truncate text-sm">
+                            {d.title}
+                          </div>
+                        ))
+                      )}
+                    </Section>
+
+                    <Section
+                      icon={MessagesSquare}
+                      label={`Discussions (${linked.discussions.length})`}
+                    >
+                      {linked.discussions.length === 0 ? (
+                        <Empty text="No discussions linked." />
+                      ) : (
+                        linked.discussions.map((d) => (
+                          <div key={d.id} className="truncate text-sm">
+                            {d.title} <span className="label-mono">({d.type})</span>
+                          </div>
+                        ))
+                      )}
+                    </Section>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 w-full"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(session.contextPackage);
+                        toast.success("Context package copied");
+                      }}
+                    >
+                      <Copy className="size-4" /> Copy context package
+                    </Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </aside>
+          </Panel>
+          <ResizeSeparator className="group relative w-px bg-border outline-none transition-colors hover:bg-primary focus-visible:bg-primary data-[separator=active]:bg-primary">
+            <span className="absolute inset-y-0 -left-1.5 w-3" />
+          </ResizeSeparator>
 
           {/* -------------------------------------------- center panel */}
-          <section className="flex min-h-0 flex-col">
-            <Tabs
-              value={centerTab}
-              onValueChange={setCenterTab}
-              className="flex min-h-0 flex-1 flex-col gap-0"
-            >
-              <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-                <TabsList>
-                  <TabsTrigger value="chat" className="text-xs">
-                    Coding chat
-                  </TabsTrigger>
-                  <TabsTrigger value="build" className="text-xs">
-                    Build manager
-                    {gate.blocked ? (
-                      <span className="ml-1 size-1.5 rounded-full bg-destructive" />
-                    ) : null}
-                  </TabsTrigger>
-                  <TabsTrigger value="editor" className="text-xs">
-                    Editor
-                  </TabsTrigger>
-                  <TabsTrigger value="history" className="text-xs">
-                    History
-                  </TabsTrigger>
-                  <TabsTrigger value="agent" className="text-xs">
-                    Agent
-                  </TabsTrigger>
-                  <TabsTrigger value="trace" className="text-xs">
-                    Actions
-                  </TabsTrigger>
-                </TabsList>
-                {selected ? (
-                  <span className="label-mono truncate">{selected.path}</span>
-                ) : null}
-              </div>
-
-              {/* chat */}
-              <TabsContent value="chat" className="flex min-h-0 flex-1 flex-col gap-0">
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                  <div className="mx-auto max-w-3xl space-y-5">
-                    {turns.length === 0 && streaming === null ? (
-                      <EmptyState
-                        title="The coder is loaded and waiting"
-                        description="It holds the prompt, the linked decisions, requirements, documents and discussions of this build session, plus the session file tree. Pick a mode and ask it to build."
-                      />
-                    ) : null}
-
-                    {turns.map((t) => (
-                      <TurnBubble
-                        key={t.id}
-                        turn={t}
-                      />
-                    ))}
-
-                    {streaming !== null ? (
-                      <div className="space-y-2">
-                        <div className="label-mono flex items-center gap-1.5">
-                          <Sparkles className="size-3.5" /> AI Coder · {PROVIDER_LABEL[provider]} ·{" "}
-                          {mode}
-                        </div>
-                        {streaming ? (
-                          <Markdown source={streaming} />
-                        ) : (
-                          <div className="label-mono flex items-center gap-1.5">
-                            <Loader2 className="size-3.5 animate-spin" /> Thinking…
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
-                    <div ref={bottomRef} />
-                  </div>
+          <Panel
+            id="chat"
+            panelRef={chatPanelRef}
+            defaultSize="20%"
+            minSize="280px"
+            maxSize="55%"
+            collapsedSize="0%"
+            collapsible
+            onResize={(size) => setChatOpen(size.asPercentage > 0)}
+          >
+            <section className="flex size-full min-h-0 flex-col bg-background">
+              <Tabs
+                value={centerTab}
+                onValueChange={setCenterTab}
+                className="flex min-h-0 flex-1 flex-col gap-0"
+              >
+                <div className="flex min-w-0 items-center gap-2 overflow-x-auto border-b border-border px-2 py-2">
+                  <TabsList className="h-8 w-max shrink-0">
+                    <TabsTrigger value="chat" className="text-xs">
+                      Coding chat
+                    </TabsTrigger>
+                    <TabsTrigger value="build" className="text-xs">
+                      Build manager
+                      {gate.blocked ? (
+                        <span className="ml-1 size-1.5 rounded-full bg-destructive" />
+                      ) : null}
+                    </TabsTrigger>
+                    <TabsTrigger value="editor" className="text-xs">
+                      Editor
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className="text-xs">
+                      History
+                    </TabsTrigger>
+                    <TabsTrigger value="agent" className="text-xs">
+                      Agent
+                    </TabsTrigger>
+                    <TabsTrigger value="trace" className="text-xs">
+                      Actions
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
 
-                <div className="shrink-0 border-t border-border bg-surface px-6 py-3">
-                  <div className="mx-auto max-w-3xl space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Select value={mode} onValueChange={(v) => setMode(v as CoderActionKind)}>
-                        <SelectTrigger className="h-8 w-[190px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CODER_CHAT_MODES.map((m) => (
-                            <SelectItem key={m} value={m}>
-                              {m}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={artifact} onValueChange={(v) => setArtifact(v as CodeArtifact)}>
-                        <SelectTrigger className="h-8 w-[150px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CODE_ARTIFACTS.map((a) => (
-                            <SelectItem key={a} value={a}>
-                              {a}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {selected ? <Tag>open: {fileName(selected.path)}</Tag> : null}
-                    </div>
-                    <Textarea
-                      ref={inputRef}
-                      rows={3}
-                      className="resize-none bg-surface-2"
-                      placeholder="e.g. build the invoice form for R-002 respecting D-001"
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                          e.preventDefault();
-                          void send();
-                        }
-                      }}
-                    />
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="label-mono">
-                        Traceable to {session.code} · {linked.decisions.length} decisions ·{" "}
-                        {linked.requirements.length} requirements
+                {/* chat */}
+                <TabsContent value="chat" className="flex min-h-0 flex-1 flex-col gap-0">
+                  <Conversation className="min-h-0">
+                    <ConversationContent className="gap-5 px-4 py-5">
+                      {turns.length === 0 && streaming === null ? (
+                        <ConversationEmptyState
+                          icon={<BrainCircuit className="size-7" />}
+                          title="The coder is loaded and waiting"
+                          description="It holds the prompt, the linked decisions, requirements, documents and discussions of this build session, plus the session file tree. Pick a mode and ask it to build."
+                        />
+                      ) : null}
+
+                      {turns.map((t) => (
+                        <TurnBubble key={t.id} turn={t} />
+                      ))}
+
+                      {streaming !== null ? (
+                        <Message from="assistant">
+                          <div className="label-mono">
+                            AI Coder · {PROVIDER_LABEL[provider]} · {mode}
+                          </div>
+                          <MessageContent>
+                            {streaming ? (
+                              <MessageResponse>{streaming}</MessageResponse>
+                            ) : (
+                              <Shimmer>Thinking…</Shimmer>
+                            )}
+                          </MessageContent>
+                        </Message>
+                      ) : null}
+                      <div ref={bottomRef} />
+                    </ConversationContent>
+                    <ConversationScrollButton />
+                  </Conversation>
+
+                  <div className="shrink-0 border-t border-border bg-surface p-3">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Select value={mode} onValueChange={(v) => setMode(v as CoderActionKind)}>
+                          <SelectTrigger className="h-8 w-[190px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CODER_CHAT_MODES.map((m) => (
+                              <SelectItem key={m} value={m}>
+                                {m}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={artifact}
+                          onValueChange={(v) => setArtifact(v as CodeArtifact)}
+                        >
+                          <SelectTrigger className="h-8 w-[150px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CODE_ARTIFACTS.map((a) => (
+                              <SelectItem key={a} value={a}>
+                                {a}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {selected ? <Tag>open: {fileName(selected.path)}</Tag> : null}
                       </div>
-                      <div className="flex gap-2">
-                        {busy ? (
+                      <PromptInput onSubmit={() => void send()} className="bg-surface-2">
+                        <PromptInputTextarea
+                          ref={inputRef}
+                          className="min-h-24 resize-none"
+                          placeholder="e.g. build the invoice form for R-002 respecting D-001"
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                        />
+                        <PromptInputFooter>
+                          <PromptInputTools className="min-w-0">
+                            <div className="label-mono truncate">
+                              Traceable to {session.code} · {linked.decisions.length} decisions ·{" "}
+                              {linked.requirements.length} requirements
+                            </div>
+                          </PromptInputTools>
+                          <PromptInputSubmit
+                            status={busy ? (streaming ? "streaming" : "submitted") : "ready"}
+                            disabled={!input.trim() && !busy}
+                            onStop={() => abortRef.current?.abort()}
+                          />
+                        </PromptInputFooter>
+                      </PromptInput>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* editor */}
+                <TabsContent value="editor" className="flex min-h-0 flex-1 flex-col gap-0">
+                  {selected ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+                        <div className="label-mono">
+                          {languageOf(selected.path)} · V{selected.versions.at(-1)?.seq ?? 1} ·{" "}
+                          {relTime(selected.updatedAt)}
+                        </div>
+                        <div className="flex gap-2">
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-8"
-                            onClick={() => abortRef.current?.abort()}
+                            onClick={() => renamePath(selected.path, false)}
                           >
-                            <Square className="size-4" /> Stop
+                            <Pencil className="size-4" /> Rename
                           </Button>
-                        ) : null}
-                        <Button size="sm" className="h-8" onClick={() => void send()} disabled={busy}>
-                          {busy ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <CornerDownLeft className="size-4" />
-                          )}
-                          Send to coder
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* editor */}
-              <TabsContent value="editor" className="flex min-h-0 flex-1 flex-col gap-0">
-                {selected ? (
-                  <>
-                    <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-                      <div className="label-mono">
-                        {languageOf(selected.path)} · V{selected.versions.at(-1)?.seq ?? 1} ·{" "}
-                        {relTime(selected.updatedAt)}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8"
-                          onClick={() => renamePath(selected.path, false)}
-                        >
-                          <Pencil className="size-4" /> Rename
-                        </Button>
-                        <Button size="sm" className="h-8" onClick={saveDraft}>
-                          <Save className="size-4" /> Save version
-                        </Button>
-                      </div>
-                    </div>
-                    <Textarea
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      spellCheck={false}
-                      className="min-h-0 flex-1 resize-none rounded-none border-0 bg-surface-2 font-mono text-xs leading-relaxed focus-visible:ring-0"
-                    />
-                  </>
-                ) : (
-                  <div className="p-6">
-                    <EmptyState
-                      title="No file open"
-                      description="Pick a file in the explorer, or create one."
-                    />
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* history */}
-              <TabsContent value="history" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-                {selected ? (
-                  <VersionHistory
-                    file={selected}
-                    onRestore={(versionId, seq) => {
-                      actions.restoreCoderVersion(session.id, selected.path, versionId);
-                      log("Restore Version", `${selected.path} → V${seq}`, [selected.path]);
-                      toast.success(`Restored V${seq}`);
-                    }}
-                  />
-                ) : (
-                  <EmptyState
-                    title="No file open"
-                    description="Open a file to see its versions, compare them and restore one."
-                  />
-                )}
-              </TabsContent>
-
-              {/* Module 16 — build orchestration */}
-              <TabsContent value="build" className="flex min-h-0 flex-1 flex-col gap-0">
-                <BuildManager
-                  requirements={requirements}
-                  plan={session.buildPlan}
-                  report={report}
-                  health={health}
-                  gate={gate}
-                  busy={busy}
-                  onExtract={runExtractRequirements}
-                  onPlan={runPlanBuild}
-                  onValidate={runValidate}
-                  onRepair={runRepairTask}
-                  onRequirementStatus={(id: string, status: RequirementStatus) =>
-                    actions.patchBuildRequirement(session.id, id, { status })
-                  }
-                />
-              </TabsContent>
-
-
-              {/* Module 14 — AI Development Agent */}
-              <TabsContent value="agent" className="flex min-h-0 flex-1 flex-col gap-0">
-                <AgentPanel
-                  inputs={{
-                    session,
-                    project: p.project,
-                    register: p.knowledge,
-                    decisions: linked.decisions,
-                    requirements: linked.requirements,
-                    documents: linked.documents,
-                    discussions: linked.discussions,
-                    repository: p.repositories.find((r) => r.id === session.repositoryId),
-                    files,
-                  }}
-                  trace={trace}
-                  provider={provider}
-                  cfg={cfg}
-                  hasKey={Boolean(keys[provider] || cfg.apiKey?.trim())}
-                  errorText={[
-                    logs
-                      .slice(-40)
-                      .filter((l) => l.stream === "error" || l.stream === "build")
-                      .map((l) => `[${l.stream}] ${l.output}`)
-                      .join("\n"),
-                    problems.join("\n"),
-                  ]
-                    .filter(Boolean)
-                    .join("\n")}
-                  onSelectFile={(path) => {
-                    setSelectedPath(path);
-                    setCenterTab("editor");
-                  }}
-                />
-              </TabsContent>
-
-              {/* action trail */}
-              <TabsContent value="trace" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-                {(session.actions ?? []).length === 0 ? (
-                  <EmptyState
-                    title="No coding actions yet"
-                    description="Every action records build, prompt, requirement codes, decision codes, files modified, engine and time."
-                  />
-                ) : (
-                  <div className="space-y-2">
-                    {[...(session.actions ?? [])].reverse().map((a) => (
-                      <div key={a.id} className="panel p-3">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-sm font-medium">{a.kind}</span>
-                          <span className="label-mono">
-                            #{a.seq} · {relTime(a.createdAt)}
-                            {a.provider ? ` · ${PROVIDER_LABEL[a.provider]}` : ""}
-                            {a.model ? ` · ${a.model}` : ""}
-                          </span>
-                        </div>
-                        {a.summary ? (
-                          <p className="mt-1 text-xs text-muted-foreground">{a.summary}</p>
-                        ) : null}
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <Tag>{a.trace.buildCode}</Tag>
-                          <Tag>Prompt V{a.trace.promptVersion}</Tag>
-                          {a.trace.decisionCodes.map((c) => (
-                            <Tag key={`d-${c}`}>{c}</Tag>
-                          ))}
-                          {a.trace.requirementCodes.map((c) => (
-                            <Tag key={`r-${c}`}>{c}</Tag>
-                          ))}
-                          {a.filesModified.map((f) => (
-                            <Tag key={f}>{f}</Tag>
-                          ))}
+                          <Button size="sm" className="h-8" onClick={saveDraft}>
+                            <Save className="size-4" /> Save version
+                          </Button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          </section>
-
-          {/* --------------------------------------------- right panel */}
-          <aside className="flex min-h-0 flex-col border-l border-border bg-surface">
-            <Tabs
-              value={rightTab}
-              onValueChange={setRightTab}
-              className="flex min-h-0 flex-1 flex-col gap-0"
-            >
-              <div className="border-b border-border px-2 py-2">
-                <TabsList className="w-full">
-                  <TabsTrigger value="preview" className="text-xs">
-                    <Monitor className="size-3.5" /> Preview
-                  </TabsTrigger>
-                  <TabsTrigger value="database" className="text-xs">
-                    <Database className="size-3.5" /> Database
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="preview" className="flex min-h-0 flex-1 flex-col gap-0">
-                <div className="flex items-center gap-2 border-b border-border px-2 py-1.5">
-                  <Select
-                    value={session.previewEntryPath ?? ""}
-                    onValueChange={(v) => actions.setPreviewEntry(session.id, v)}
-                  >
-                    <SelectTrigger className="h-7 flex-1 text-xs">
-                      <SelectValue placeholder="Entry file" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {realFiles
-                        .filter((f) => f.path.endsWith(".html"))
-                        .map((f) => (
-                          <SelectItem key={f.path} value={f.path}>
-                            {f.path}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7"
-                    onClick={() => {
-                      setPreviewLogs([]);
-                      setPreviewKey((k) => k + 1);
-                    }}
-                  >
-                    <RefreshCw className="size-3.5" /> Refresh
-                  </Button>
-                </div>
-                <div className="relative min-h-0 flex-1 bg-white">
-                  {previewDoc ? (
-                    <>
-                      <iframe
-                        key={previewKey}
-                        title="Live preview"
-                        srcDoc={previewDoc}
-                        sandbox="allow-scripts allow-forms"
-                        className="size-full border-0"
+                      <Textarea
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        spellCheck={false}
+                        className="min-h-0 flex-1 resize-none rounded-none border-0 bg-surface-2 font-mono text-xs leading-relaxed focus-visible:ring-0"
                       />
-                      {previewLogs.some((l) => l.kind === "error") ? (
-                        <div className="absolute inset-x-0 bottom-0 max-h-32 overflow-y-auto border-t border-destructive/40 bg-destructive/10 p-2 font-mono text-[11px] text-destructive">
-                          {previewLogs
-                            .filter((l) => l.kind === "error")
-                            .map((l, i) => (
-                              <div key={i}>{l.text}</div>
-                            ))}
-                        </div>
-                      ) : null}
                     </>
                   ) : (
-                    <div className="p-4">
+                    <div className="p-6">
                       <EmptyState
-                        title="Nothing to preview"
-                        description="Ask the coder to create the project. Generated files are written automatically and the preview appears here without a repository connection."
+                        title="No file open"
+                        description="Pick a file in the explorer, or create one."
                       />
                     </div>
                   )}
-                </div>
-                <div className="h-24 shrink-0 overflow-y-auto border-t border-border bg-surface-2 p-2 font-mono text-[11px]">
-                  <div className="label-mono mb-1">Preview logs</div>
-                  {previewLogs.length === 0 ? (
-                    <span className="text-muted-foreground">no output</span>
-                  ) : (
-                    previewLogs.map((l, i) => (
-                      <div key={i} className={l.kind === "error" ? "text-destructive" : ""}>
-                        {l.text}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </TabsContent>
+                </TabsContent>
 
-              <TabsContent value="database" className="min-h-0 flex-1 overflow-y-auto p-3">
-                <DbPanel
-                  connections={session.dbConnections ?? []}
-                  onAdd={(engine, label, config) => {
-                    actions.addDbConnection(session.id, { engine, label, config });
-                    log("Database Connection", `${engine} · ${label}`, []);
-                  }}
-                  onRemove={(id, label) => {
-                    actions.removeDbConnection(session.id, id);
-                    log("Database Connection", `removed ${label}`, []);
-                  }}
+                {/* history */}
+                <TabsContent value="history" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                  {selected ? (
+                    <VersionHistory
+                      file={selected}
+                      onRestore={(versionId, seq) => {
+                        actions.restoreCoderVersion(session.id, selected.path, versionId);
+                        log("Restore Version", `${selected.path} → V${seq}`, [selected.path]);
+                        toast.success(`Restored V${seq}`);
+                      }}
+                    />
+                  ) : (
+                    <EmptyState
+                      title="No file open"
+                      description="Open a file to see its versions, compare them and restore one."
+                    />
+                  )}
+                </TabsContent>
+
+                {/* Module 16 — build orchestration */}
+                <TabsContent value="build" className="flex min-h-0 flex-1 flex-col gap-0">
+                  <BuildManager
+                    requirements={requirements}
+                    plan={session.buildPlan}
+                    report={report}
+                    health={health}
+                    gate={gate}
+                    busy={busy}
+                    onExtract={runExtractRequirements}
+                    onPlan={runPlanBuild}
+                    onValidate={runValidate}
+                    onRepair={runRepairTask}
+                    onRequirementStatus={(id: string, status: RequirementStatus) =>
+                      actions.patchBuildRequirement(session.id, id, { status })
+                    }
+                  />
+                </TabsContent>
+
+                {/* Module 14 — AI Development Agent */}
+                <TabsContent value="agent" className="flex min-h-0 flex-1 flex-col gap-0">
+                  <AgentPanel
+                    inputs={{
+                      session,
+                      project: p.project,
+                      register: p.knowledge,
+                      decisions: linked.decisions,
+                      requirements: linked.requirements,
+                      documents: linked.documents,
+                      discussions: linked.discussions,
+                      repository: p.repositories.find((r) => r.id === session.repositoryId),
+                      files,
+                    }}
+                    trace={trace}
+                    provider={provider}
+                    cfg={cfg}
+                    hasKey={Boolean(keys[provider] || cfg.apiKey?.trim())}
+                    errorText={[
+                      logs
+                        .slice(-40)
+                        .filter((l) => l.stream === "error" || l.stream === "build")
+                        .map((l) => `[${l.stream}] ${l.output}`)
+                        .join("\n"),
+                      problems.join("\n"),
+                    ]
+                      .filter(Boolean)
+                      .join("\n")}
+                    onSelectFile={(path) => {
+                      setSelectedPath(path);
+                      setCenterTab("editor");
+                    }}
+                  />
+                </TabsContent>
+
+                {/* action trail */}
+                <TabsContent value="trace" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                  {(session.actions ?? []).length === 0 ? (
+                    <EmptyState
+                      title="No coding actions yet"
+                      description="Every action records build, prompt, requirement codes, decision codes, files modified, engine and time."
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      {[...(session.actions ?? [])].reverse().map((a) => (
+                        <div key={a.id} className="panel p-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-sm font-medium">{a.kind}</span>
+                            <span className="label-mono">
+                              #{a.seq} · {relTime(a.createdAt)}
+                              {a.provider ? ` · ${PROVIDER_LABEL[a.provider]}` : ""}
+                              {a.model ? ` · ${a.model}` : ""}
+                            </span>
+                          </div>
+                          {a.summary ? (
+                            <p className="mt-1 text-xs text-muted-foreground">{a.summary}</p>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <Tag>{a.trace.buildCode}</Tag>
+                            <Tag>Prompt V{a.trace.promptVersion}</Tag>
+                            {a.trace.decisionCodes.map((c) => (
+                              <Tag key={`d-${c}`}>{c}</Tag>
+                            ))}
+                            {a.trace.requirementCodes.map((c) => (
+                              <Tag key={`r-${c}`}>{c}</Tag>
+                            ))}
+                            {a.filesModified.map((f) => (
+                              <Tag key={f}>{f}</Tag>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </section>
+          </Panel>
+          <ResizeSeparator className="group relative w-px bg-border outline-none transition-colors hover:bg-primary focus-visible:bg-primary data-[separator=active]:bg-primary">
+            <span className="absolute inset-y-0 -left-1.5 w-3" />
+          </ResizeSeparator>
+
+          {/* --------------------------------------------- right panel */}
+          <Panel id="preview" defaultSize="80%" minSize="35%">
+            <aside className="flex size-full min-h-0 flex-col bg-surface">
+              <Tabs
+                value={rightTab}
+                onValueChange={setRightTab}
+                className="flex min-h-0 flex-1 flex-col gap-0"
+              >
+                <div className="border-b border-border px-2 py-2">
+                  <TabsList className="w-full">
+                    <TabsTrigger value="preview" className="text-xs">
+                      <Monitor className="size-3.5" /> Preview
+                    </TabsTrigger>
+                    <TabsTrigger value="database" className="text-xs">
+                      <Database className="size-3.5" /> Database
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <TabsContent value="preview" className="flex min-h-0 flex-1 flex-col gap-0">
+                  <div className="flex items-center gap-2 border-b border-border px-2 py-1.5">
+                    <Select
+                      value={session.previewEntryPath ?? ""}
+                      onValueChange={(v) => actions.setPreviewEntry(session.id, v)}
+                    >
+                      <SelectTrigger className="h-7 flex-1 text-xs">
+                        <SelectValue placeholder="Entry file" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {realFiles
+                          .filter((f) => f.path.endsWith(".html"))
+                          .map((f) => (
+                            <SelectItem key={f.path} value={f.path}>
+                              {f.path}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7"
+                      onClick={() => {
+                        setPreviewLogs([]);
+                        setPreviewKey((k) => k + 1);
+                      }}
+                    >
+                      <RefreshCw className="size-3.5" /> Refresh
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7"
+                      onClick={() => setPreviewLogsOpen((open) => !open)}
+                    >
+                      <TerminalIcon className="size-3.5" />
+                      Logs{previewLogs.some((entry) => entry.kind === "error") ? " !" : ""}
+                    </Button>
+                  </div>
+                  <div className="relative min-h-0 flex-1 bg-white">
+                    {previewDoc ? (
+                      <>
+                        <iframe
+                          key={previewKey}
+                          title="Live preview"
+                          srcDoc={previewDoc}
+                          sandbox="allow-scripts allow-forms"
+                          className="size-full border-0"
+                        />
+                      </>
+                    ) : (
+                      <div className="p-4">
+                        <EmptyState
+                          title="Nothing to preview"
+                          description="Ask the coder to create the project. Generated files are written automatically and the preview appears here without a repository connection."
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {previewLogsOpen ? (
+                    <div className="h-24 shrink-0 overflow-y-auto border-t border-border bg-surface-2 p-2 font-mono text-[11px]">
+                      <div className="label-mono mb-1">Preview logs</div>
+                      {previewLogs.length === 0 ? (
+                        <span className="text-muted-foreground">no output</span>
+                      ) : (
+                        previewLogs.map((l, i) => (
+                          <div key={i} className={l.kind === "error" ? "text-destructive" : ""}>
+                            {l.text}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+                </TabsContent>
+
+                <TabsContent value="database" className="min-h-0 flex-1 overflow-y-auto p-3">
+                  <DbPanel
+                    connections={session.dbConnections ?? []}
+                    onAdd={(engine, label, config) => {
+                      actions.addDbConnection(session.id, { engine, label, config });
+                      log("Database Connection", `${engine} · ${label}`, []);
+                    }}
+                    onRemove={(id, label) => {
+                      actions.removeDbConnection(session.id, id);
+                      log("Database Connection", `removed ${label}`, []);
+                    }}
+                  />
+                </TabsContent>
+              </Tabs>
+            </aside>
+          </Panel>
+        </Group>
+
+        <div className="grid h-full min-h-0 grid-rows-[minmax(320px,45%)_1fr] xl:hidden">
+          <section className="flex min-h-0 flex-col border-b border-border bg-surface">
+            <div className="label-mono border-b border-border px-3 py-2">Coding chat</div>
+            <Conversation className="min-h-0">
+              <ConversationContent className="gap-4 p-3">
+                {turns.map((turn) => (
+                  <TurnBubble key={turn.id} turn={turn} />
+                ))}
+                {streaming !== null ? (
+                  <Message from="assistant">
+                    <MessageContent>
+                      {streaming ? (
+                        <MessageResponse>{streaming}</MessageResponse>
+                      ) : (
+                        <Shimmer>Thinking…</Shimmer>
+                      )}
+                    </MessageContent>
+                  </Message>
+                ) : null}
+              </ConversationContent>
+              <ConversationScrollButton />
+            </Conversation>
+            <div className="border-t border-border p-2">
+              <PromptInput onSubmit={() => void send()} className="bg-surface-2">
+                <PromptInputTextarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask the coder to build or change something…"
                 />
-              </TabsContent>
-            </Tabs>
-          </aside>
+                <PromptInputFooter className="justify-end">
+                  <PromptInputSubmit
+                    status={busy ? "streaming" : "ready"}
+                    disabled={!input.trim() && !busy}
+                    onStop={() => abortRef.current?.abort()}
+                  />
+                </PromptInputFooter>
+              </PromptInput>
+            </div>
+          </section>
+          <section className="min-h-0 bg-surface">
+            {previewDoc ? (
+              <iframe
+                key={`mobile-${previewKey}`}
+                title="Live preview"
+                srcDoc={previewDoc}
+                sandbox="allow-scripts allow-forms"
+                className="size-full border-0 bg-background"
+              />
+            ) : (
+              <ConversationEmptyState
+                title="Nothing to preview"
+                description="Generated files will appear here."
+              />
+            )}
+          </section>
         </div>
 
         {/* ------------------------------------------------ bottom panel */}
-        <div className="flex min-h-0 flex-col border-t border-border bg-surface">
-          <Tabs
-            value={bottomTab}
-            onValueChange={setBottomTab}
-            className="flex min-h-0 flex-1 flex-col gap-0"
-          >
-            <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-              <TabsList>
-                <TabsTrigger value="terminal" className="text-xs">
-                  <TerminalIcon className="size-3.5" /> Terminal
-                </TabsTrigger>
-                <TabsTrigger value="build" className="text-xs">
-                  Build logs
-                </TabsTrigger>
-                <TabsTrigger value="error" className="text-xs">
-                  Error logs {problems.length ? `(${problems.length})` : ""}
-                </TabsTrigger>
-              </TabsList>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7"
-                onClick={() =>
-                  actions.clearLogs(
-                    session.id,
-                    bottomTab === "build" ? "build" : bottomTab === "error" ? "error" : "terminal",
-                  )
-                }
-              >
-                Clear
-              </Button>
-            </div>
+        {bottomOpen ? (
+          <div className="flex min-h-0 flex-col border-t border-border bg-surface">
+            <Tabs
+              value={bottomTab}
+              onValueChange={setBottomTab}
+              className="flex min-h-0 flex-1 flex-col gap-0"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+                <TabsList>
+                  <TabsTrigger value="terminal" className="text-xs">
+                    <TerminalIcon className="size-3.5" /> Terminal
+                  </TabsTrigger>
+                  <TabsTrigger value="build" className="text-xs">
+                    Build logs
+                  </TabsTrigger>
+                  <TabsTrigger value="error" className="text-xs">
+                    Error logs {problems.length ? `(${problems.length})` : ""}
+                  </TabsTrigger>
+                </TabsList>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7"
+                  onClick={() =>
+                    actions.clearLogs(
+                      session.id,
+                      bottomTab === "build"
+                        ? "build"
+                        : bottomTab === "error"
+                          ? "error"
+                          : "terminal",
+                    )
+                  }
+                >
+                  Clear
+                </Button>
+              </div>
 
-            <TabsContent value="terminal" className="flex min-h-0 flex-1 flex-col gap-0">
-              <LogStreamView entries={logs.filter((l) => l.stream === "terminal")} />
-              <CommandLine onRun={execCommand} />
-            </TabsContent>
-            <TabsContent value="build" className="min-h-0 flex-1">
-              <LogStreamView entries={logs.filter((l) => l.stream === "build")} />
-            </TabsContent>
-            <TabsContent value="error" className="min-h-0 flex-1 overflow-y-auto p-3 font-mono text-xs">
-              {problems.length === 0 && logs.filter((l) => l.stream === "error").length === 0 ? (
-                <span className="text-muted-foreground">No errors detected in this session.</span>
-              ) : (
-                <div className="space-y-1">
-                  {problems.map((pr) => (
-                    <div key={pr} className="text-destructive">
-                      {pr}
-                    </div>
-                  ))}
-                  {logs
-                    .filter((l) => l.stream === "error")
-                    .map((l) => (
-                      <div key={l.id} className="text-destructive">
-                        {l.command ? `$ ${l.command} · ` : ""}
-                        {l.output}
+              <TabsContent value="terminal" className="flex min-h-0 flex-1 flex-col gap-0">
+                <LogStreamView entries={logs.filter((l) => l.stream === "terminal")} />
+                <CommandLine onRun={execCommand} />
+              </TabsContent>
+              <TabsContent value="build" className="min-h-0 flex-1">
+                <LogStreamView entries={logs.filter((l) => l.stream === "build")} />
+              </TabsContent>
+              <TabsContent
+                value="error"
+                className="min-h-0 flex-1 overflow-y-auto p-3 font-mono text-xs"
+              >
+                {problems.length === 0 && logs.filter((l) => l.stream === "error").length === 0 ? (
+                  <span className="text-muted-foreground">No errors detected in this session.</span>
+                ) : (
+                  <div className="space-y-1">
+                    {problems.map((pr) => (
+                      <div key={pr} className="text-destructive">
+                        {pr}
                       </div>
                     ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
+                    {logs
+                      .filter((l) => l.stream === "error")
+                      .map((l) => (
+                        <div key={l.id} className="text-destructive">
+                          {l.command ? `$ ${l.command} · ` : ""}
+                          {l.output}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        ) : null}
       </div>
     </Shell>
   );
@@ -1444,9 +1645,7 @@ function VersionHistory({
 
       {left ? (
         <div className="panel overflow-x-auto p-0">
-          <div className="label-mono border-b border-border px-3 py-2">
-            V{left.seq} → current
-          </div>
+          <div className="label-mono border-b border-border px-3 py-2">V{left.seq} → current</div>
           <table className="w-full font-mono text-[11px]">
             <tbody>
               {rows.map((r, i) => (
@@ -1481,7 +1680,12 @@ function VersionHistory({
 function LogStreamView({
   entries,
 }: {
-  entries: { id: string; command?: string | undefined; output: string; exitCode?: number | undefined }[];
+  entries: {
+    id: string;
+    command?: string | undefined;
+    output: string;
+    exitCode?: number | undefined;
+  }[];
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -1582,7 +1786,11 @@ function DbPanel({
             value={config[field] ?? ""}
             onChange={(e) => setConfig((c) => ({ ...c, [field]: e.target.value }))}
             placeholder={field}
-            type={field.toLowerCase().includes("password") || field.toLowerCase().includes("key") ? "password" : "text"}
+            type={
+              field.toLowerCase().includes("password") || field.toLowerCase().includes("key")
+                ? "password"
+                : "text"
+            }
             className="h-8"
           />
         ))}
@@ -1615,17 +1823,15 @@ function DbPanel({
                 .filter(([, v]) => v)
                 .map(([k, v]) => (
                   <div key={k}>
-                    {k}: {k.toLowerCase().includes("password") || k.toLowerCase().includes("key") ? "••••••" : v}
+                    {k}:{" "}
+                    {k.toLowerCase().includes("password") || k.toLowerCase().includes("key")
+                      ? "••••••"
+                      : v}
                   </div>
                 ))}
             </div>
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7"
-            onClick={() => onRemove(c.id, c.label)}
-          >
+          <Button size="sm" variant="ghost" className="h-7" onClick={() => onRemove(c.id, c.label)}>
             <Trash2 className="size-3.5 text-destructive" />
           </Button>
         </div>
@@ -1638,16 +1844,18 @@ function TurnBubble({ turn }: { turn: CoderTurn }) {
   const isUser = turn.role === "user";
   const proposed = isUser ? [] : parseProposedFiles(turn.content);
   return (
-    <div className="space-y-2">
+    <Message from={isUser ? "user" : "assistant"}>
       <div className="label-mono flex flex-wrap items-center gap-1.5">
         {isUser ? "You" : "AI Coder"} · {relTime(turn.createdAt)}
         {turn.provider ? <span>· {PROVIDER_LABEL[turn.provider]}</span> : null}
       </div>
-      {isUser ? (
-        <div className="panel whitespace-pre-wrap bg-surface-2 p-3 text-sm">{turn.content}</div>
-      ) : (
-        <Markdown source={turn.content} />
-      )}
+      <MessageContent>
+        {isUser ? (
+          <div className="whitespace-pre-wrap">{turn.content}</div>
+        ) : (
+          <MessageResponse>{turn.content}</MessageResponse>
+        )}
+      </MessageContent>
 
       {proposed.length ? (
         <div className="panel space-y-2 p-3">
@@ -1672,6 +1880,6 @@ function TurnBubble({ turn }: { turn: CoderTurn }) {
           <Tag key={c}>{c}</Tag>
         ))}
       </div>
-    </div>
+    </Message>
   );
 }
