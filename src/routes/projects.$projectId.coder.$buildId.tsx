@@ -646,8 +646,11 @@ function CoderPage() {
             className="h-8"
             title={filesOpen ? "Close files" : "Open files"}
             onClick={() => {
-              if (filesPanelRef.current?.isCollapsed()) filesPanelRef.current.expand();
-              else filesPanelRef.current?.collapse();
+              if (filesPanelRef.current?.isCollapsed()) {
+                workspaceRef.current?.setLayout({ files: 22, chat: 28, preview: 50 });
+              } else {
+                workspaceRef.current?.setLayout({ files: 0, chat: 20, preview: 80 });
+              }
             }}
           >
             {filesOpen ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
@@ -712,7 +715,7 @@ function CoderPage() {
           onLayoutChanged={(layout) =>
             window.localStorage.setItem("vpip-coder-layout", JSON.stringify(layout))
           }
-          className="hidden min-h-0 lg:flex"
+          className="hidden min-h-0 xl:flex"
         >
           {/* ---------------------------------------------- left panel */}
           <Panel
@@ -1309,15 +1312,6 @@ function CoderPage() {
                           sandbox="allow-scripts allow-forms"
                           className="size-full border-0"
                         />
-                        {previewLogs.some((l) => l.kind === "error") ? (
-                          <div className="absolute inset-x-0 bottom-0 max-h-32 overflow-y-auto border-t border-destructive/40 bg-destructive/10 p-2 font-mono text-[11px] text-destructive">
-                            {previewLogs
-                              .filter((l) => l.kind === "error")
-                              .map((l, i) => (
-                                <div key={i}>{l.text}</div>
-                              ))}
-                          </div>
-                        ) : null}
                       </>
                     ) : (
                       <div className="p-4">
@@ -1362,7 +1356,7 @@ function CoderPage() {
           </Panel>
         </Group>
 
-        <div className="grid h-full min-h-0 grid-rows-[minmax(320px,45%)_1fr] lg:hidden">
+        <div className="grid h-full min-h-0 grid-rows-[minmax(320px,45%)_1fr] xl:hidden">
           <section className="flex min-h-0 flex-col border-b border-border bg-surface">
             <div className="label-mono border-b border-border px-3 py-2">Coding chat</div>
             <Conversation className="min-h-0">
