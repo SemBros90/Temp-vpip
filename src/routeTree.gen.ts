@@ -21,6 +21,7 @@ import { Route as ProjectsProjectIdBuildsRouteImport } from './routes/projects.$
 import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects.$projectId.documents'
 import { Route as ProjectsProjectIdExplorerRouteImport } from './routes/projects.$projectId.explorer'
 import { Route as ProjectsProjectIdInboxRouteImport } from './routes/projects.$projectId.inbox'
+import { Route as ProjectsProjectIdMemoryRouteImport } from './routes/projects.$projectId.memory'
 import { Route as ProjectsProjectIdPromptsRouteImport } from './routes/projects.$projectId.prompts'
 import { Route as ProjectsProjectIdRegisterRouteImport } from './routes/projects.$projectId.register'
 import { Route as ProjectsProjectIdRepositoriesRouteImport } from './routes/projects.$projectId.repositories'
@@ -92,6 +93,11 @@ const ProjectsProjectIdInboxRoute = ProjectsProjectIdInboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdMemoryRoute = ProjectsProjectIdMemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
 const ProjectsProjectIdPromptsRoute =
   ProjectsProjectIdPromptsRouteImport.update({
     id: '/prompts',
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/memory': typeof ProjectsProjectIdMemoryRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
   '/projects/$projectId/repositories': typeof ProjectsProjectIdRepositoriesRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/memory': typeof ProjectsProjectIdMemoryRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
   '/projects/$projectId/repositories': typeof ProjectsProjectIdRepositoriesRoute
@@ -189,6 +197,7 @@ export interface FileRoutesById {
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
+  '/projects/$projectId/memory': typeof ProjectsProjectIdMemoryRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/register': typeof ProjectsProjectIdRegisterRoute
   '/projects/$projectId/repositories': typeof ProjectsProjectIdRepositoriesRoute
@@ -212,6 +221,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
+    | '/projects/$projectId/memory'
     | '/projects/$projectId/prompts'
     | '/projects/$projectId/register'
     | '/projects/$projectId/repositories'
@@ -232,6 +242,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
+    | '/projects/$projectId/memory'
     | '/projects/$projectId/prompts'
     | '/projects/$projectId/register'
     | '/projects/$projectId/repositories'
@@ -253,6 +264,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
     | '/projects/$projectId/inbox'
+    | '/projects/$projectId/memory'
     | '/projects/$projectId/prompts'
     | '/projects/$projectId/register'
     | '/projects/$projectId/repositories'
@@ -357,6 +369,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdInboxRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/memory': {
+      id: '/projects/$projectId/memory'
+      path: '/memory'
+      fullPath: '/projects/$projectId/memory'
+      preLoaderRoute: typeof ProjectsProjectIdMemoryRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/prompts': {
       id: '/projects/$projectId/prompts'
       path: '/prompts'
@@ -416,6 +435,7 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdDocumentsRoute: typeof ProjectsProjectIdDocumentsRoute
   ProjectsProjectIdExplorerRoute: typeof ProjectsProjectIdExplorerRoute
   ProjectsProjectIdInboxRoute: typeof ProjectsProjectIdInboxRoute
+  ProjectsProjectIdMemoryRoute: typeof ProjectsProjectIdMemoryRoute
   ProjectsProjectIdPromptsRoute: typeof ProjectsProjectIdPromptsRoute
   ProjectsProjectIdRegisterRoute: typeof ProjectsProjectIdRegisterRoute
   ProjectsProjectIdRepositoriesRoute: typeof ProjectsProjectIdRepositoriesRoute
@@ -433,6 +453,7 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdDocumentsRoute: ProjectsProjectIdDocumentsRoute,
   ProjectsProjectIdExplorerRoute: ProjectsProjectIdExplorerRoute,
   ProjectsProjectIdInboxRoute: ProjectsProjectIdInboxRoute,
+  ProjectsProjectIdMemoryRoute: ProjectsProjectIdMemoryRoute,
   ProjectsProjectIdPromptsRoute: ProjectsProjectIdPromptsRoute,
   ProjectsProjectIdRegisterRoute: ProjectsProjectIdRegisterRoute,
   ProjectsProjectIdRepositoriesRoute: ProjectsProjectIdRepositoriesRoute,
