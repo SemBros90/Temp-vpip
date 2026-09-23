@@ -46,20 +46,49 @@ const projectNav = [
 ] as const;
 
 function SaveIndicator() {
-  const { dirty, lastSavedAt } = useVpip();
+  const { dirty, lastSavedAt, saveState, saveError, saveNow, tabId, otherTabs } = useVpip();
+  const failed = saveState === "error";
+  const saving = saveState === "saving" || (dirty && !failed);
   return (
-    <div className="label-mono flex items-center gap-2">
-      <span
-        className={cn(
-          "size-1.5 rounded-full",
-          dirty ? "bg-warning" : "bg-success",
-        )}
-      />
-      {dirty
-        ? "Saving…"
-        : lastSavedAt
-          ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}`
-          : "Vault ready"}
+    <div className="space-y-1.5">
+      <Link
+        to="/diagnostics/persistence"
+        className="label-mono flex items-center gap-2 hover:text-foreground"
+      >
+        <span
+          className={cn(
+            "size-1.5 rounded-full",
+            failed ? "bg-destructive" : saving ? "bg-warning" : "bg-success",
+          )}
+        />
+        {failed
+          ? "Save failed"
+          : saving
+            ? "Saving…"
+            : lastSavedAt
+              ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}`
+              : "Vault ready"}
+      </Link>
+      {failed ? (
+        <div className="rounded-sm border border-destructive/50 bg-destructive/10 p-2 text-[11px] leading-snug text-destructive">
+          <div className="font-semibold">Changes are not stored</div>
+          <div className="mt-1 break-words">{saveError}</div>
+          <button
+            type="button"
+            onClick={() => void saveNow()}
+            className="mt-1.5 underline underline-offset-2"
+          >
+            Retry save
+          </button>
+        </div>
+      ) : null}
+      {otherTabs.length ? (
+        <div className="rounded-sm border border-warning/50 bg-warning/10 p-2 text-[11px] leading-snug text-warning-foreground">
+          Also open in {otherTabs.length} other tab{otherTabs.length > 1 ? "s" : ""} (
+          {otherTabs.join(", ")}). This tab is {tabId}. Edit in one tab only — the last
+          save wins.
+        </div>
+      ) : null}
     </div>
   );
 }
