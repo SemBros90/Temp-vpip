@@ -233,6 +233,64 @@ const PREVIEW_BRIDGE = `<script>
   });
   try{ if(!window.indexedDB){ /* nothing to do */ } }catch(e){}
 
+  /* The preview frame has no URL of its own, so every link resolves against
+     the VPIP page behind it: "#about" or "/about" would navigate the frame to
+     VPIP itself (which then shows "Loading project data…"). Handle in-site
+     links inside the frame instead of letting the browser navigate. */
+  var navigate=function(url){
+    try{ window.history.pushState({},'',url); }catch(e){}
+    try{ window.dispatchEvent(new PopStateEvent('popstate',{state:null})); }catch(e){
+      try{ var ev=document.createEvent('Event'); ev.initEvent('popstate',true,true); window.dispatchEvent(ev); }catch(e2){}
+    }
+    try{ window.dispatchEvent(new Event('vpip:navigate')); }catch(e){}
+  };
+  window.__vpipNavigate=navigate;
+
+  var scrollToId=function(id){
+    if(!id)return false;
+    var node=null;
+    try{ node=document.getElementById(id)||document.querySelector('[name="'+id+'"]'); }catch(e){}
+    if(!node)return false;
+    try{ node.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){ try{ node.scrollIntoView(); }catch(e2){} }
+    return true;
+  };
+
+  document.addEventListener('click',function(e){
+    if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
+    var el=e.target;
+    while(el&&el.nodeName!=='A')el=el.parentNode;
+    if(!el||!el.getAttribute)return;
+    var href=el.getAttribute('href');
+    if(!href||el.hasAttribute('download'))return;
+    var target=el.getAttribute('target');
+    if(target&&target!=='_self')return;
+    if(/^(https?:)?\\/\\//i.test(href)||/^(mailto|tel|data|blob):/i.test(href))return;
+    /* In-page anchors: scroll inside the frame, never navigate it. */
+    if(href.charAt(0)==='#'){
+      e.preventDefault();
+      scrollToId(href.slice(1));
+      return;
+    }
+    e.preventDefault();
+    var hash=href.indexOf('#')>-1?href.slice(href.indexOf('#')+1):'';
+    var path=href.split('#')[0];
+    if(path){
+      navigate(path.charAt(0)==='/'?path:'/'+path.replace(/^\\.\\//,''));
+      try{ window.scrollTo(0,0); }catch(e){}
+    }
+    if(hash)setTimeout(function(){scrollToId(hash)},0);
+  },true);
+
+
+  document.addEventListener('submit',function(e){
+    var form=e.target;
+    if(!form||!form.getAttribute)return;
+    var action=form.getAttribute('action');
+    if(action&&/^(https?:)?\\/\\//i.test(action))return;
+    e.preventDefault();
+  },true);
+
+
   post('log','preview loaded');
 })();
 </script>`;
