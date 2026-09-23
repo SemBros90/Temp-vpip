@@ -9,6 +9,7 @@ import {
   Copy,
   CornerDownLeft,
   Database,
+  ExternalLink,
   FilePlus2,
   FileText,
   FolderPlus,
@@ -289,6 +290,15 @@ function CoderPage() {
   const logs = session.terminal ?? [];
   const problems = validateFiles(realFiles);
   const previewDoc = buildPreviewDoc(files, session.previewEntryPath);
+
+  /** Open the live preview as a standalone page in a new browser tab. */
+  const openPreviewInTab = useCallback(() => {
+    if (!previewDoc) return;
+    const url = URL.createObjectURL(new Blob([previewDoc], { type: "text/html" }));
+    window.open(url, "_blank", "noopener");
+    // Reclaim the blob once the new tab has had time to load it.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }, [previewDoc]);
 
   /* ------------------------------- Module 16 — build orchestration */
 
@@ -1296,6 +1306,16 @@ function CoderPage() {
                       size="sm"
                       variant="outline"
                       className="h-7"
+                      onClick={openPreviewInTab}
+                      disabled={!previewDoc}
+                      title="Open preview in a new full browser tab"
+                    >
+                      <ExternalLink className="size-3.5" /> Open tab
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7"
                       onClick={() => setPreviewLogsOpen((open) => !open)}
                     >
                       <TerminalIcon className="size-3.5" />
@@ -1310,6 +1330,7 @@ function CoderPage() {
                           title="Live preview"
                           srcDoc={previewDoc}
                           sandbox="allow-scripts allow-forms"
+
 
                           className="size-full border-0"
                         />
@@ -1398,13 +1419,26 @@ function CoderPage() {
           </section>
           <section className="min-h-0 bg-surface">
             {previewDoc ? (
-              <iframe
-                key={`mobile-${previewKey}`}
-                title="Live preview"
-                srcDoc={previewDoc}
-                sandbox="allow-scripts allow-forms"
-                className="size-full border-0 bg-background"
-              />
+              <>
+                <div className="flex items-center justify-end gap-2 border-b border-border px-2 py-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    onClick={openPreviewInTab}
+                    title="Open preview in a new full browser tab"
+                  >
+                    <ExternalLink className="size-3.5" /> Open tab
+                  </Button>
+                </div>
+                <iframe
+                  key={`mobile-${previewKey}`}
+                  title="Live preview"
+                  srcDoc={previewDoc}
+                  sandbox="allow-scripts allow-forms"
+                  className="size-full border-0 bg-background"
+                />
+              </>
             ) : (
               <ConversationEmptyState
                 title="Nothing to preview"
