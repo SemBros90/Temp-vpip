@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai.chat'
@@ -36,6 +37,11 @@ import { Route as ProjectsProjectIdDiscussionsDiscussionIdRouteImport } from './
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntelligenceRoute = IntelligenceRouteImport.update({
+  id: '/intelligence',
+  path: '/intelligence',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -164,6 +170,7 @@ const ProjectsProjectIdDiscussionsDiscussionIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/api/ai/chat': typeof ApiAiChatRoute
@@ -189,6 +196,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
@@ -214,6 +222,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/api/ai/chat': typeof ApiAiChatRoute
@@ -241,6 +250,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/intelligence'
     | '/settings'
     | '/projects/$projectId'
     | '/api/ai/chat'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/intelligence'
     | '/settings'
     | '/api/ai/chat'
     | '/api/ai/status'
@@ -290,6 +301,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/intelligence'
     | '/settings'
     | '/projects/$projectId'
     | '/api/ai/chat'
@@ -316,6 +328,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  IntelligenceRoute: typeof IntelligenceRoute
   SettingsRoute: typeof SettingsRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   ApiAiChatRoute: typeof ApiAiChatRoute
@@ -329,6 +342,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/intelligence': {
+      id: '/intelligence'
+      path: '/intelligence'
+      fullPath: '/intelligence'
+      preLoaderRoute: typeof IntelligenceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -537,6 +557,7 @@ const ProjectsProjectIdRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  IntelligenceRoute: IntelligenceRoute,
   SettingsRoute: SettingsRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   ApiAiChatRoute: ApiAiChatRoute,
