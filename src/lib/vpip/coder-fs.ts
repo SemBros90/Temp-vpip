@@ -174,14 +174,34 @@ export function parseProposedFiles(markdown: string): ProposedFile[] {
 const PREVIEW_BRIDGE = `<script>
 (function(){
   var post=function(kind,text){try{parent.postMessage({__vpipPreview:true,kind:kind,text:String(text)},'*')}catch(e){}};
+  var showError=function(value){
+    var text=value&&value.stack?value.stack:(value&&value.message?value.message:String(value));
+    post('error',text);
+    var render=function(){
+      var root=document.getElementById('root')||document.getElementById('app')||document.body;
+      if(!root)return;
+      root.innerHTML='';
+      var panel=document.createElement('div');
+      panel.setAttribute('role','alert');
+      panel.style.cssText='box-sizing:border-box;min-height:100vh;padding:24px;background:#fff7f7;color:#7f1d1d;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere';
+      var title=document.createElement('strong');
+      title.textContent='Preview runtime error';
+      var detail=document.createElement('div');
+      detail.style.marginTop='12px';
+      detail.textContent=text;
+      panel.appendChild(title); panel.appendChild(detail); root.appendChild(panel);
+    };
+    if(document.body)render();else window.addEventListener('DOMContentLoaded',render,{once:true});
+  };
   ['log','warn','error','info'].forEach(function(k){
     var orig=console[k];
     console[k]=function(){post(k==='error'?'error':'log',Array.prototype.map.call(arguments,function(a){
       try{return typeof a==='string'?a:JSON.stringify(a)}catch(e){return String(a)}}).join(' '));
       orig.apply(console,arguments)};
   });
-  window.addEventListener('error',function(e){post('error',e.message+' ('+(e.filename||'')+':'+e.lineno+')')});
-  window.addEventListener('unhandledrejection',function(e){post('error','Unhandled rejection: '+e.reason)});
+  window.addEventListener('error',function(e){showError(e.error||e.message+' ('+(e.filename||'')+':'+e.lineno+')')});
+  window.addEventListener('unhandledrejection',function(e){showError(e.reason||'Unhandled promise rejection')});
+  window.__vpipShowError=showError;
 
   /* The preview frame is sandboxed, so it has an opaque origin: touching
      localStorage/sessionStorage or history throws SecurityError and kills the
@@ -375,7 +395,7 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     var React = externals['react'], client = externals['react-dom/client'];
     if (root && found.comp && React && client) {
       try { client.createRoot(root).render(React.createElement(found.comp)); }
-      catch (e) { console.error(e && e.message ? e.message : String(e)); }
+      catch (e) { window.__vpipShowError(e); }
       return;
     }
     if (root) {
@@ -405,7 +425,7 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     ext['react/jsx-runtime'] = jsx;
     ext['react/jsx-dev-runtime'] = jsxDev;
   } catch (e) {
-    console.error('Could not load react for the preview: ' + (e && e.message ? e.message : e));
+    window.__vpipShowError('Could not load React for the preview: ' + (e && e.message ? e.message : e));
   }
   window.__vpipStart();
 </script>`;
