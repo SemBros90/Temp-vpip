@@ -9,6 +9,7 @@ import {
   Copy,
   CornerDownLeft,
   Database,
+  ExternalLink,
   FilePlus2,
   FileText,
   FolderPlus,
