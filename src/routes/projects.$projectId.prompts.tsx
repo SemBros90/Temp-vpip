@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { useProject, useVpipActions } from "@/lib/vpip/store";
 import { generatePrompt, type ProjectMemory } from "@/lib/vpip/engine";
-import { extractFromSource, parsePhases, phaseSystemPrompt, promptSource } from "@/lib/vpip/upgrade";
+import { parsePhases, phaseSystemPrompt, promptSource } from "@/lib/vpip/upgrade";
 import { completeChat } from "@/lib/vpip/ai";
 import { download, slug } from "@/lib/vpip/files";
 import {
