@@ -3,7 +3,13 @@ import type { ProviderId } from "./types";
 
 export type KeyStatus = Record<ProviderId, boolean>;
 
-const EMPTY: KeyStatus = { openai: false, deepseek: false };
+const EMPTY: KeyStatus = {
+  openai: false,
+  deepseek: false,
+  perplexity: false,
+  Gemini: false,
+  Claude: false,
+};
 
 let cache: Promise<KeyStatus> | null = null;
 

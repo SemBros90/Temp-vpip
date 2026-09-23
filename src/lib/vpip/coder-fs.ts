@@ -188,8 +188,20 @@ const PREVIEW_BRIDGE = `<script>
 
 const MODULE_RE = /\.(tsx|ts|jsx|js|mjs)$/;
 
+/**
+ * Build tooling that belongs to a real Node toolchain, not to the in-browser
+ * preview. These files import packages like "vite" that the preview can never
+ * supply, so they are excluded from compilation, execution and validation.
+ */
+export const TOOLING_RE =
+  /(^|\/)(vite|vitest|tailwind|postcss|rollup|webpack|next|astro|svelte|eslint|prettier|jest|babel|drizzle|playwright|cypress|tsup|craco)\.config\.[cm]?[jt]sx?$/i;
+
+export function isToolingFile(path: string) {
+  return TOOLING_RE.test(path) || /\.(test|spec)\.[cm]?[jt]sx?$/i.test(path);
+}
+
 function isModule(path: string) {
-  return MODULE_RE.test(path) && !path.endsWith(".d.ts");
+  return MODULE_RE.test(path) && !path.endsWith(".d.ts") && !isToolingFile(path);
 }
 
 /** Compiles the session's TS/TSX/JS modules to a browser-runnable registry. */
@@ -281,9 +293,15 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     return base.join('/');
   }
   function resolve(from, spec){
-    var base = spec.charAt(0) === '.' ? join(from, spec) : spec.replace(/^\\//,'');
+    var base = spec.charAt(0) === '.' ? join(from, spec) : spec.replace(/^@\\//,'src/').replace(/^\\//,'');
     var tries = [base, base+'.tsx', base+'.ts', base+'.jsx', base+'.js', base+'/index.tsx', base+'/index.ts', base+'/index.jsx', base+'/index.js'];
     for (var i=0;i<tries.length;i++) if (sources[tries[i]]) return tries[i];
+    var wanted = base.split('/').pop(), hits = [], p;
+    for (p in sources) if (sources.hasOwnProperty(p)) {
+      var name = p.split('/').pop();
+      if (name === wanted || name.replace(/\\.[cm]?[jt]sx?$/,'') === wanted) hits.push(p);
+    }
+    if (hits.length === 1) return hits[0];
     return null;
   }
   function req(from, spec){

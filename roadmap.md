@@ -8,3 +8,6 @@
 - [ ] Blocked (needs user input): no AI engine key, so extraction / document generation / coding chat / agent runs cannot be exercised; no GitHub token, so repository operations cannot be exercised.
 - [ ] Earlier project data (projects, discussions, extracted items) was lost with the previous disconnected backend — awaiting user decision on re-entering it.
 - [x] Upgrade Pack V-02 → V-15: project memory overview, phased prompt execution, build traceability, context packages, outcome learning, failure analysis, discussion reopen, revision history, repository releases, engine activity log, structured + universal extraction, portable export/import, intelligence register. Report in IMPLEMENTATION-REPORT-V02-V15.md.
+- [x] AI engine plumbing corrected for all five engines (OpenAI, DeepSeek, Perplexity, Gemini, Claude): correct endpoints, Claude's own protocol translated, per-engine key detection, valid model lists.
+- [x] Coder preview errors: build tooling files (vite.config.ts etc.) excluded from preview/validation; misplaced relative imports resolved by unique file name.
+- [ ] Perplexity / Gemini / Claude keys not stored yet — add them in Settings or ask for server-side secrets.

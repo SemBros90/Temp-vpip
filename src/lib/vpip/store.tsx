@@ -1449,7 +1449,10 @@ export function useVpipActions() {
       setSettings(patch: Partial<Settings>) {
         update((w) => ({ ...w, settings: { ...w.settings, ...patch } }));
       },
-      setProvider(id: "openai" | "deepseek", patch: Partial<Settings["providers"]["openai"]>) {
+      setProvider(
+        id: Settings["defaultProvider"],
+        patch: Partial<Settings["providers"]["openai"]>,
+      ) {
         update((w) => ({
           ...w,
           settings: {

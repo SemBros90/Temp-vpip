@@ -1,6 +1,6 @@
 import { transform } from "sucrase";
 import { completeChat, extractJson } from "./ai";
-import { FOLDER_KEEP, fileName, normalizePath } from "./coder-fs";
+import { FOLDER_KEEP, fileName, isToolingFile, normalizePath } from "./coder-fs";
 import type {
   BuildHealth,
   BuildPlan,
@@ -227,6 +227,16 @@ export function resolveImport(files: CoderFile[], from: string, spec: string): s
     const candidate = `${base}${ext}`;
     if (paths.has(candidate)) return candidate;
   }
+  // Fallback: the generated code pointed at the right file name from the wrong
+  // folder. Accept it when exactly one file in the session carries that name.
+  const wanted = base.split("/").pop();
+  if (wanted) {
+    const matches = files.filter((f) => {
+      const name = f.path.split("/").pop() ?? "";
+      return name === wanted || name.replace(/\.[cm]?[jt]sx?$/, "") === wanted;
+    });
+    if (matches.length === 1 && matches[0]) return matches[0].path;
+  }
   return null;
 }
 
@@ -269,7 +279,9 @@ function findFile(files: CoderFile[], candidates: string[]) {
 
 /** Runs dependency, startup and compile validation over the session files. */
 export function validateBuild(files: CoderFile[]): ValidationReport {
-  const real = files.filter((f) => fileName(f.path) !== FOLDER_KEEP);
+  const real = files.filter(
+    (f) => fileName(f.path) !== FOLDER_KEEP && !isToolingFile(f.path),
+  );
   const issues: ValidationIssue[] = [];
   const declared = declaredDependencies(real);
   const missingDependencies: string[] = [];
