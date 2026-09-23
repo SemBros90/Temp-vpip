@@ -251,7 +251,7 @@ function DiscussionPage() {
     actions.appendMessage(discussion.id, { role: "assistant", content: context, provider });
     actions.updateDiscussion(discussion.id, {
       reopenedAt: new Date().toISOString(),
-      reopenContext: context,
+      reopenContext: lines,
     });
     actions.logActivity({
       projectId,
