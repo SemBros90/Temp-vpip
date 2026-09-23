@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
+import { ExtractButton } from "@/components/vpip/ExtractButton";
+import { repositorySource, artifactSource } from "@/lib/vpip/upgrade";
 import { EmptyState, Tag, relTime } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +88,13 @@ function RepositoriesPage() {
           >
             <Github className="size-4" /> Connect existing
           </Button>
+          {repo ? (
+            <ExtractButton
+              projectId={projectId}
+              source={repositorySource(repo, p.repoCommits)}
+              label="Extract repo knowledge"
+            />
+          ) : null}
         </div>
       }
     >
