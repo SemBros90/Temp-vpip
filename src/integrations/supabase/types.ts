@@ -1203,8 +1203,120 @@ export type Database = {
           },
         ]
       }
+      vpip_repo_env: {
+        Row: {
+          id: string
+          key: string
+          project_id: string
+          repository_id: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          id: string
+          key: string
+          project_id: string
+          repository_id: string
+          updated_at: string
+          value?: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          project_id?: string
+          repository_id?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_repo_env_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vpip_repo_env_repository_id_fkey"
+            columns: ["repository_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_repositories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_repo_reports: {
+        Row: {
+          aliases: Json
+          branch: string
+          build_session_id: string | null
+          classification: Json
+          commit_sha: string | null
+          created_at: string
+          dependencies: Json
+          environment: Json
+          health: Json
+          id: string
+          imports: Json
+          preview_diagnostics: Json
+          project_id: string
+          repository_id: string | null
+          unsupported: Json
+        }
+        Insert: {
+          aliases?: Json
+          branch?: string
+          build_session_id?: string | null
+          classification?: Json
+          commit_sha?: string | null
+          created_at: string
+          dependencies?: Json
+          environment?: Json
+          health?: Json
+          id: string
+          imports?: Json
+          preview_diagnostics?: Json
+          project_id: string
+          repository_id?: string | null
+          unsupported?: Json
+        }
+        Update: {
+          aliases?: Json
+          branch?: string
+          build_session_id?: string | null
+          classification?: Json
+          commit_sha?: string | null
+          created_at?: string
+          dependencies?: Json
+          environment?: Json
+          health?: Json
+          id?: string
+          imports?: Json
+          preview_diagnostics?: Json
+          project_id?: string
+          repository_id?: string | null
+          unsupported?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_repo_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vpip_repo_reports_repository_id_fkey"
+            columns: ["repository_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_repositories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vpip_repositories: {
         Row: {
+          classification: Json | null
           created_at: string
           current_branch: string
           default_branch: string
@@ -1215,6 +1327,7 @@ export type Database = {
           last_commit_at: string | null
           last_commit_message: string | null
           last_commit_sha: string | null
+          last_push_at: string | null
           name: string
           owner: string
           project_id: string
@@ -1227,6 +1340,7 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          classification?: Json | null
           created_at: string
           current_branch?: string
           default_branch?: string
@@ -1237,6 +1351,7 @@ export type Database = {
           last_commit_at?: string | null
           last_commit_message?: string | null
           last_commit_sha?: string | null
+          last_push_at?: string | null
           name?: string
           owner?: string
           project_id: string
@@ -1249,6 +1364,7 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          classification?: Json | null
           created_at?: string
           current_branch?: string
           default_branch?: string
@@ -1259,6 +1375,7 @@ export type Database = {
           last_commit_at?: string | null
           last_commit_message?: string | null
           last_commit_sha?: string | null
+          last_push_at?: string | null
           name?: string
           owner?: string
           project_id?: string
