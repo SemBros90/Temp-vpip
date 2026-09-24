@@ -64,8 +64,11 @@ export const runtimePreviewAccess = createServerFn({ method: "POST" })
   .inputValidator((d) => rowInput.parse(d))
   .handler(async ({ data }) => {
     const c = await caller();
-    const { row } = await rt.runtimeStatus(c, data.rowId);
+    const { row, health } = await rt.runtimeStatus(c, data.rowId);
     if (!row.preview_slug) throw new Error("Runtime has no preview.");
+    if (!health.sandboxAlive || !health.processAlive || !health.previewReachable) {
+      throw new Error("Preview health check failed. Resume or restart the app to regenerate the preview tunnel.");
+    }
     const token = await rt.signPreviewToken(row.id, c.userId);
     setCookie(`vpip_rt_${row.id}`, token, {
       path: "/runtime/",
@@ -76,7 +79,7 @@ export const runtimePreviewAccess = createServerFn({ method: "POST" })
       maxAge: 12 * 3600,
     });
     await rt.audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "preview_access", status: "info" });
-    return { path: `/runtime/${row.id}-${row.preview_slug}/` };
+    return { path: `/runtime/${row.id}-${row.preview_slug}/?v=${encodeURIComponent(row.updated_at)}` };
   });
 
 export const runtimeAudit = createServerFn({ method: "POST" })

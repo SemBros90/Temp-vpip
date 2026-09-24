@@ -147,13 +147,16 @@ export function RuntimeEventsView({ mode, initialProjectId, initialBuildId }: { 
       <div className="overflow-x-auto rounded border border-border">
         <table className="w-full text-xs">
           <thead className="bg-surface-2 text-left text-muted-foreground">
-            <tr>{["Timestamp", "Project", "Build session", "Runtime ID", mode === "audit" ? "Category" : "Event", "Event type", "Status", "Duration", "Error", "User action"].map((h) => <th key={h} className="px-2 py-2 font-medium">{h}</th>)}</tr>
+            <tr>{["Timestamp", "Project", "Build session", "Runtime ID", mode === "audit" ? "Category" : "Event", "Event type", "Status", "Duration", "Preview endpoints", "Error", "User action"].map((h) => <th key={h} className="px-2 py-2 font-medium">{h}</th>)}</tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">{loading ? "Loading…" : "No runtime events match these filters."}</td></tr>
+              <tr><td colSpan={11} className="px-3 py-6 text-center text-muted-foreground">{loading ? "Loading…" : "No runtime events match these filters."}</td></tr>
             ) : rows.map((r) => {
               const sev = eventSeverity(r);
+              const detail = (r.detail ?? {}) as Record<string, unknown>;
+              const devServerUrl = typeof detail["devServerUrl"] === "string" ? detail["devServerUrl"] : null;
+              const previewUrl = typeof detail["previewUrl"] === "string" ? detail["previewUrl"] : null;
               return (
                 <tr key={r.id} className="border-t border-border align-top">
                   <td className="whitespace-nowrap px-2 py-1.5 font-mono">{new Date(r.created_at).toLocaleString()}</td>
@@ -168,6 +171,11 @@ export function RuntimeEventsView({ mode, initialProjectId, initialBuildId }: { 
                     <Badge variant={sev === "error" ? "destructive" : sev === "ok" ? "default" : "secondary"}>{sev === "warning" ? "warning" : r.status}</Badge>
                   </td>
                   <td className="px-2 py-1.5">{r.duration_ms != null ? `${(r.duration_ms / 1000).toFixed(1)}s` : "—"}</td>
+                  <td className="max-w-xs px-2 py-1.5 font-mono text-[10px]">
+                    {devServerUrl ? <div className="break-all" title={devServerUrl}>Dev: {devServerUrl}</div> : null}
+                    {previewUrl ? <div className="break-all" title={previewUrl}>VPIP: {previewUrl}</div> : null}
+                    {!devServerUrl && !previewUrl ? "—" : null}
+                  </td>
                   <td className="max-w-xs px-2 py-1.5 text-destructive">{r.error ?? ""}</td>
                   <td className="px-2 py-1.5">{USER_ACTIONS.has(r.action) ? "User" : r.user_id ? "System (owner session)" : "System"}</td>
                 </tr>
