@@ -560,7 +560,7 @@ export async function startRuntime(c: Caller, rowId: string) {
   await runCommand(h, `rm -f ${V}/phases.log`);
   await startBackground(h, "dev");
   await audit({ projectId: row.project_id, buildId: row.build_id, rowId, sandboxId: h.sandboxId, userId: c.userId, email: c.email, action: "sandbox_start", status: "started", detail: { command: cfg.dev.command } });
-  return patchRow(rowId, { phase: "starting", phase_events_seen: 0, phase_events: [] as never, last_active_at: nowIso() });
+  return patchRow(rowId, { phase: "starting", phase_events_seen: 0, phase_events: [] as never, last_error: null, last_active_at: nowIso() });
 }
 
 export async function stopRuntime(c: Caller, rowId: string) {
@@ -620,6 +620,8 @@ export async function resume(c: Caller, row: Row) {
       const [alive = "no", code = "000", mods = "no"] = probe.stdout.trim().split(/\s+/).slice(-3);
       const healthy = alive === "yes" && code !== "000" && Number(code) < 500;
       if (!healthy && mods === "yes") {
+        const build = await loadBuild(c, row.build_id);
+        await writeRuntimeConfig(h, row, build.files, await loadEnv(c, build.projectId, build.repositoryId));
         await runCommand(h, `rm -f ${V}/phases.log`);
         await startBackground(h, "dev");
         await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_start", status: "started", detail: { reason: "resume_recovery", devAlive: alive, httpCode: code, command: row.dev_command } });
