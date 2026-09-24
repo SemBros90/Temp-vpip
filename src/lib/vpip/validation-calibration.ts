@@ -146,3 +146,58 @@ export function calibrate(report: RepoReport | undefined, files: AnalyzerFile[],
   const validationResult: CalibratedReport["validationResult"] = blockers.length ? "BLOCKED" : warnings.length || environment.length ? "PASS WITH WARNINGS" : "PASS";
   return { runtimeResult, runtimeOverride, validationResult, blockers, warnings, environment, before: { blockers: oldBlock, warnings: oldWarn } };
 }
+
+/* ------------------------------------------------------------------ *
+ * Phase 4C — Validation Engine Unification.
+ * One verdict for Build Manager, Import Diagnostics, Safe Repair and the
+ * Runtime Validation Center: the calibrated engine above. The legacy
+ * Coder checker (orchestration.validateBuild) is only an input.
+ * ------------------------------------------------------------------ */
+import type { ValidationIssue, ValidationReport } from "./types";
+
+export const RUNTIME_AUDIT_ACTIONS = ["repository_sync", "dependency_install", "runtime_startup", "sandbox_start", "preview_create", "preview_health", "preview_recovery"];
+
+/** Deduplicates legacy issues: one Dependency issue per package, one issue per identical message. */
+function dedupe(issues: ValidationIssue[]): ValidationIssue[] {
+  const seen = new Set<string>();
+  const out: ValidationIssue[] = [];
+  for (const i of issues) {
+    const pkg = i.kind === "Dependency" ? /"([^"]+)"/.exec(i.message)?.[1] : undefined;
+    const key = pkg ? `dep:${pkg}` : `${i.kind}:${i.path ?? ""}:${i.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(i);
+  }
+  return out;
+}
+
+/**
+ * Converts the legacy report into the unified verdict.
+ * - Runtime PASS: every static finding becomes a warning; statuses Pass; nothing blocks.
+ * - Calibrated BLOCKERs (install/run/sync/manifest failures) are the only errors.
+ * - No runtime evidence for an imported repository: static findings are warnings
+ *   (static guesses never block), calibrated blockers still block.
+ */
+export function unifyValidation(legacy: ValidationReport, cal: CalibratedReport | undefined, imported: boolean): ValidationReport {
+  const deduped = dedupe(legacy.issues);
+  const missing = [...new Set(legacy.missingDependencies)];
+  if (!cal || (!imported && cal.runtimeResult !== "PASS")) return { ...legacy, issues: deduped, missingDependencies: missing };
+  const warnings = deduped.map((i) => ({ ...i, severity: "warning" as const }));
+  const blockers: ValidationIssue[] = cal.blockers.map((b) => ({
+    kind: b.category === "Install" || b.category === "Manifest" ? "Dependency" : "Startup",
+    severity: "error",
+    message: `${b.title} — ${b.detail}`,
+  }));
+  const depFail = blockers.some((b) => b.kind === "Dependency");
+  const startFail = blockers.some((b) => b.kind === "Startup");
+  const ok = cal.runtimeResult === "PASS";
+  return {
+    at: legacy.at,
+    issues: [...blockers, ...warnings],
+    dependencyStatus: depFail ? "Fail" : ok ? "Pass" : "Unknown",
+    startupStatus: startFail ? "Fail" : ok ? "Pass" : "Unknown",
+    compileStatus: startFail ? "Fail" : ok ? "Pass" : "Unknown",
+    // Only real failures count as missing; static guesses stay in the warning list.
+    missingDependencies: depFail ? missing : [],
+  };
+}
