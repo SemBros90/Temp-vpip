@@ -279,7 +279,7 @@ const PREVIEW_BRIDGE = `<script>
       try{ window.scrollTo(0,0); }catch(e){}
     }
     if(hash)setTimeout(function(){scrollToId(hash)},0);
-  },true);
+  });
 
 
   document.addEventListener('submit',function(e){
@@ -288,7 +288,7 @@ const PREVIEW_BRIDGE = `<script>
     var action=form.getAttribute('action');
     if(action&&/^(https?:)?\\/\\//i.test(action))return;
     e.preventDefault();
-  },true);
+  });
 
 
   post('log','preview loaded');
@@ -503,7 +503,19 @@ function runtimeScript(
   );
   const extUrls = Object.fromEntries(bare.map((s) => [s, esmUrl(s, opts.packages ?? {})]));
   return `<script>
-window.__vpipEnv = Object.assign({ MODE: 'development', DEV: true, PROD: false, NODE_ENV: 'development', BASE_URL: '/' }, JSON.parse(${jsonScript(JSON.stringify(opts.env ?? {}))}));
+window.__vpipEnv = Object.assign({
+  MODE: 'development', DEV: true, PROD: false, NODE_ENV: 'development', BASE_URL: '/',
+  /* Browser previews must be able to render a repository before its private
+     backend settings are supplied. These non-routable values let SDK clients
+     initialise; their requests fail normally without exposing any credential. */
+  VITE_SUPABASE_URL: 'https://preview.invalid',
+  SUPABASE_URL: 'https://preview.invalid',
+  NEXT_PUBLIC_SUPABASE_URL: 'https://preview.invalid',
+  VITE_SUPABASE_PUBLISHABLE_KEY: 'vpip-preview-key',
+  VITE_SUPABASE_ANON_KEY: 'vpip-preview-key',
+  SUPABASE_ANON_KEY: 'vpip-preview-key',
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'vpip-preview-key'
+}, JSON.parse(${jsonScript(JSON.stringify(opts.env ?? {}))}));
 window.__vpipAliases = JSON.parse(${jsonScript(JSON.stringify(aliases))});
 window.__vpipExtUrls = JSON.parse(${jsonScript(JSON.stringify(extUrls))});
 window.__vpipSources = JSON.parse(${jsonScript(JSON.stringify(code))});
@@ -695,6 +707,17 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
       console.error('missing dependency: ' + spec + ' — ' + (e && e.message ? e.message : e));
     }
   }));
+  /* A srcdoc/blob preview has no trustworthy pathname. BrowserRouter would
+     otherwise read VPIP's own /projects/... URL and render the imported app's
+     not-found page. Keep repository navigation entirely in memory instead. */
+  const router = window.__vpipExternals['react-router-dom'];
+  if (router) {
+    if (router.MemoryRouter) {
+      router.BrowserRouter = router.MemoryRouter;
+      router.HashRouter = router.MemoryRouter;
+    }
+    if (router.createMemoryRouter) router.createBrowserRouter = router.createMemoryRouter;
+  }
   window.__vpipStart();
 </script>`;
 }
@@ -721,7 +744,9 @@ export function buildPreviewDoc(
     .filter((f) => f.path.endsWith(".css"))
     .map((f) => inlineCssAssets(f.content, f.path, cssAssets, opts.aliases ?? []))
     .join("\n");
-  const styleTag = css ? `\n<style>\n${css}\n</style>` : "";
+  const needsTailwindRuntime = real.some((f) => f.path.endsWith(".css") && /@tailwind\s+(base|components|utilities)/.test(f.content));
+  const tailwindRuntime = needsTailwindRuntime ? `\n<script src="https://cdn.tailwindcss.com"><\/script>` : "";
+  const styleTag = `${tailwindRuntime}${css ? `\n<style>\n${css}\n</style>` : ""}`;
 
   const html =
     real.find((f) => f.path === entryPath && f.path.endsWith(".html")) ??
