@@ -16,7 +16,7 @@ export const runtimeInfo = createServerFn({ method: "POST" })
     const c = await caller();
     const role = await rt.requireProjectAccess(c, data.projectId);
     const row = await rt.activeRowForBuild(data.buildId);
-    return { configured: rt.hasE2BKey(), role, row: row && row.project_id === data.projectId ? row : null };
+    return { configured: await rt.e2bReady(), role, row: row && row.project_id === data.projectId ? row : null };
   });
 
 export const runtimeLaunch = createServerFn({ method: "POST" })
