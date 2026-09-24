@@ -573,8 +573,9 @@ export async function pauseRuntime(c: Caller, rowId: string) {
 export async function resume(c: Caller, row: Row) {
   const started = Date.now();
   if (!row.e2b_sandbox_id) throw new Error("No sandbox.");
+  let h: SandboxHandle;
   try {
-    const h = await connectSandbox(row.e2b_sandbox_id, IDLE_PAUSE_SECONDS);
+    h = await connectSandbox(row.e2b_sandbox_id, IDLE_PAUSE_SECONDS);
     await saveSecrets(row.id, h);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -584,6 +585,34 @@ export async function resume(c: Caller, row: Row) {
   await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_resume", status: "success", durationMs: Date.now() - started });
   const events = Array.isArray(row.phase_events) ? (row.phase_events as Array<{ phase: string }>) : [];
   const last = [...events].reverse().find((e) => e.phase !== "stopped")?.phase ?? "sandbox_created";
+
+  // Dev server recovery: only when the app was installed and had been started (not explicitly stopped).
+  const wasStarted = ["starting", "running", "preview_ready", "runtime_failed"].includes(last);
+  const explicitlyStopped = events.length > 0 && events[events.length - 1]?.phase === "stopped";
+  if (wasStarted && !explicitlyStopped) {
+    try {
+      const probe = await runCommand(
+        h,
+        `source ${V}/env.sh 2>/dev/null; alive=no; if [ -f ${V}/dev.pid ] && kill -0 "$(cat ${V}/dev.pid)" 2>/dev/null; then alive=yes; fi; ` +
+          `code=000; for i in 1 2 3 4 5; do code=$(curl -s -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$BASE_PATH" || true); [ -n "$code" ] && [ "$code" != "000" ] && break; sleep 1; done; ` +
+          `mods=no; [ -d ${APP}/node_modules ] && mods=yes; echo "$alive $code $mods"`,
+        30_000,
+      );
+      const [alive = "no", code = "000", mods = "no"] = probe.stdout.trim().split(/\s+/).slice(-3);
+      const healthy = alive === "yes" && code !== "000" && Number(code) < 500;
+      if (!healthy && mods === "yes") {
+        await runCommand(h, `rm -f ${V}/phases.log`);
+        await startBackground(h, "dev");
+        await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_start", status: "started", detail: { reason: "resume_recovery", devAlive: alive, httpCode: code, command: row.dev_command } });
+        return patchRow(row.id, { status: "running", phase: "starting", phase_events_seen: 0, phase_events: [] as never, last_error: null, running_since: nowIso(), last_active_at: nowIso() });
+      }
+      if (!healthy) {
+        await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_start", status: "failed", error: "Dev server not running after resume and dependencies are missing; use Launch to reinstall." });
+      }
+    } catch (e) {
+      await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_start", status: "failed", error: `Resume health check failed: ${e instanceof Error ? e.message : String(e)}` });
+    }
+  }
   return patchRow(row.id, { status: "running", phase: last, running_since: nowIso(), last_active_at: nowIso() });
 }
 
