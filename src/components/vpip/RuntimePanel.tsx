@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Play, Square, Pause, RotateCcw, Trash2, RefreshCw, ExternalLink, AlertTriangle } from "lucide-react";
+import { Play, Square, Pause, RotateCcw, Trash2, RefreshCw, ExternalLink, AlertTriangle, History } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -158,6 +159,9 @@ export function RuntimePanel({ projectId, buildId }: { projectId: string; buildI
           <Button size="sm" variant="ghost" className="h-7" onClick={() => void refreshInfo()} title="Refresh status">
             <RefreshCw className="size-3.5" />
           </Button>
+          <Link to="/runtime-history" search={{ projectId, buildId }} className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs hover:bg-surface-2" title="Runtime History">
+            <History className="size-3.5" /> History
+          </Link>
         </div>
       </div>
 
