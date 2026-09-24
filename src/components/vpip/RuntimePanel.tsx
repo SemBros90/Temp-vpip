@@ -10,6 +10,7 @@ import {
   runtimeStop,
   runtimePause,
   runtimeResume,
+  runtimeStart,
   runtimeDestroy,
   runtimeStatusFn,
   runtimeHeartbeat,
@@ -33,6 +34,7 @@ export function RuntimePanel({ projectId, buildId }: { projectId: string; buildI
   const stop = useServerFn(runtimeStop);
   const pause = useServerFn(runtimePause);
   const resume = useServerFn(runtimeResume);
+  const start = useServerFn(runtimeStart);
   const destroy = useServerFn(runtimeDestroy);
   const status = useServerFn(runtimeStatusFn);
   const beat = useServerFn(runtimeHeartbeat);
@@ -151,6 +153,11 @@ export function RuntimePanel({ projectId, buildId }: { projectId: string; buildI
           <Button size="sm" variant="outline" className="h-7" disabled={!!busy || row?.status !== "paused"}
             onClick={() => act("Resume", () => resume({ data: { rowId: row!.id } }))}>
             <RotateCcw className="size-3.5" /> Resume
+          </Button>
+          <Button size="sm" variant="outline" className="h-7" title="Restart the app's server in this sandbox"
+            disabled={!!busy || row?.status !== "running" || !["stopped", "runtime_failed", "installed"].includes(row?.phase ?? "")}
+            onClick={() => act("Restart", () => { setPreviewPath(null); return start({ data: { rowId: row!.id } }); })}>
+            <Play className="size-3.5" /> {busy === "Restart" ? "Restarting…" : "Restart app"}
           </Button>
           <Button size="sm" variant="outline" className="h-7" disabled={!!busy || !alive}
             onClick={() => act("Destroy", () => destroy({ data: { rowId: row!.id } }))}>
