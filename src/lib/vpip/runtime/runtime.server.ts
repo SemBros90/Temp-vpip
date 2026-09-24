@@ -60,34 +60,17 @@ const nowIso = () => new Date().toISOString();
 /* ------------------------------------------------------------ security */
 
 /** Signed-in + project access. First signed-in user on an unclaimed project becomes its owner. */
+export const OWNER_ID = "00000000-0000-0000-0000-000000000001";
+
+/** Single-owner mode: the local VPIP owner, acting through the server client. */
+export async function ownerCaller(): Promise<Caller> {
+  return { userId: OWNER_ID, email: null, supabase: await admin() };
+}
+
 export async function requireProjectAccess(c: Caller, projectId: string): Promise<"owner" | "member"> {
-  const { data: isMember, error } = await c.supabase.rpc("is_project_member", {
-    _project_id: projectId,
-    _user_id: c.userId,
-  });
-  if (error) throw new Error(`Access check failed: ${error.message}`);
-  const db = await admin();
-  if (isMember) {
-    const { data } = await db
-      .from("vpip_project_members")
-      .select("role")
-      .eq("project_id", projectId)
-      .eq("user_id", c.userId)
-      .maybeSingle();
-    return (data?.role as "owner" | "member") ?? "member";
-  }
-  const { data: project } = await c.supabase.from("vpip_projects").select("id").eq("id", projectId).maybeSingle();
+  const { data: project, error } = await c.supabase.from("vpip_projects").select("id").eq("id", projectId).maybeSingle();
+  if (error) throw new Error(`Could not read project: ${error.message}`);
   if (!project) throw new Error("Project not found.");
-  const { count } = await db
-    .from("vpip_project_members")
-    .select("id", { count: "exact", head: true })
-    .eq("project_id", projectId);
-  if ((count ?? 0) > 0) throw new Error("Forbidden: you are not an authorized user of this project's runtime.");
-  const { error: insErr } = await db
-    .from("vpip_project_members")
-    .insert({ project_id: projectId, user_id: c.userId, email: c.email, role: "owner" });
-  if (insErr) throw new Error(`Could not claim project ownership: ${insErr.message}`);
-  await audit({ projectId, userId: c.userId, email: c.email, action: "ownership_claimed", status: "success" });
   return "owner";
 }
 
