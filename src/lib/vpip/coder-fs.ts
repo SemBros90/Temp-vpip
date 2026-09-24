@@ -327,11 +327,15 @@ function normalizeGeneratedHookContracts(content: string) {
 }
 
 /** Compiles the session's TS/TSX/JS modules to a browser-runnable registry. */
-function compileModules(files: CoderFile[]): { code: Record<string, string>; errors: string[] } {
+function compileModules(files: CoderFile[], exclude: Set<string> = new Set()): { code: Record<string, string>; errors: string[] } {
   const code: Record<string, string> = {};
   const errors: string[] = [];
   for (const f of files) {
     if (!isModule(f.path)) continue;
+    if (exclude.has(f.path)) {
+      code[f.path] = EXCLUDED_SRC;
+      continue;
+    }
     const ts = /\.tsx?$/.test(f.path);
     try {
       const src = normalizeGeneratedHookContracts(f.content)
@@ -349,6 +353,54 @@ function compileModules(files: CoderFile[]): { code: Record<string, string>; err
     }
   }
   return { code, errors };
+}
+
+const EXCLUDED_SRC = "/*vpip-excluded*/";
+
+/** Compiles the frontend files only (backend excluded) and returns compile errors. */
+export function compileCheck(files: Array<{ path: string; content: string }>, excludePaths: string[] = []): string[] {
+  const list = files.map((f) => ({ path: f.path, content: f.content, updatedAt: "" }) as unknown as CoderFile);
+  return compileModules(list, new Set(excludePaths)).errors;
+}
+
+const ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|svg|ico|avif|bmp|woff2?|ttf|otf|eot)$/i;
+
+/** Image/font files as data URLs, keyed by repository path. */
+function assetMap(files: CoderFile[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of files) {
+    if (!ASSET_EXT_RE.test(f.path)) continue;
+    if (f.content.startsWith("data:")) out[f.path] = f.content;
+    else if (/\.svg$/i.test(f.path) && f.content.includes("<svg")) out[f.path] = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(f.content)}`;
+  }
+  return out;
+}
+
+function joinRel(base: string, rel: string) {
+  const parts = base ? base.split("/") : [];
+  for (const part of rel.split("/")) {
+    if (part === "." || part === "") continue;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  }
+  return parts.join("/");
+}
+
+/** Rewrites CSS url(...) references to embedded asset data URLs. */
+function inlineCssAssets(css: string, cssPath: string, assets: Record<string, string>, aliases: Array<{ alias: string; target: string }>) {
+  const dir = cssPath.includes("/") ? cssPath.slice(0, cssPath.lastIndexOf("/")) : "";
+  return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (m, q: string, ref: string) => {
+    if (/^(data:|https?:|#|\/\/)/.test(ref)) return m;
+    const clean = ref.split(/[?#]/)[0]!;
+    const al = aliases.find((a) => clean === a.alias || clean.startsWith(`${a.alias}/`));
+    const cands = clean.startsWith("/")
+      ? [`public${clean}`, clean.slice(1)]
+      : al
+        ? [joinRel(al.target, clean.slice(al.alias.length))]
+        : [joinRel(dir, clean)];
+    const hit = cands.map((c) => assets[c] ?? Object.entries(assets).find(([k]) => k.endsWith(`/${c}`))?.[1]).find(Boolean);
+    return hit ? `url("${hit}")` : m;
+  });
 }
 
 /** Resolves a spec (as written in an import or a script src) to a session module. */
@@ -405,7 +457,12 @@ export interface PreviewBuildOptions {
   aliases?: Array<{ alias: string; target: string }> | undefined;
   packages?: Record<string, string> | undefined;
   env?: Record<string, string> | undefined;
+  /** Backend files: never executed in the preview, imported as stubs. */
+  excludePaths?: string[] | undefined;
 }
+
+const NODE_BUILTIN_RE = /^(node:)?(assert|buffer|child_process|cluster|crypto|dgram|dns|events|fs|fs\/promises|http|http2|https|module|net|os|path|perf_hooks|process|querystring|readline|stream|string_decoder|timers|tls|tty|url|util|v8|vm|worker_threads|zlib|async_hooks|inspector)(\/.*)?$/;
+const SERVER_PKG_RE = /^(express|fastify|koa|@nestjs\/[\w-]+|pg|mysql2?|mongodb|mongoose|@prisma\/client|better-sqlite3|sqlite3|ioredis|redis|nodemailer|bcrypt|sharp|puppeteer|dotenv)(\/.*)?$/;
 
 const PREVIEW_BUILTIN = new Set(["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"]);
 
@@ -418,6 +475,7 @@ function collectBareSpecs(code: Record<string, string>): string[] {
     while ((m = re.exec(c))) {
       const spec = m[1]!;
       if (/^[./]/.test(spec) || /\.(css|scss|sass|less)$/.test(spec) || PREVIEW_BUILTIN.has(spec)) continue;
+      if (NODE_BUILTIN_RE.test(spec) || SERVER_PKG_RE.test(spec) || ASSET_EXT_RE.test(spec)) continue;
       out.add(spec);
     }
   }
@@ -437,6 +495,7 @@ function runtimeScript(
   entry: string | undefined,
   errors: string[],
   opts: PreviewBuildOptions = {},
+  assets: Record<string, string> = {},
 ) {
   const aliases = [...(opts.aliases ?? [])].sort((a, b) => b.alias.length - a.alias.length);
   const bare = collectBareSpecs(code).filter(
@@ -450,9 +509,39 @@ window.__vpipExtUrls = JSON.parse(${jsonScript(JSON.stringify(extUrls))});
 window.__vpipSources = JSON.parse(${jsonScript(JSON.stringify(code))});
 window.__vpipEntry = ${jsonScript(entry ?? null)};
 window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
+window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
 (function(){
-  var sources = window.__vpipSources, cache = {}, externals = {};
+  var sources = window.__vpipSources, cache = {}, externals = {}, assets = window.__vpipAssets || {};
   window.__vpipExternals = externals;
+  var warned = {};
+  function stub(name){
+    var fn = function(){ return p; };
+    var p = new Proxy(fn, {
+      get: function(t, k){
+        if (k === '__esModule') return true;
+        if (k === 'then') return undefined;
+        if (k === Symbol.toPrimitive) return function(){ return ''; };
+        if (k === 'toString' || k === 'valueOf') return function(){ return ''; };
+        if (k === Symbol.iterator) return function(){ return [][Symbol.iterator](); };
+        return p;
+      },
+      apply: function(){ return p; },
+      construct: function(){ return p; }
+    });
+    if (!warned[name]) { warned[name] = 1; console.warn('[vpip] ' + name + ' is server-only — replaced with a stub in the preview.'); }
+    return p;
+  }
+  function findAsset(from, spec){
+    var clean = spec.split(/[?#]/)[0], al = window.__vpipAliases || [], base = null;
+    if (clean.charAt(0) === '.') base = join(from, clean);
+    else if (clean.charAt(0) === '/') { if (assets['public' + clean]) return assets['public' + clean]; base = clean.slice(1); }
+    else { for (var a=0;a<al.length;a++) if (clean === al[a].alias || clean.indexOf(al[a].alias + '/') === 0) { base = al[a].target + clean.slice(al[a].alias.length); break; } }
+    if (base && assets[base]) return assets[base];
+    var name = clean.split('/').pop(), hit = null, n = 0;
+    for (var k in assets) if (assets.hasOwnProperty(k) && k.split('/').pop() === name) { hit = assets[k]; n++; }
+    return n === 1 ? hit : null;
+  }
+  window.__vpipFindAsset = findAsset;
   function join(from, spec){
     var base = from.split('/'); base.pop();
     spec.split('/').forEach(function(part){
@@ -479,8 +568,16 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     return null;
   }
   function req(from, spec){
-    if (/\\.css$/.test(spec)) return {};
+    if (/\\.(css|scss|sass|less)$/.test(spec)) return {};
+    if (/\\.(png|jpe?g|gif|webp|svg|ico|avif|bmp|woff2?|ttf|otf|eot)(\\?.*)?$/i.test(spec)) {
+      var url = findAsset(from, spec);
+      if (!url) console.warn('[vpip] missing asset "' + spec + '" (imported by ' + from + ')');
+      return { default: url || spec, __esModule: true };
+    }
+    if (${NODE_BUILTIN_RE.toString().replace(/\\/g, "\\\\")}.test(spec)) return stub('Node module "' + spec + '"');
+    if (${SERVER_PKG_RE.toString().replace(/\\/g, "\\\\")}.test(spec) && !externals[spec]) return stub('Server package "' + spec + '"');
     var path = resolve(from, spec);
+    if (path && sources[path] === '${EXCLUDED_SRC}') return stub('Backend file ' + path);
     if (!path) {
       if (externals[spec]) return externals[spec];
       if (window.__vpipExtUrls && window.__vpipExtUrls[spec]) throw new Error('Package "'+spec+'" could not be loaded from the package CDN (imported by '+from+').');
@@ -518,7 +615,35 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     }
     return { summary: summary };
   }
+  function fixPublicSrc(el){
+    ['src','href','poster'].forEach(function(attr){
+      var v = el.getAttribute && el.getAttribute(attr);
+      if (v && v.charAt(0) === '/' && v.charAt(1) !== '/' && !el.__vpipFixed) {
+        var u = findAsset('index.html', v);
+        if (u) { el.__vpipFixed = 1; el.setAttribute(attr, u); }
+      }
+    });
+  }
+  function scanAssets(root){
+    if (!root || !root.querySelectorAll) return;
+    var list = root.querySelectorAll('img,source,link[rel~="icon"],video');
+    for (var i=0;i<list.length;i++) fixPublicSrc(list[i]);
+  }
+  try {
+    new MutationObserver(function(ms){ ms.forEach(function(m){ if (m.type === 'attributes') fixPublicSrc(m.target); else m.addedNodes.forEach(function(n){ if (n.nodeType === 1) { fixPublicSrc(n); scanAssets(n); } }); }); })
+      .observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src','href'] });
+  } catch (e) {}
+  function reportStatus(){
+    setTimeout(function(){
+      var root = document.getElementById('root') || document.getElementById('app') || document.body;
+      var alert = root && root.querySelector && root.querySelector('[role="alert"]');
+      var text = root ? (root.innerText || '').trim() : '';
+      var rendered = !!root && root.childNodes.length > 0 && !alert && text.indexOf('No UI entry in this session') < 0;
+      try { parent.postMessage({ __vpipPreview: true, kind: 'status', text: JSON.stringify({ rendered: rendered, compileErrors: window.__vpipCompileErrors || [] }) }, '*'); } catch (e) {}
+    }, 2500);
+  }
   window.__vpipStart = function(){
+    reportStatus();
     (window.__vpipCompileErrors || []).forEach(function(e){ console.error('compile: '+e); });
     var hasSources = Object.keys(sources).length > 0;
     if (!hasSources) return;
@@ -591,9 +716,10 @@ export function buildPreviewDoc(
 ): string | null {
   const real = files.filter((f) => fileName(f.path) !== FOLDER_KEEP);
   if (!real.length) return null;
+  const cssAssets = assetMap(real);
   const css = real
     .filter((f) => f.path.endsWith(".css"))
-    .map((f) => f.content)
+    .map((f) => inlineCssAssets(f.content, f.path, cssAssets, opts.aliases ?? []))
     .join("\n");
   const styleTag = css ? `\n<style>\n${css}\n</style>` : "";
 
@@ -602,7 +728,9 @@ export function buildPreviewDoc(
     real.find((f) => f.path.endsWith("index.html")) ??
     real.find((f) => f.path.endsWith(".html"));
 
-  const { code, errors } = compileModules(real);
+  const exclude = new Set(opts.excludePaths ?? []);
+  const assets = assetMap(real);
+  const { code, errors } = compileModules(real, exclude);
   const hasModules = Object.keys(code).length > 0;
   if (!html && !hasModules) return null;
 
@@ -614,7 +742,7 @@ export function buildPreviewDoc(
   }
 
   const entry = hasModules ? pickEntryModule(real, entryPath, scriptSrcs) : undefined;
-  const scripts = hasModules ? runtimeScript(code, entry, errors, opts) : "";
+  const scripts = hasModules ? runtimeScript(code, entry, errors, opts, assets) : "";
 
   if (!html) return SHELL(`${PREVIEW_BRIDGE}${styleTag}`, scripts);
 
