@@ -127,7 +127,19 @@ export function VpipProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(async () => {
     try {
-      const stored = await vaultRead<Workspace>();
+      // The database may be waking up (schema cache / 5xx). Retry with backoff
+      // instead of showing an empty workspace that needs manual refreshes.
+      let stored: Workspace | null = null;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          stored = await vaultRead<Workspace>();
+          break;
+        } catch (e) {
+          if (attempt >= 7) throw e;
+          setLoadError(`Connecting to database… (attempt ${attempt + 2})`);
+          await new Promise((r) => setTimeout(r, Math.min(1500 * 2 ** attempt, 10000)));
+        }
+      }
       const next = stored ? { ...emptyWorkspace(), ...stored } : emptyWorkspace();
       wsRef.current = next;
       setWs(next);
