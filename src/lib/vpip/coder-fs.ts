@@ -574,8 +574,8 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
       if (!url) console.warn('[vpip] missing asset "' + spec + '" (imported by ' + from + ')');
       return { default: url || spec, __esModule: true };
     }
-    if (${NODE_BUILTIN_RE.toString().replace(/\\/g, "\\\\")}.test(spec)) return stub('Node module "' + spec + '"');
-    if (${SERVER_PKG_RE.toString().replace(/\\/g, "\\\\")}.test(spec) && !externals[spec]) return stub('Server package "' + spec + '"');
+    if (${NODE_BUILTIN_RE.toString()}.test(spec)) return stub('Node module "' + spec + '"');
+    if (${SERVER_PKG_RE.toString()}.test(spec) && !externals[spec]) return stub('Server package "' + spec + '"');
     var path = resolve(from, spec);
     if (path && sources[path] === '${EXCLUDED_SRC}') return stub('Backend file ' + path);
     if (!path) {
