@@ -567,7 +567,11 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
     if (spec.charAt(0) === '.') base = join(from, spec);
     else {
       for (var a=0;a<al.length;a++) if (spec === al[a].alias || spec.indexOf(al[a].alias + '/') === 0) { base = al[a].target + spec.slice(al[a].alias.length); break; }
-      if (base === null) base = spec.replace(/^@\\//,'src/').replace(/^\\//,'');
+      if (base === null && spec.indexOf('@/') === 0) base = spec.replace(/^@\\//,'src/');
+      if (base === null && spec.charAt(0) === '/') base = spec.replace(/^\\//,'');
+      /* Bare package subpaths such as react-dom/client must not use basename
+         fallback, which could incorrectly select a repository client.ts. */
+      if (base === null) return null;
     }
     var tries = [base, base+'.tsx', base+'.ts', base+'.jsx', base+'.js', base+'/index.tsx', base+'/index.ts', base+'/index.jsx', base+'/index.js'];
     for (var i=0;i<tries.length;i++) if (sources[tries[i]]) return tries[i];
