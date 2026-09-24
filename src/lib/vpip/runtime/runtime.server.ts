@@ -745,14 +745,17 @@ export async function runtimeStatus(c: Caller, rowId: string) {
       const SEP = "---VPIP-SEP---";
       const out = await runCommand(
         h,
-        `cat ${V}/phases.log 2>/dev/null; echo ${SEP}; tail -c 12000 ${V}/install.log 2>/dev/null; echo ${SEP}; tail -c 12000 ${V}/dev.log 2>/dev/null; echo ${SEP}; tail -c 3000 ${V}/run.log 2>/dev/null; echo ${SEP}; if [ -f ${V}/dev.pid ] && kill -0 "$(cat ${V}/dev.pid)" 2>/dev/null; then echo alive; fi`,
+        `cat ${V}/phases.log 2>/dev/null; echo ${SEP}; tail -c 12000 ${V}/install.log 2>/dev/null; echo ${SEP}; tail -c 12000 ${V}/dev.log 2>/dev/null; echo ${SEP}; tail -c 3000 ${V}/run.log 2>/dev/null; echo ${SEP}; ` +
+          `if [ -f ${V}/dev.pid ] && kill -0 "$(cat ${V}/dev.pid)" 2>/dev/null; then proc=alive; else proc=dead; fi; ` +
+          `source ${V}/env.sh 2>/dev/null; code=$(curl -s -m 1 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$BASE_PATH" || true); echo "$proc \${code:-000}"`,
       );
-      const [phasesTxt = "", install = "", dev = "", run = "", alive = ""] = out.stdout.split(SEP);
+      const [phasesTxt = "", install = "", dev = "", run = "", processStatus = ""] = out.stdout.split(SEP);
       logs.install = install.trim();
       logs.dev = dev.trim();
       logs.run = run.trim();
-      devAlive = alive.trim() === "alive";
-      health = { ...health, sandboxAlive: true, processAlive: devAlive, ...previewUrls(row, h) };
+      const [proc = "dead", localCode = "000"] = processStatus.trim().split(/\s+/);
+      devAlive = proc === "alive";
+      health = { ...health, sandboxAlive: true, processAlive: devAlive, localHttpCode: Number(localCode) || 0, ...previewUrls(row, h) };
       const lines = phasesTxt.split("\n").map((l) => l.trim()).filter(Boolean);
       const events = lines.map((l) => {
         const [phase = "", at = "", code = "0"] = l.split(" ");
@@ -772,7 +775,19 @@ export async function runtimeStatus(c: Caller, rowId: string) {
                 ? `Install exited with code ${ev.code}: ${logs.install.split("\n").slice(-6).join(" | ")}`
                 : `Runtime failed (code ${ev.code}): ${logs.dev.split("\n").slice(-6).join(" | ")}`
               : null;
-          await audit({ projectId: row.project_id, buildId: row.build_id, rowId, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: map.action, status: map.status, durationMs, error: errorText, detail: { exitCode: ev.code, at: ev.at } });
+          await audit({
+            projectId: row.project_id,
+            buildId: row.build_id,
+            rowId,
+            sandboxId: row.e2b_sandbox_id,
+            userId: c.userId,
+            email: c.email,
+            action: map.action,
+            status: map.status,
+            durationMs,
+            error: errorText,
+            detail: { exitCode: ev.code, at: ev.at, ...(ev.phase === "preview_ready" ? previewUrls(row, h) : {}) },
+          });
         }
       }
       if (phase === "preview_ready" && !devAlive) phase = "runtime_failed";
