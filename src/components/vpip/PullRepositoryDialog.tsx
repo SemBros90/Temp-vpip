@@ -18,6 +18,7 @@ import { isGenericRemote } from "@/lib/vpip/git-remote";
 import type { GhFile } from "@/lib/vpip/github";
 import { coderTrace } from "@/lib/vpip/coder";
 import { analyzeRepository, classify } from "@/lib/vpip/repo-analyzer";
+import { createSnapshot, ingestionFailure, logAudit, saveReportExtras } from "@/lib/vpip/safe-repair";
 
 /** Detect the framework from package.json and config files. */
 export function detectFramework(files: GhFile[]): string {
@@ -65,8 +66,10 @@ export function PullRepositoryDialog() {
       ]);
       if (!branches.some((b) => b.name === br)) throw new Error(`Branch "${br}" does not exist.`);
       setBusy("Downloading files…");
-      const files = await gh.readBranchFiles(cred, info.fullName, br);
-      if (files.length === 0) throw new Error("No readable files were found on this branch.");
+      const { files, audit: ingestion } = await gh.readBranchFilesAudited(cred, info.fullName, br);
+      const lost = ingestionFailure(ingestion);
+      if (lost) throw new Error(lost);
+      if (files.length === 0) throw new Error("No files were found on this branch.");
       const framework = detectFramework(files);
       const last = commits[0];
       const pulledAt = new Date().toISOString();
@@ -154,7 +157,7 @@ export function PullRepositoryDialog() {
         repositoryProvider: generic ? "Git" : "GitHub",
         repositoryBranch: br,
       });
-      actions.saveRepoReport({
+      const saved = actions.saveRepoReport({
         ...analysis,
         projectId: project.id,
         repositoryId: repo.id,
@@ -162,6 +165,22 @@ export function PullRepositoryDialog() {
         previewDiagnostics: { ...analysis.previewDiagnostics, buildStatus: "Scanned on import", lastRunAt: pulledAt },
       });
       actions.createDiscussion({ projectId: project.id, title: `Repository: ${info.name}`, type: "Architecture" });
+
+      setBusy("Creating Rollback Point Zero…");
+      const author = ws.settings.author || "VPIP user";
+      const metadata = { url: info.htmlUrl || info.fullName, owner: info.owner, name: info.name, branch: br, defaultBranch: info.defaultBranch, commitSha: last?.sha ?? null, commitMessage: last?.message ?? null, pulledAt, ingestion };
+      await createSnapshot({ projectId: project.id, repositoryId: repo.id, buildSessionId: session.id, label: "Rollback Point Zero", isZero: true, files, metadata });
+      await saveReportExtras(saved.id, { ingestion });
+      await logAudit({
+        projectId: project.id,
+        repositoryId: repo.id,
+        user: author,
+        action: "Import",
+        changeType: "Repository Import",
+        files: [],
+        dependencies: [],
+        note: `Imported ${info.fullName}@${br}: found ${ingestion.found.length}, imported ${ingestion.imported.length}, ignored ${ingestion.ignored.length}, failed ${ingestion.failed.length}. Rollback Point Zero created.`,
+      });
 
       toast.success(`Imported ${info.fullName} — ${files.length} files, ${framework}, health ${analysis.health.overall}%`);
       setOpen(false);
