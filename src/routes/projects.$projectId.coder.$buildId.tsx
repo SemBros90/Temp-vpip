@@ -65,6 +65,7 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Stethoscope } from "lucide-react";
+import { applyPreviewResult } from "@/lib/vpip/repo-analyzer";
 import { RepoCompatibilityPanel, useRepoEnv, useRepoReport, useRunCompatibility } from "@/components/vpip/RepoCompatibilityPanel";
 import { previewOptionsFrom, repoDiagnosticsSummary } from "@/lib/vpip/repo-analyzer";
 import {
@@ -166,6 +167,7 @@ function CoderPage() {
   const [busy, setBusy] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const [previewLogs, setPreviewLogs] = useState<{ kind: string; text: string }[]>([]);
+  const [previewStatus, setPreviewStatus] = useState<{ rendered: boolean; compileErrors?: string[]; at: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -218,6 +220,14 @@ function CoderPage() {
     const onMessage = (e: MessageEvent) => {
       const data = e.data as { __vpipPreview?: boolean; kind?: string; text?: string };
       if (!data?.__vpipPreview) return;
+      if (data.kind === "status") {
+        try {
+          setPreviewStatus({ ...(JSON.parse(data.text ?? "{}") as { rendered: boolean; compileErrors?: string[] }), at: Date.now() });
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
       setPreviewLogs((l) => [
         ...l.slice(-120),
         { kind: data.kind ?? "log", text: data.text ?? "" },
@@ -249,6 +259,16 @@ function CoderPage() {
     runCompat(projectId, realFiles, { build: session, buildStatus: "Scanned on open" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, repoReport, realFiles.length]);
+
+  // Record the live preview outcome (compile / runtime / preview stages) on the report.
+  const recordedStatus = useRef<number>(0);
+  useEffect(() => {
+    if (!previewStatus || !repoReport || recordedStatus.current === previewStatus.at) return;
+    recordedStatus.current = previewStatus.at;
+    const runtimeErrors = previewLogs.filter((l) => l.kind === "error" && !l.text.startsWith("compile:")).map((l) => l.text);
+    actions.updateRepoReport(repoReport.id, applyPreviewResult(repoReport, { rendered: previewStatus.rendered, runtimeErrors, compileErrors: previewStatus.compileErrors }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewStatus, repoReport?.id]);
 
   /** The handed-off prompt text, ready to be sent to the coder. */
   const promptBody = (prompt?.markdown ?? session?.contextPackage ?? "").trim();
