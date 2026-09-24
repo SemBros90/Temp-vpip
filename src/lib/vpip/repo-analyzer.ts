@@ -302,12 +302,15 @@ export function validateImports(
   const BIN = /\.(png|jpe?g|gif|webp|ico|avif|bmp|woff2?|ttf|otf|eot|mp4|webm|mp3|wav)$/i;
   const dirs = new Set<string>();
   for (const p of paths) for (let d = dirname(p); d; d = dirname(d)) dirs.add(d);
-  const binaryMissing = (target: string) => BIN.test(target) && !dirs.has(dirname(target));
+  const hasBinaries = [...paths].some((p) => BIN.test(p));
+  const binaryMissing = (target: string) => BIN.test(target) && hasBinaries && !dirs.has(dirname(target));
   const skipBinary = (target: string) => BIN.test(target) && !binaryMissing(target);
 
   for (const f of files) {
     if (!(CODE_RE.test(f.path) || STYLE_RE.test(f.path))) continue;
     if (/(^|\/)(node_modules|dist|build|\.next)\//.test(f.path) || /\.d\.ts$/.test(f.path)) continue;
+    // Deno edge functions resolve their own URL / npm: imports.
+    if (/^supabase\/functions\//.test(f.path)) continue;
     for (const spec of extractSpecs(f.content, f.path)) {
       total++;
       const asset = ASSET_RE.test(spec.split("?")[0]!);
@@ -329,7 +332,7 @@ export function validateImports(
           issues.push({ kind: asset ? "Missing asset" : "Broken alias", spec, referencedBy: f.path, expectedPath: target });
         continue;
       }
-      if (/^(node:|virtual:|~icons|https?:|data:|bun:|\$)/.test(spec)) continue;
+      if (/^(node:|npm:|jsr:|virtual:|~icons|https?:|data:|bun:|\$)/.test(spec)) continue;
       const name = pkgName(spec);
       if (NODE_BUILTINS.has(name)) continue;
       const list = usedPackages.get(name) ?? [];
