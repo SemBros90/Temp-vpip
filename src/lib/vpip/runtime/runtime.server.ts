@@ -263,7 +263,7 @@ do_dev(){
   export PATH="$V/node/bin:$PATH"
   # Keep the JavaScript process below the sandbox ceiling and let esbuild's Go GC
   # work normally. An artificially tiny GOMEMLIMIT can make esbuild terminate.
-  export NODE_OPTIONS="--max-old-space-size=256 [1m[0m${NODE_OPTIONS:-}"
+  export NODE_OPTIONS="--max-old-space-size=256 \${NODE_OPTIONS:-}"
   export GOGC=50
   unset GOMEMLIMIT
   ensure_swap >> "$V/run.log" 2>&1 || true
