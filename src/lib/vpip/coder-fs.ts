@@ -224,6 +224,21 @@ const PREVIEW_BRIDGE = `<script>
       try{ Object.defineProperty(window,name,{configurable:true,get:(function(store){return function(){return store}})(memoryStorage())}); }catch(e){}
     }
   });
+  /* Auth/data clients use navigator.locks to serialize session refreshes. The
+     Locks API exists in a sandboxed srcdoc but rejects every request because
+     the frame has an opaque origin. Replace it with a small in-frame queue so
+     those clients can initialize and the UI can render. */
+  try {
+    var lockQueue=Promise.resolve();
+    var memoryLocks={request:function(name,options,callback){
+      if(typeof options==='function'){callback=options;options={};}
+      var run=function(){return Promise.resolve(callback({name:String(name),mode:(options&&options.mode)||'exclusive'}));};
+      var result=lockQueue.then(run,run);
+      lockQueue=result.catch(function(){});
+      return result;
+    },query:function(){return Promise.resolve({held:[],pending:[]});}};
+    Object.defineProperty(navigator,'locks',{configurable:true,get:function(){return memoryLocks}});
+  } catch(e) {}
   ['pushState','replaceState'].forEach(function(m){
     var orig=window.history[m];
     window.history[m]=function(){
