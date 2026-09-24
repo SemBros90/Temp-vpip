@@ -222,6 +222,13 @@ export function RuntimePanel({ projectId, buildId }: { projectId: string; buildI
         </div>
       ) : null}
       {row?.last_error ? <div className="border-b border-border px-3 py-1.5 text-[11px] text-destructive">{row.last_error}</div> : null}
+      {row ? (
+        <div className="space-y-0.5 border-b border-border px-3 py-1.5 font-mono text-[10px] text-muted-foreground">
+          <div className="truncate" title={previewPath ?? ""}>iframe URL: {previewPath ? `${typeof window !== "undefined" ? window.location.origin : ""}${previewPath}` : "—"}</div>
+          <div className="truncate" title={health?.devServerUrl ?? ""}>app URL (Vite base): {health?.devServerUrl ?? "—"} · app route shown as "/"</div>
+          <div>HTTP status: local {health?.localHttpCode || "—"} · preview {health?.previewHttpCode || "—"}</div>
+        </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1 bg-background">
         {previewPath ? (
