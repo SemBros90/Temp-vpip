@@ -261,11 +261,10 @@ ensure_swap(){
 }
 do_dev(){
   export PATH="$V/node/bin:$PATH"
-  # Keep the JavaScript process below the sandbox ceiling and let esbuild's Go GC
-  # work normally. An artificially tiny GOMEMLIMIT can make esbuild terminate.
-  export NODE_OPTIONS="--max-old-space-size=256 \${NODE_OPTIONS:-}"
-  export GOGC=50
-  unset GOMEMLIMIT
+  # Keep Vite and esbuild together below the base sandbox's memory ceiling.
+  # esbuild is a separate Go process, so limiting Node alone is insufficient.
+  export NODE_OPTIONS="--max-old-space-size=192 \${NODE_OPTIONS:-}"
+  export GOMEMLIMIT=160MiB GOGC=25 GOMAXPROCS=1
   ensure_swap >> "$V/run.log" 2>&1 || true
   ev starting
   if [ -f "$V/dev.pid" ]; then kill -- -"$(cat "$V/dev.pid")" 2>/dev/null; rm -f "$V/dev.pid"; fi
@@ -278,10 +277,16 @@ do_dev(){
   for i in $(seq 1 180); do
     if ! kill -0 "$pid" 2>/dev/null; then wait "$pid"; ev runtime_failed $?; rm -f "$V/dev.pid"; return 1; fi
     code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$BASE_PATH" || true)
-    if [ -n "$code" ] && [ "$code" != "000" ]; then
+    if [ -n "$code" ] && [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
       ev running 0
-      if [ "$code" -lt 500 ]; then ev preview_ready "$code"; else ev runtime_failed "$code"; fi
+      ev preview_ready "$code"
       return 0
+    fi
+    if tail -n 20 "$V/dev.log" 2>/dev/null | grep -qE 'The service was stopped|JavaScript heap out of memory|Killed$'; then
+      kill -- -"$pid" 2>/dev/null || true
+      ev runtime_failed 137
+      rm -f "$V/dev.pid"
+      return 1
     fi
     sleep 1
   done
