@@ -13,9 +13,6 @@ const STORAGE_SHIM = `<script>(function(){function mk(){var d={};return{getItem:
 const DROP_REQ = new Set(["host", "cookie", "authorization", "origin", "referer", "cf-connecting-ip", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-real-ip", "content-length"]);
 const DROP_RES = new Set(["content-encoding", "content-length", "transfer-encoding", "set-cookie", "access-control-allow-origin", "access-control-allow-credentials", "x-frame-options", "connection"]);
 
-type Target = NonNullable<Awaited<ReturnType<typeof import("@/lib/vpip/runtime/runtime.server").previewTarget>>>;
-const cache = new Map<string, { at: number; t: Target }>();
-
 function cookieValue(header: string | null, name: string) {
   if (!header) return null;
   for (const part of header.split(";")) {
@@ -40,17 +37,10 @@ async function relay(request: Request, splat: string) {
   const rowId = first.slice(0, dash);
   const slug = first.slice(dash + 1);
 
-  let t = cache.get(first);
-  if (!t || Date.now() - t.at > 20_000) {
-    const target = await rt.previewTarget(rowId, slug);
-    if (!target) {
-      cache.delete(first);
-      return page(404, "Preview not available", "This runtime was destroyed or the address is wrong. Launch the runtime again from VPIP Coder.");
-    }
-    t = { at: Date.now(), t: target };
-    cache.set(first, t);
+  const target = await rt.previewTarget(rowId, slug);
+  if (!target) {
+    return page(404, "Preview not available", "This runtime was destroyed or the address is wrong. Launch the runtime again from VPIP Coder.");
   }
-  const target = t.t;
 
   const dest = request.headers.get("sec-fetch-dest");
   const isDocument = dest === "document" || dest === "iframe" || dest === "frame";

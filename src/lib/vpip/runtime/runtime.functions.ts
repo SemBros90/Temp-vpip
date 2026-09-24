@@ -76,7 +76,7 @@ export const runtimePreviewAccess = createServerFn({ method: "POST" })
       maxAge: 12 * 3600,
     });
     await rt.audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "preview_access", status: "info" });
-    return { path: `/runtime/${row.id}-${row.preview_slug}/` };
+    return { path: `/runtime/${row.id}-${row.preview_slug}/?v=${encodeURIComponent(row.updated_at)}` };
   });
 
 export const runtimeAudit = createServerFn({ method: "POST" })

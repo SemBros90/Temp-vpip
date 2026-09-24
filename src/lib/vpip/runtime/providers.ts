@@ -54,6 +54,8 @@ export const EVENT_TYPES: Record<string, { label: string; category: EventCategor
   runtime_failure: { label: "Error", category: "runtime" },
   preview_create: { label: "Preview", category: "preview" },
   preview_access: { label: "Preview", category: "preview" },
+  preview_health: { label: "Preview health", category: "preview" },
+  preview_recovery: { label: "Preview recovery", category: "preview" },
   validation_readiness: { label: "Validation", category: "validation" },
   provider_test: { label: "Provider test", category: "provider" },
   provider_connect: { label: "Provider connect", category: "provider" },

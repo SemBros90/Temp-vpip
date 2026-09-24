@@ -21,6 +21,7 @@ import { PHASE_LABEL, type RuntimePhase } from "@/lib/vpip/runtime/detect";
 type Info = Awaited<ReturnType<typeof runtimeInfo>>;
 type Row = NonNullable<Info["row"]>;
 type Logs = { install: string; dev: string; run: string };
+type Health = { sandboxAlive: boolean; processAlive: boolean; previewReachable: boolean; localHttpCode: number; previewHttpCode: number; devServerUrl: string | null; previewUrl: string | null };
 
 const STEPS: RuntimePhase[] = ["sandbox_created", "synced", "installing", "installed", "starting", "running", "preview_ready"];
 const STEP_ORDER: Record<string, number> = {
@@ -43,6 +44,7 @@ export function RuntimePanel({ projectId, buildId }: { projectId: string; buildI
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [row, setRow] = useState<Row | null>(null);
   const [logs, setLogs] = useState<Logs>({ install: "", dev: "", run: "" });
+  const [health, setHealth] = useState<Health | null>(null);
   const [logTab, setLogTab] = useState<keyof Logs>("run");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +80,7 @@ export function RuntimePanel({ projectId, buildId }: { projectId: string; buildI
         if (stopped) return;
         setRow(s.row as Row);
         setLogs(s.logs);
+        setHealth(s.health);
       } catch (e) {
         if (!stopped) setError(e instanceof Error ? e.message : String(e));
       }
@@ -105,7 +108,7 @@ export function RuntimePanel({ projectId, buildId }: { projectId: string; buildI
     }
     if (previewPath) return;
     access({ data: { rowId: row.id } })
-      .then((r) => setPreviewPath(r.path))
+      .then((r) => { setPreviewPath(r.path); setFrameKey((k) => k + 1); })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [row?.id, row?.phase, row?.status, previewPath, access]);
 
@@ -211,6 +214,13 @@ export function RuntimePanel({ projectId, buildId }: { projectId: string; buildI
           {env.warnings?.map((w) => <div key={w} className="text-muted-foreground">{w}</div>)}
         </div>
       </div>
+      {row ? (
+        <div className="grid grid-cols-3 gap-2 border-b border-border px-3 py-2 text-[11px]">
+          <div><span className="label-mono">Sandbox</span><div>{health?.sandboxAlive ? "Alive" : "Unavailable"}</div></div>
+          <div><span className="label-mono">Process</span><div>{health?.processAlive ? `Alive · HTTP ${health.localHttpCode || "—"}` : "Not running"}</div></div>
+          <div><span className="label-mono">Preview</span><div>{health?.previewReachable ? `Reachable · HTTP ${health.previewHttpCode}` : "Not reachable"}</div></div>
+        </div>
+      ) : null}
       {row?.last_error ? <div className="border-b border-border px-3 py-1.5 text-[11px] text-destructive">{row.last_error}</div> : null}
 
       <div className="relative min-h-0 flex-1 bg-background">

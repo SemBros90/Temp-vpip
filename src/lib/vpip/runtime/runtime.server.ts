@@ -12,6 +12,7 @@ import {
   hasE2BKey,
   killSandbox,
   pauseSandbox,
+  portOrigin,
   runCommand,
   sandboxState,
   setSandboxTimeout,
@@ -498,6 +499,35 @@ async function startBackground(h: SandboxHandle, mode: "all" | "install" | "dev"
   await runCommand(h, `chmod +x ${V}/run.sh && (setsid nohup bash ${V}/run.sh ${mode} > ${V}/run.log 2>&1 < /dev/null &) ; echo started`);
 }
 
+function previewUrls(row: Row, h: SandboxHandle) {
+  const base = previewBasePath(row.id, row.preview_slug ?? "");
+  return {
+    devServerUrl: `${portOrigin(h, row.port)}${base}`,
+    previewUrl: base,
+  };
+}
+
+async function tunnelHealth(row: Row, h: SandboxHandle) {
+  const urls = previewUrls(row, h);
+  try {
+    const headers = new Headers();
+    if (h.trafficToken) headers.set("e2b-traffic-access-token", h.trafficToken);
+    const res = await fetch(urls.devServerUrl, {
+      method: "HEAD",
+      headers,
+      redirect: "manual",
+      signal: AbortSignal.timeout(4_000),
+    });
+    return { ...urls, reachable: res.status > 0 && res.status < 500, httpCode: res.status };
+  } catch {
+    return { ...urls, reachable: false, httpCode: 0 };
+  }
+}
+
+async function rotatePreview(row: Row) {
+  return patchRow(row.id, { preview_slug: randomId(24) });
+}
+
 /** Pull → Sync → Install → Start → Preview (install/start run in the sandbox). */
 export async function launch(c: Caller, buildId: string) {
   const build = await loadBuild(c, buildId);
@@ -550,6 +580,7 @@ export async function installOnly(c: Caller, rowId: string) {
 export async function startRuntime(c: Caller, rowId: string) {
   let row = await rowForCaller(c, rowId);
   row = await ensureAlive(c, row);
+  row = await rotatePreview(row);
   const build = await loadBuild(c, row.build_id);
   const h = await handleFor(row);
   const cfg = await writeRuntimeConfig(h, row, build.files, await loadEnv(c, build.projectId, build.repositoryId));
@@ -559,7 +590,7 @@ export async function startRuntime(c: Caller, rowId: string) {
   }
   await runCommand(h, `rm -f ${V}/phases.log`);
   await startBackground(h, "dev");
-  await audit({ projectId: row.project_id, buildId: row.build_id, rowId, sandboxId: h.sandboxId, userId: c.userId, email: c.email, action: "sandbox_start", status: "started", detail: { command: cfg.dev.command } });
+  await audit({ projectId: row.project_id, buildId: row.build_id, rowId, sandboxId: h.sandboxId, userId: c.userId, email: c.email, action: "sandbox_start", status: "started", detail: { command: cfg.dev.command, ...previewUrls(row, h), previewRegenerated: true } });
   return patchRow(rowId, { phase: "starting", phase_events_seen: 0, phase_events: [] as never, last_error: null, last_active_at: nowIso() });
 }
 
@@ -618,13 +649,28 @@ export async function resume(c: Caller, row: Row) {
         8_000,
       );
       const [alive = "no", code = "000", mods = "no"] = probe.stdout.trim().split(/\s+/).slice(-3);
-      const healthy = alive === "yes" && code !== "000" && Number(code) < 500;
+      const localHealthy = alive === "yes" && code !== "000" && Number(code) < 500;
+      const external = localHealthy ? await tunnelHealth(row, h) : { ...previewUrls(row, h), reachable: false, httpCode: 0 };
+      const healthy = localHealthy && external.reachable;
+      await audit({
+        projectId: row.project_id,
+        buildId: row.build_id,
+        rowId: row.id,
+        sandboxId: row.e2b_sandbox_id,
+        userId: c.userId,
+        email: c.email,
+        action: "preview_health",
+        status: healthy ? "success" : "failed",
+        error: healthy ? null : `Preview health failed (local ${code}, tunnel ${external.httpCode || "unreachable"}).`,
+        detail: { sandboxAlive: true, processAlive: alive === "yes", previewReachable: external.reachable, localHttpCode: Number(code) || 0, previewHttpCode: external.httpCode, devServerUrl: external.devServerUrl, previewUrl: external.previewUrl },
+      });
       if (!healthy && mods === "yes") {
+        row = await rotatePreview(row);
         const build = await loadBuild(c, row.build_id);
         await writeRuntimeConfig(h, row, build.files, await loadEnv(c, build.projectId, build.repositoryId));
         await runCommand(h, `rm -f ${V}/phases.log`);
         await startBackground(h, "dev");
-        await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_start", status: "started", detail: { reason: "resume_recovery", devAlive: alive, httpCode: code, command: row.dev_command } });
+        await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "preview_recovery", status: "started", detail: { reason: "resume_recovery", processAlive: alive === "yes", localHttpCode: Number(code) || 0, previousPreviewHttpCode: external.httpCode, command: row.dev_command, ...previewUrls(row, h), previewRegenerated: true } });
         return patchRow(row.id, { status: "running", phase: "starting", phase_events_seen: 0, phase_events: [] as never, last_error: null, running_since: nowIso(), last_active_at: nowIso() });
       }
       if (!healthy) {
@@ -684,6 +730,7 @@ export async function runtimeStatus(c: Caller, rowId: string) {
   let row = await rowForCaller(c, rowId);
   const logs = { install: "", dev: "", run: "" };
   let devAlive = false;
+  let health = { sandboxAlive: false, processAlive: false, previewReachable: false, localHttpCode: 0, previewHttpCode: 0, devServerUrl: null as string | null, previewUrl: null as string | null };
   if (row.status === "running" && row.e2b_sandbox_id) {
     const st = await sandboxState(row.e2b_sandbox_id).catch(() => "running" as const);
     if (st === "gone") {
@@ -705,6 +752,7 @@ export async function runtimeStatus(c: Caller, rowId: string) {
       logs.dev = dev.trim();
       logs.run = run.trim();
       devAlive = alive.trim() === "alive";
+      health = { ...health, sandboxAlive: true, processAlive: devAlive, ...previewUrls(row, h) };
       const lines = phasesTxt.split("\n").map((l) => l.trim()).filter(Boolean);
       const events = lines.map((l) => {
         const [phase = "", at = "", code = "0"] = l.split(" ");
@@ -728,11 +776,19 @@ export async function runtimeStatus(c: Caller, rowId: string) {
         }
       }
       if (phase === "preview_ready" && !devAlive) phase = "runtime_failed";
+      if (phase === "preview_ready" && devAlive) {
+        const external = await tunnelHealth(row, h);
+        health.previewReachable = external.reachable;
+        health.previewHttpCode = external.httpCode;
+        if (!external.reachable) phase = "runtime_failed";
+      }
       const lastError =
         phase === "install_failed"
           ? logs.install.split("\n").slice(-12).join("\n")
           : phase === "runtime_failed"
-            ? logs.dev.split("\n").slice(-12).join("\n") || "Dev server exited."
+            ? health.processAlive && !health.previewReachable
+              ? `Preview tunnel is not reachable (HTTP ${health.previewHttpCode || "no response"}). Resume or restart the app to regenerate it.`
+              : logs.dev.split("\n").slice(-12).join("\n") || "Dev server exited."
             : null;
       if (fresh.length || phase !== row.phase) {
         row = await patchRow(rowId, {
@@ -744,7 +800,7 @@ export async function runtimeStatus(c: Caller, rowId: string) {
       }
     }
   }
-  return { row, logs, devAlive };
+  return { row, logs, devAlive, health };
 }
 
 /* ------------------------------------------------------------ sweep */
