@@ -788,3 +788,35 @@ export async function touchActive(rowId: string) {
 }
 
 export { hasE2BKey };
+
+/* ------------------------------------------------------------ validation readiness (read-only, never runs) */
+
+export type ReadinessState = "ready" | "warning" | "blocked" | "pending";
+export interface ReadinessStage { stage: string; state: ReadinessState; detail: string }
+
+export async function readiness(c: Caller, buildId: string): Promise<{ projectId: string; buildId: string; ready: boolean; stages: ReadinessStage[] }> {
+  const build = await loadBuild(c, buildId);
+  const providerOk = await e2bReady();
+  const pkgOk = build.files.some((f) => f.path === "package.json");
+  const pm = detectPackageManager(build.files);
+  const node = detectNodeVersion(build.files);
+  const dev = detectDevCommand(build.files, pm.manager, "/");
+  const env = envAuditForRuntime(build.files, await loadEnv(c, build.projectId, build.repositoryId));
+  const active = await activeRowForBuild(buildId);
+  const lock = build.files.some((f) => /^(pnpm-lock\.yaml|yarn\.lock|package-lock\.json)$/.test(f.path));
+  const S = (stage: string, state: ReadinessState, detail: string): ReadinessStage => ({ stage, state, detail });
+  const stages: ReadinessStage[] = [
+    S("Provider", providerOk ? "ready" : "blocked", providerOk ? "E2B configured and connected." : "Provider Not Configured (Runtime Settings → Runtime Provider)."),
+    S("Pull", build.repositoryId ? "ready" : "warning", build.repositoryId ? "Build session linked to a repository." : "No linked repository — build session files are used as-is."),
+    S("Sync", build.files.length ? "ready" : "blocked", `${build.files.length} file(s) in the VPIP master copy.`),
+    S("Integrity Check", build.files.length ? "ready" : "blocked", "SHA-256 per file is compared after upload."),
+    S("Install", pkgOk ? (lock ? "ready" : "warning") : "blocked", pkgOk ? `${pm.manager} (${pm.reason ?? "detected"})${lock ? "" : " — no lockfile"}` : "package.json missing."),
+    S("Run", dev.ok ? "ready" : "blocked", dev.ok ? `Node ${node.version} · ${dev.script}` : dev.error ?? "No dev script."),
+    S("Environment", env.missing.length || env.invalid.length ? "warning" : "ready", env.missing.length ? `Missing: ${env.missing.join(", ")}` : env.invalid.length ? `Invalid: ${env.invalid.map((i) => i.key).join(", ")}` : `${env.configured.length} configured.`),
+    S("Preview", providerOk && dev.ok ? "pending" : "blocked", "Served only through the VPIP relay."),
+    S("Pause", active ? "pending" : "pending", "Available once running."),
+    S("Resume", "pending", "Available once paused."),
+    S("Destroy", "pending", "Available for any live runtime."),
+  ];
+  return { projectId: build.projectId, buildId, ready: !stages.some((s) => s.state === "blocked"), stages };
+}
