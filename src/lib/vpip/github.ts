@@ -217,7 +217,7 @@ export async function readBranchFiles(
   }>(token, `/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
 
   const blobs = tree.tree.filter(
-    (t) => t.type === "blob" && (t.size ?? 0) <= 400_000,
+    (t) => t.type === "blob" && ((t.size ?? 0) <= 400_000 || Boolean(remote.ASSET_MIME[t.path.split(".").pop()?.toLowerCase() ?? ""])),
   );
   const out: GhFile[] = [];
   for (const blob of blobs) {
@@ -226,6 +226,11 @@ export async function readBranchFiles(
       `/repos/${fullName}/git/blobs/${blob.sha}`,
     );
     if (data.encoding !== "base64") continue;
+    const mime = remote.ASSET_MIME[blob.path.split(".").pop()?.toLowerCase() ?? ""];
+    if (mime) {
+      out.push({ path: blob.path, content: (blob.size ?? 0) > 2_000_000 ? `vpip-skipped:too-large:${blob.size}` : `data:${mime};base64,${data.content.replace(/\n/g, "")}` });
+      continue;
+    }
     try {
       const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), (c) =>
         c.charCodeAt(0),
@@ -239,6 +244,8 @@ export async function readBranchFiles(
 }
 
 function toBase64(text: string) {
+  const m = /^data:[\w/+.-]+;base64,(.*)$/s.exec(text);
+  if (m) return m[1]!;
   const bytes = new TextEncoder().encode(text);
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
@@ -268,6 +275,7 @@ export async function commitFiles(
 
   const tree: Array<{ path: string; mode: string; type: string; sha: string }> = [];
   for (const file of files) {
+    if (file.content.startsWith("vpip-skipped:")) continue;
     const blob = await call<{ sha: string }>(token, `/repos/${fullName}/git/blobs`, {
       method: "POST",
       body: { content: toBase64(file.content), encoding: "base64" },

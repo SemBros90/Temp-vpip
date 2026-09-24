@@ -25,6 +25,7 @@ import { Route as ProjectsProjectIdBuildsRouteImport } from './routes/projects.$
 import { Route as ProjectsProjectIdContextRouteImport } from './routes/projects.$projectId.context'
 import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects.$projectId.documents'
 import { Route as ProjectsProjectIdExplorerRouteImport } from './routes/projects.$projectId.explorer'
+import { Route as ProjectsProjectIdImportDiagnosticsRouteImport } from './routes/projects.$projectId.import-diagnostics'
 import { Route as ProjectsProjectIdInboxRouteImport } from './routes/projects.$projectId.inbox'
 import { Route as ProjectsProjectIdLessonsRouteImport } from './routes/projects.$projectId.lessons'
 import { Route as ProjectsProjectIdMemoryRouteImport } from './routes/projects.$projectId.memory'
@@ -121,6 +122,12 @@ const ProjectsProjectIdExplorerRoute =
     path: '/explorer',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdImportDiagnosticsRoute =
+  ProjectsProjectIdImportDiagnosticsRouteImport.update({
+    id: '/import-diagnostics',
+    path: '/import-diagnostics',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdInboxRoute = ProjectsProjectIdInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
@@ -202,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/context': typeof ProjectsProjectIdContextRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
+  '/projects/$projectId/import-diagnostics': typeof ProjectsProjectIdImportDiagnosticsRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
   '/projects/$projectId/lessons': typeof ProjectsProjectIdLessonsRoute
   '/projects/$projectId/memory': typeof ProjectsProjectIdMemoryRoute
@@ -230,6 +238,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId/context': typeof ProjectsProjectIdContextRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
+  '/projects/$projectId/import-diagnostics': typeof ProjectsProjectIdImportDiagnosticsRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
   '/projects/$projectId/lessons': typeof ProjectsProjectIdLessonsRoute
   '/projects/$projectId/memory': typeof ProjectsProjectIdMemoryRoute
@@ -260,6 +269,7 @@ export interface FileRoutesById {
   '/projects/$projectId/context': typeof ProjectsProjectIdContextRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
   '/projects/$projectId/explorer': typeof ProjectsProjectIdExplorerRoute
+  '/projects/$projectId/import-diagnostics': typeof ProjectsProjectIdImportDiagnosticsRoute
   '/projects/$projectId/inbox': typeof ProjectsProjectIdInboxRoute
   '/projects/$projectId/lessons': typeof ProjectsProjectIdLessonsRoute
   '/projects/$projectId/memory': typeof ProjectsProjectIdMemoryRoute
@@ -291,6 +301,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/context'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
+    | '/projects/$projectId/import-diagnostics'
     | '/projects/$projectId/inbox'
     | '/projects/$projectId/lessons'
     | '/projects/$projectId/memory'
@@ -319,6 +330,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/context'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
+    | '/projects/$projectId/import-diagnostics'
     | '/projects/$projectId/inbox'
     | '/projects/$projectId/lessons'
     | '/projects/$projectId/memory'
@@ -348,6 +360,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/context'
     | '/projects/$projectId/documents'
     | '/projects/$projectId/explorer'
+    | '/projects/$projectId/import-diagnostics'
     | '/projects/$projectId/inbox'
     | '/projects/$projectId/lessons'
     | '/projects/$projectId/memory'
@@ -488,6 +501,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdExplorerRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/import-diagnostics': {
+      id: '/projects/$projectId/import-diagnostics'
+      path: '/import-diagnostics'
+      fullPath: '/projects/$projectId/import-diagnostics'
+      preLoaderRoute: typeof ProjectsProjectIdImportDiagnosticsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/inbox': {
       id: '/projects/$projectId/inbox'
       path: '/inbox'
@@ -575,6 +595,7 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdContextRoute: typeof ProjectsProjectIdContextRoute
   ProjectsProjectIdDocumentsRoute: typeof ProjectsProjectIdDocumentsRoute
   ProjectsProjectIdExplorerRoute: typeof ProjectsProjectIdExplorerRoute
+  ProjectsProjectIdImportDiagnosticsRoute: typeof ProjectsProjectIdImportDiagnosticsRoute
   ProjectsProjectIdInboxRoute: typeof ProjectsProjectIdInboxRoute
   ProjectsProjectIdLessonsRoute: typeof ProjectsProjectIdLessonsRoute
   ProjectsProjectIdMemoryRoute: typeof ProjectsProjectIdMemoryRoute
@@ -596,6 +617,8 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdContextRoute: ProjectsProjectIdContextRoute,
   ProjectsProjectIdDocumentsRoute: ProjectsProjectIdDocumentsRoute,
   ProjectsProjectIdExplorerRoute: ProjectsProjectIdExplorerRoute,
+  ProjectsProjectIdImportDiagnosticsRoute:
+    ProjectsProjectIdImportDiagnosticsRoute,
   ProjectsProjectIdInboxRoute: ProjectsProjectIdInboxRoute,
   ProjectsProjectIdLessonsRoute: ProjectsProjectIdLessonsRoute,
   ProjectsProjectIdMemoryRoute: ProjectsProjectIdMemoryRoute,

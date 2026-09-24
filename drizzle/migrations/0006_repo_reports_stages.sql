@@ -1,0 +1,1 @@
+ALTER TABLE public.vpip_repo_reports ADD COLUMN IF NOT EXISTS stages jsonb DEFAULT '{}'::jsonb;

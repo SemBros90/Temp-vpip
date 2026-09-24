@@ -704,12 +704,50 @@ export interface RepoHealth {
   assets: number;
   environment: number;
   previewReadiness: number;
+  compile?: number | undefined;
+  runtime?: number | undefined;
+  preview?: number | undefined;
+}
+export type StageStatus = "Pass" | "Warn" | "Fail" | "Not run";
+export interface StageResult {
+  status: StageStatus;
+  detail: string;
+  at?: string | undefined;
+}
+export interface BuildStages {
+  dependencies: StageResult;
+  imports: StageResult;
+  compile: StageResult;
+  runtime: StageResult;
+  preview: StageResult;
+}
+export type CodeSide = "Frontend" | "Backend" | "Shared";
+export interface ServerOnlyFile {
+  path: string;
+  apis: string[];
+}
+export interface GraphEdge {
+  from: string;
+  to: string;
+}
+export interface RepoInsights {
+  totalFiles: number;
+  entry?: string | undefined;
+  codeSplit: Record<string, CodeSide>;
+  serverOnly: ServerOnlyFile[];
+  edges: GraphEdge[];
+  packagesByFile: Record<string, string[]>;
+  unreachable: string[];
+  assets: { present: number; missing: number; skippedTooLarge: string[] };
+  tailwind?: { content: string[]; plugins: string[] } | undefined;
+  remix?: { appDirectory?: string | undefined } | undefined;
 }
 export interface PreviewDiagnostics {
   buildStatus: string;
   repairs: string[];
   runtimeErrors: string[];
   lastRunAt?: string | undefined;
+  insights?: RepoInsights | undefined;
 }
 export interface RepoReport {
   id: string;
@@ -726,6 +764,7 @@ export interface RepoReport {
   unsupported: UnsupportedReason[];
   previewDiagnostics: PreviewDiagnostics;
   health: RepoHealth;
+  stages?: BuildStages | undefined;
   createdAt: string;
 }
 export interface RepoEnvVar {

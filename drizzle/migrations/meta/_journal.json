@@ -43,6 +43,13 @@
       "when": 1790233652080,
       "tag": "0005_vpip_repo_compatibility",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790236011386,
+      "tag": "0006_repo_reports_stages",
+      "breakpoints": true
     }
   ]
 }

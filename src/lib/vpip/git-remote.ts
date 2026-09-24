@@ -102,6 +102,26 @@ export async function whoAmI(token: string, url: string) {
   return creds(token).username;
 }
 
+/** Images and fonts kept on import (≤2 MB) as data URLs so the preview can show them. */
+export const ASSET_MIME: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", ico: "image/x-icon",
+  avif: "image/avif", woff: "font/woff", woff2: "font/woff2", ttf: "font/ttf", otf: "font/otf", eot: "application/vnd.ms-fontobject",
+};
+
+export function bytesToBase64(bytes: Uint8Array) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+/** Decodes a stored file back to bytes for commits (data URLs → binary). Returns null for placeholders. */
+export function fileBytes(content: string): Uint8Array | string | null {
+  if (content.startsWith("vpip-skipped:")) return null;
+  const m = /^data:[\w/+.-]+;base64,(.*)$/s.exec(content);
+  if (m) return Uint8Array.from(atob(m[1]!), (c) => c.charCodeAt(0));
+  return content;
+}
+
 async function walk(fs: { promises: any }, dir: string, out: GhFile[], root = dir) {
   for (const entry of (await fs.promises.readdir(dir)) as string[]) {
     if (entry === ".git" || entry === "node_modules" || entry === "dist" || entry === "build") continue;
@@ -109,7 +129,17 @@ async function walk(fs: { promises: any }, dir: string, out: GhFile[], root = di
     const st = await fs.promises.stat(p);
     if (st.isDirectory()) await walk(fs, p, out, root);
     else {
-      if (st.size > 400_000 || /\.(png|jpe?g|gif|webp|ico|woff2?|ttf|eot|otf|mp4|mp3|pdf|zip|gz|lockb)$/i.test(entry)) continue;
+      const asset = ASSET_MIME[entry.split(".").pop()?.toLowerCase() ?? ""];
+      if (asset) {
+        const rel = p.slice(root.length + 1);
+        if (st.size > 2_000_000) out.push({ path: rel, content: `vpip-skipped:too-large:${st.size}` });
+        else {
+          const bytes = (await fs.promises.readFile(p)) as Uint8Array;
+          out.push({ path: rel, content: `data:${asset};base64,${bytesToBase64(bytes)}` });
+        }
+        continue;
+      }
+      if (st.size > 400_000 || /\.(mp4|mp3|pdf|zip|gz|lockb)$/i.test(entry)) continue;
       try {
         const content = (await fs.promises.readFile(p, { encoding: "utf8" })) as string;
         if (content.includes("\u0000")) continue;
@@ -179,7 +209,9 @@ export async function commitFiles(
       const path = f.path.replace(/^\/+/, "");
       const dir = path.split("/").slice(0, -1).join("/");
       if (dir) await mkdirp(s.fs, `/repo/${dir}`);
-      await s.fs.promises.writeFile(`/repo/${path}`, f.content, "utf8");
+      const data = fileBytes(f.content);
+      if (data === null) continue;
+      await s.fs.promises.writeFile(`/repo/${path}`, data, typeof data === "string" ? "utf8" : undefined);
       await s.git.add({ fs: s.fs, dir: "/repo", filepath: path });
     }
     const sha = await s.git.commit({ fs: s.fs, dir: "/repo", message, author: s.author });
