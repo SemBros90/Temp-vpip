@@ -608,11 +608,11 @@ export async function destroyRuntime(c: Caller | null, rowId: string, reason = "
       await killSandbox(row.e2b_sandbox_id);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      await audit({ projectId: row.project_id, buildId: row.build_id, rowId, sandboxId: row.e2b_sandbox_id, userId: c?.userId, email: c?.email, action: reason, status: "failed", error: msg });
+      await audit({ projectId: row.project_id, buildId: row.build_id, rowId, sandboxId: row.e2b_sandbox_id, userId: c?.userId ?? null, email: c?.email ?? null, action: reason, status: "failed", error: msg });
       throw e;
     }
   }
-  await audit({ projectId: row.project_id, buildId: row.build_id, rowId, sandboxId: row.e2b_sandbox_id, userId: c?.userId, email: c?.email, action: reason, status: "success", durationMs: Date.now() - started });
+  await audit({ projectId: row.project_id, buildId: row.build_id, rowId, sandboxId: row.e2b_sandbox_id, userId: c?.userId ?? null, email: c?.email ?? null, action: reason, status: "success", durationMs: Date.now() - started });
   return patchRow(rowId, { ...closeRunningSegment(row), status: "destroyed", phase: "destroyed", destroyed_at: nowIso() });
 }
 
