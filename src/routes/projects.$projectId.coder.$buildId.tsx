@@ -64,6 +64,9 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Stethoscope } from "lucide-react";
+import { RepoCompatibilityPanel, useRepoEnv, useRepoReport, useRunCompatibility } from "@/components/vpip/RepoCompatibilityPanel";
+import { previewOptionsFrom, repoDiagnosticsSummary } from "@/lib/vpip/repo-analyzer";
 import {
   Select,
   SelectContent,
@@ -235,6 +238,18 @@ function CoderPage() {
     };
   }, [p.knowledge, p.documents, p.discussions, prompt]);
 
+  const repoReport = useRepoReport(projectId, session?.repositoryId, session?.id);
+  const repoEnv = useRepoEnv(session?.repositoryId);
+  const runCompat = useRunCompatibility();
+  const autoScanned = useRef<string | null>(null);
+  useEffect(() => {
+    if (!session || repoReport || autoScanned.current === session.id) return;
+    if (!session.repositoryId || realFiles.length === 0) return;
+    autoScanned.current = session.id;
+    runCompat(projectId, realFiles, { build: session, buildStatus: "Scanned on open" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id, repoReport, realFiles.length]);
+
   /** The handed-off prompt text, ready to be sent to the coder. */
   const promptBody = (prompt?.markdown ?? session?.contextPackage ?? "").trim();
 
@@ -289,7 +304,12 @@ function CoderPage() {
   const turns = session.turns ?? [];
   const logs = session.terminal ?? [];
   const problems = validateFiles(realFiles);
-  const previewDoc = buildPreviewDoc(files, session.previewEntryPath);
+  const previewDoc = buildPreviewDoc(
+    files,
+    session.previewEntryPath,
+    previewOptionsFrom(repoReport, realFiles, repoEnv),
+  );
+  const previewErrors = previewLogs.filter((l) => l.kind === "error").map((l) => l.text);
 
   /** Open the live preview as a standalone page in a new browser tab. */
   const openPreviewInTab = useCallback(() => {
@@ -496,6 +516,7 @@ function CoderPage() {
     try {
       const system =
         coderSystemPrompt(session, p.project, linked.decisions, linked.requirements) +
+        (repoReport ? `\n\n${repoDiagnosticsSummary(repoReport)}\n\nUse these diagnostics when repairing: fix missing imports/assets, add missing packages to package.json, never ask for secret values.\n` : "") +
         coderModePrompt({
           mode,
           artifact,
@@ -1269,6 +1290,10 @@ function CoderPage() {
                     <TabsTrigger value="database" className="text-xs">
                       <Database className="size-3.5" /> Database
                     </TabsTrigger>
+                    <TabsTrigger value="diagnostics" className="text-xs">
+                      <Stethoscope className="size-3.5" /> Diagnostics
+                      {repoReport ? ` ${repoReport.health.overall}%` : ""}
+                    </TabsTrigger>
                   </TabsList>
                 </div>
 
@@ -1358,6 +1383,27 @@ function CoderPage() {
                       )}
                     </div>
                   ) : null}
+                </TabsContent>
+
+                <TabsContent value="diagnostics" className="min-h-0 flex-1 overflow-y-auto p-3">
+                  <RepoCompatibilityPanel
+                    projectId={projectId}
+                    repository={p.repositories.find((r) => r.id === session.repositoryId)}
+                    build={session}
+                    loadFiles={async () => realFiles.map((f) => ({ path: f.path, content: f.content }))}
+                    runtimeErrors={previewErrors}
+                    compact
+                    onPreview={() => {
+                      setPreviewLogs([]);
+                      setPreviewKey((k) => k + 1);
+                      setRightTab("preview");
+                    }}
+                    onAskAI={(summary) => {
+                      setInput(`${summary}\n\nDiagnose these repository problems and return the corrected files so the preview runs.`);
+                      setCenterTab("chat");
+                      setChatOpen(true);
+                    }}
+                  />
                 </TabsContent>
 
                 <TabsContent value="database" className="min-h-0 flex-1 overflow-y-auto p-3">

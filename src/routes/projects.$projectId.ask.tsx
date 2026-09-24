@@ -55,6 +55,7 @@ function AskPage() {
       project: p.project!,
       discussions: p.discussions,
       approved: p.approved,
+      repoDiagnostics: p.repoDiagnostics,
       documents: p.documents,
       prompts: p.prompts,
     };

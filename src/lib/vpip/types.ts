@@ -650,7 +650,90 @@ export interface Repository {
   lastCommitSha?: string | undefined;
   lastCommitMessage?: string | undefined;
   lastCommitAt?: string | undefined;
+  lastPushAt?: string | undefined;
+  classification?: RepoClassification | undefined;
   createdAt: string;
+  updatedAt: string;
+}
+
+/* ---------------- Repository compatibility engine ---------------- */
+
+export interface RepoClassification {
+  frameworks: string[];
+  primary: string;
+  language: string;
+  packageManager: string;
+  buildSystem: string;
+  workspaceType: string;
+  appRoot: string;
+}
+export type DepStatus = "OK" | "Missing" | "Not locked" | "Version conflict" | "Invalid";
+export interface DepReportRow {
+  name: string;
+  required: string;
+  installed?: string | undefined;
+  dev: boolean;
+  status: DepStatus;
+  usedBy?: string[] | undefined;
+}
+export interface ImportIssue {
+  kind: "Missing file" | "Broken relative path" | "Broken alias" | "Missing asset" | "Missing module";
+  spec: string;
+  referencedBy: string;
+  expectedPath: string;
+}
+export interface AliasEntry {
+  alias: string;
+  target: string;
+  source: string;
+}
+export interface EnvReportRow {
+  key: string;
+  sources: string[];
+  configured: boolean;
+}
+export interface UnsupportedReason {
+  reason: string;
+  evidence: string;
+  blocking: boolean;
+}
+export interface RepoHealth {
+  overall: number;
+  dependencies: number;
+  imports: number;
+  assets: number;
+  environment: number;
+  previewReadiness: number;
+}
+export interface PreviewDiagnostics {
+  buildStatus: string;
+  repairs: string[];
+  runtimeErrors: string[];
+  lastRunAt?: string | undefined;
+}
+export interface RepoReport {
+  id: string;
+  projectId: string;
+  repositoryId?: string | undefined;
+  buildSessionId?: string | undefined;
+  branch: string;
+  commitSha?: string | undefined;
+  classification: RepoClassification;
+  dependencies: DepReportRow[];
+  imports: ImportIssue[];
+  aliases: AliasEntry[];
+  environment: EnvReportRow[];
+  unsupported: UnsupportedReason[];
+  previewDiagnostics: PreviewDiagnostics;
+  health: RepoHealth;
+  createdAt: string;
+}
+export interface RepoEnvVar {
+  id: string;
+  projectId: string;
+  repositoryId: string;
+  key: string;
+  value: string;
   updatedAt: string;
 }
 
@@ -1059,6 +1142,8 @@ export interface Workspace {
   failures: FailureRecord[];
   activity: ActivityRecord[];
   intelligence: IntelligenceRecord[];
+  repoReports: RepoReport[];
+  repoEnv: RepoEnvVar[];
   savedAt?: string;
 }
 
@@ -1135,5 +1220,7 @@ export function emptyWorkspace(): Workspace {
     failures: [],
     activity: [],
     intelligence: [],
+    repoReports: [],
+    repoEnv: [],
   };
 }

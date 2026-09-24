@@ -33,6 +33,7 @@ import {
 import { useProject, useVpip, useVpipActions } from "@/lib/vpip/store";
 import * as gh from "@/lib/vpip/github";
 import { coderTrace } from "@/lib/vpip/coder";
+import { RepoCompatibilityPanel } from "@/components/vpip/RepoCompatibilityPanel";
 import type {
   BuildSession,
   RepoVisibility,
@@ -91,7 +92,7 @@ function RepositoriesPage() {
           {repo ? (
             <ExtractButton
               projectId={projectId}
-              source={repositorySource(repo, p.repoCommits)}
+              source={repositorySource(repo, p.repoCommits, p.repoDiagnostics)}
               label="Extract repo knowledge"
             />
           ) : null}
@@ -336,6 +337,8 @@ function RepoDetail({
 
   const branches = (ws.repoBranches ?? []).filter((b) => b.repositoryId === repo.id);
   const commits = (ws.repoCommits ?? []).filter((c) => c.repositoryId === repo.id);
+  const navigate = useNavigate();
+  const repoBuild = builds.find((b) => b.repositoryId === repo.id);
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label);
@@ -453,7 +456,33 @@ function RepoDetail({
           <TabsTrigger value="operations">Operations</TabsTrigger>
           <TabsTrigger value="commits">Commits</TabsTrigger>
           <TabsTrigger value="branches">Branches</TabsTrigger>
+          <TabsTrigger value="compatibility">Compatibility</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="compatibility" className="pt-3">
+          <div className="mb-3 grid gap-2 text-xs md:grid-cols-5">
+            <div><span className="label-mono">Branch</span><div>{repo.currentBranch}</div></div>
+            <div><span className="label-mono">Last pull</span><div>{repo.validatedAt ? relTime(repo.validatedAt) : "—"}</div></div>
+            <div><span className="label-mono">Last push</span><div>{repo.lastPushAt ? relTime(repo.lastPushAt) : "—"}</div></div>
+            <div><span className="label-mono">Last commit</span><div>{repo.lastCommitSha ? gh.shortSha(repo.lastCommitSha) : "—"}</div></div>
+            <div><span className="label-mono">Sync</span><div>{repo.status}</div></div>
+          </div>
+          <RepoCompatibilityPanel
+            projectId={projectId}
+            repository={repo}
+            build={repoBuild}
+            loadFiles={async () =>
+              repoBuild?.files?.length
+                ? repoBuild.files.map((f) => ({ path: f.path, content: f.content }))
+                : gh.readBranchFiles(repo.token, repo.fullName, repo.currentBranch)
+            }
+            onPreview={
+              repoBuild
+                ? () => void navigate({ to: "/projects/$projectId/coder/$buildId", params: { projectId, buildId: repoBuild.id } })
+                : undefined
+            }
+          />
+        </TabsContent>
 
         <TabsContent value="operations" className="pt-3">
           <Operations repo={repo} builds={builds} busy={busy} run={run} />
@@ -709,6 +738,7 @@ function CommitPanel({
       requirementCodes: requirements.map((r) => r.code),
       provider: repo.provider,
     });
+    actions.updateRepository(repo.id, { lastPushAt: new Date().toISOString() });
     setMessage("");
     setSelected([]);
     toast.success(`Committed ${gh.shortSha(commit.sha)} to ${repo.currentBranch}`);

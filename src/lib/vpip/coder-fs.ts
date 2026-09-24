@@ -334,7 +334,10 @@ function compileModules(files: CoderFile[]): { code: Record<string, string>; err
     if (!isModule(f.path)) continue;
     const ts = /\.tsx?$/.test(f.path);
     try {
-      const out = transform(normalizeGeneratedHookContracts(f.content), {
+      const src = normalizeGeneratedHookContracts(f.content)
+        .replace(/\bimport\.meta\.env\b/g, "window.__vpipEnv")
+        .replace(/\bprocess\.env\b/g, "window.__vpipEnv");
+      const out = transform(src, {
         transforms: [...(ts ? (["typescript"] as const) : []), "jsx", "imports"],
         jsxRuntime: "automatic",
         filePath: f.path,
@@ -398,8 +401,52 @@ function pickEntryModule(
 const jsonScript = (value: unknown) =>
   JSON.stringify(value).replace(/</g, "\\u003c").replace(/\u2028|\u2029/g, "");
 
-function runtimeScript(code: Record<string, string>, entry: string | undefined, errors: string[]) {
+export interface PreviewBuildOptions {
+  aliases?: Array<{ alias: string; target: string }> | undefined;
+  packages?: Record<string, string> | undefined;
+  env?: Record<string, string> | undefined;
+}
+
+const PREVIEW_BUILTIN = new Set(["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"]);
+
+/** Bare package specs required by the compiled modules that are not session files. */
+function collectBareSpecs(code: Record<string, string>): string[] {
+  const out = new Set<string>();
+  const re = /require\(\s*['"]([^'"]+)['"]\s*\)/g;
+  for (const c of Object.values(code)) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(c))) {
+      const spec = m[1]!;
+      if (/^[./]/.test(spec) || /\.(css|scss|sass|less)$/.test(spec) || PREVIEW_BUILTIN.has(spec)) continue;
+      out.add(spec);
+    }
+  }
+  return [...out];
+}
+
+function esmUrl(spec: string, packages: Record<string, string>) {
+  const name = spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0]!;
+  const sub = spec.slice(name.length);
+  const raw = packages[name] ?? "";
+  const ver = /^[\^~]?\d/.test(raw) ? raw.replace(/^[\^~]/, "") : "";
+  return `https://esm.sh/${name}${ver ? `@${ver}` : ""}${sub}?deps=react@19.2.0,react-dom@19.2.0`;
+}
+
+function runtimeScript(
+  code: Record<string, string>,
+  entry: string | undefined,
+  errors: string[],
+  opts: PreviewBuildOptions = {},
+) {
+  const aliases = [...(opts.aliases ?? [])].sort((a, b) => b.alias.length - a.alias.length);
+  const bare = collectBareSpecs(code).filter(
+    (spec) => !aliases.some((a) => spec === a.alias || spec.startsWith(`${a.alias}/`)),
+  );
+  const extUrls = Object.fromEntries(bare.map((s) => [s, esmUrl(s, opts.packages ?? {})]));
   return `<script>
+window.__vpipEnv = Object.assign({ MODE: 'development', DEV: true, PROD: false, NODE_ENV: 'development', BASE_URL: '/' }, JSON.parse(${jsonScript(JSON.stringify(opts.env ?? {}))}));
+window.__vpipAliases = JSON.parse(${jsonScript(JSON.stringify(aliases))});
+window.__vpipExtUrls = JSON.parse(${jsonScript(JSON.stringify(extUrls))});
 window.__vpipSources = JSON.parse(${jsonScript(JSON.stringify(code))});
 window.__vpipEntry = ${jsonScript(entry ?? null)};
 window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
@@ -415,7 +462,12 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     return base.join('/');
   }
   function resolve(from, spec){
-    var base = spec.charAt(0) === '.' ? join(from, spec) : spec.replace(/^@\\//,'src/').replace(/^\\//,'');
+    var base = null, al = window.__vpipAliases || [];
+    if (spec.charAt(0) === '.') base = join(from, spec);
+    else {
+      for (var a=0;a<al.length;a++) if (spec === al[a].alias || spec.indexOf(al[a].alias + '/') === 0) { base = al[a].target + spec.slice(al[a].alias.length); break; }
+      if (base === null) base = spec.replace(/^@\\//,'src/').replace(/^\\//,'');
+    }
     var tries = [base, base+'.tsx', base+'.ts', base+'.jsx', base+'.js', base+'/index.tsx', base+'/index.ts', base+'/index.jsx', base+'/index.js'];
     for (var i=0;i<tries.length;i++) if (sources[tries[i]]) return tries[i];
     var wanted = base.split('/').pop(), hits = [], p;
@@ -431,7 +483,9 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
     var path = resolve(from, spec);
     if (!path) {
       if (externals[spec]) return externals[spec];
-      throw new Error('Cannot resolve "'+spec+'" from '+from+'. Preview supports session files plus react and react-dom.');
+      if (window.__vpipExtUrls && window.__vpipExtUrls[spec]) throw new Error('Package "'+spec+'" could not be loaded from the package CDN (imported by '+from+').');
+      if (/\\.(png|jpe?g|gif|webp|svg|ico|avif|woff2?|ttf|mp4|mp3)$/.test(spec)) return { default: spec, __esModule: true };
+      throw new Error('Cannot resolve "'+spec+'" from '+from+' — file not found in the repository.');
     }
     if (cache[path]) return cache[path].exports;
     var mod = { exports: {} };
@@ -507,6 +561,15 @@ window.__vpipCompileErrors = JSON.parse(${jsonScript(JSON.stringify(errors))});
   } catch (e) {
     window.__vpipShowError('Could not load React for the preview: ' + (e && e.message ? e.message : e));
   }
+  const urls = window.__vpipExtUrls || {};
+  await Promise.all(Object.keys(urls).map(async (spec) => {
+    try {
+      const m = await import(urls[spec]);
+      window.__vpipExternals[spec] = m.default && typeof m.default === 'object' && !('default' in m.default) ? Object.assign({}, m.default, m, { __esModule: true }) : Object.assign({ __esModule: true }, m);
+    } catch (e) {
+      console.error('missing dependency: ' + spec + ' — ' + (e && e.message ? e.message : e));
+    }
+  }));
   window.__vpipStart();
 </script>`;
 }
@@ -521,7 +584,11 @@ ${head}</head><body><div id="root"></div>${body}</body></html>`;
  * Works with a plain .html entry AND with TS/TSX/React sources, which are
  * compiled in the browser and mounted into #root.
  */
-export function buildPreviewDoc(files: CoderFile[], entryPath?: string): string | null {
+export function buildPreviewDoc(
+  files: CoderFile[],
+  entryPath?: string,
+  opts: PreviewBuildOptions = {},
+): string | null {
   const real = files.filter((f) => fileName(f.path) !== FOLDER_KEEP);
   if (!real.length) return null;
   const css = real
@@ -547,7 +614,7 @@ export function buildPreviewDoc(files: CoderFile[], entryPath?: string): string 
   }
 
   const entry = hasModules ? pickEntryModule(real, entryPath, scriptSrcs) : undefined;
-  const scripts = hasModules ? runtimeScript(code, entry, errors) : "";
+  const scripts = hasModules ? runtimeScript(code, entry, errors, opts) : "";
 
   if (!html) return SHELL(`${PREVIEW_BRIDGE}${styleTag}`, scripts);
 

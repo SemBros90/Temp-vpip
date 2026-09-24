@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { repoDiagnosticsSummary } from "./repo-analyzer";
 import { toast } from "sonner";
 import { saveQueueLength, vaultClear, vaultRead, vaultWrite, verifySave } from "./db";
 import {
@@ -36,6 +37,7 @@ import {
   type RepoCommit,
   type RepoProvider,
   type Repository,
+  type RepoReport,
   type ActivityRecord,
   type ContextPackageRecord,
   type FailureRecord,
@@ -426,6 +428,8 @@ export function useVpipActions() {
           failures: (w.failures ?? []).filter((x) => x.projectId !== id),
           activity: (w.activity ?? []).filter((x) => x.projectId !== id),
           intelligence: (w.intelligence ?? []).filter((x) => x.projectId !== id),
+          repoReports: (w.repoReports ?? []).filter((x) => x.projectId !== id),
+          repoEnv: (w.repoEnv ?? []).filter((x) => x.projectId !== id),
         }));
       },
 
@@ -1055,6 +1059,39 @@ export function useVpipActions() {
           ),
         }));
       },
+      /** Saves a compatibility report, replacing earlier ones for the same repository and branch. */
+      saveRepoReport(report: Omit<RepoReport, "id" | "createdAt">): RepoReport {
+        const full: RepoReport = { ...report, id: uid(), createdAt: now() };
+        update((w) => ({
+          ...w,
+          repoReports: [
+            full,
+            ...(w.repoReports ?? []).filter(
+              (x) => !(x.projectId === report.projectId && x.repositoryId === report.repositoryId && x.branch === report.branch),
+            ),
+          ],
+          repositories: (w.repositories ?? []).map((r) =>
+            r.id === report.repositoryId ? { ...r, classification: report.classification, updatedAt: now() } : r,
+          ),
+        }));
+        return full;
+      },
+      updateRepoReport(id: string, patch: Partial<RepoReport>) {
+        update((w) => ({
+          ...w,
+          repoReports: (w.repoReports ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)),
+        }));
+      },
+      setRepoEnv(projectId: string, repositoryId: string, key: string, value: string) {
+        update((w) => {
+          const list = w.repoEnv ?? [];
+          const hit = list.find((x) => x.repositoryId === repositoryId && x.key === key);
+          const next = hit
+            ? list.map((x) => (x === hit ? { ...x, value, updatedAt: now() } : x))
+            : [...list, { id: uid(), projectId, repositoryId, key, value, updatedAt: now() }];
+          return { ...w, repoEnv: next };
+        });
+      },
       /** Disconnect — drops the stored credentials and the project link. */
       removeRepository(id: string) {
         update((w) => ({
@@ -1062,6 +1099,8 @@ export function useVpipActions() {
           repositories: (w.repositories ?? []).filter((r) => r.id !== id),
           repoBranches: (w.repoBranches ?? []).filter((b) => b.repositoryId !== id),
           repoCommits: (w.repoCommits ?? []).filter((c) => c.repositoryId !== id),
+          repoReports: (w.repoReports ?? []).filter((x) => x.repositoryId !== id),
+          repoEnv: (w.repoEnv ?? []).filter((x) => x.repositoryId !== id),
           buildSessions: (w.buildSessions ?? []).map((b) =>
             b.repositoryId === id
               ? {
@@ -1720,6 +1759,12 @@ export function useProject(projectId: string) {
       failures: (ws.failures ?? []).filter((f) => f.projectId === projectId),
       activity: (ws.activity ?? []).filter((a) => a.projectId === projectId),
       intelligence: (ws.intelligence ?? []).filter((i) => i.projectId === projectId),
+      repoReports: (ws.repoReports ?? []).filter((r) => r.projectId === projectId),
+      repoDiagnostics: (ws.repoReports ?? [])
+        .filter((r) => r.projectId === projectId)
+        .filter((r, i, all) => all.findIndex((x) => (x.repositoryId ?? x.buildSessionId) === (r.repositoryId ?? r.buildSessionId)) === i)
+        .map((r) => repoDiagnosticsSummary(r, 25))
+        .join("\n\n"),
     };
   }, [ws, projectId]);
 }

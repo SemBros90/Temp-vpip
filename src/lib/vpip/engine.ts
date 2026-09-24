@@ -18,6 +18,8 @@ export interface ProjectMemory {
   approved: KnowledgeItem[];
   documents: GeneratedDocument[];
   prompts: GeneratedPrompt[];
+  /** Repository compatibility diagnostics (names only, never secret values). */
+  repoDiagnostics?: string | undefined;
 }
 
 /* ------------------------------------------------- context retrieval */
@@ -131,7 +133,8 @@ export function memoryDigest(mem: ProjectMemory, maxChars = 6000) {
   ]
     .filter(Boolean)
     .join("\n");
-  return text.length > maxChars ? `${text.slice(0, maxChars)}\n…(truncated)` : text;
+  const cut = text.length > maxChars ? `${text.slice(0, maxChars)}\n…(truncated)` : text;
+  return mem.repoDiagnostics ? `${cut}\n\n${mem.repoDiagnostics.slice(0, 6000)}` : cut;
 }
 
 export function discussionTranscript(d: Discussion, maxChars = 12000) {

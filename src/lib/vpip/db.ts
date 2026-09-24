@@ -30,6 +30,8 @@ import {
   type ContextPackageRecord,
   type FailureRecord,
   type IntelligenceRecord,
+  type RepoReport,
+  type RepoEnvVar,
   type OutcomeRecord,
   type PhaseRun,
   type PromptPhase,
@@ -112,6 +114,8 @@ export async function vaultRead<T>(): Promise<T | null> {
     failures,
     activity,
     intelligence,
+    repoReports,
+    repoEnv,
   ] = await Promise.all([
     selectAll("vpip_projects", "created_at"),
     selectAll("vpip_discussions", "created_at"),
@@ -133,6 +137,8 @@ export async function vaultRead<T>(): Promise<T | null> {
     selectAll("vpip_failures", "created_at"),
     selectAll("vpip_activity", "created_at"),
     selectAll("vpip_intelligence", "created_at"),
+    selectAll("vpip_repo_reports", "created_at"),
+    selectAll("vpip_repo_env", "updated_at"),
   ]);
 
   // Record exactly which rows this session has loaded; writes may only delete
@@ -158,6 +164,8 @@ export async function vaultRead<T>(): Promise<T | null> {
     ["vpip_failures", failures],
     ["vpip_activity", activity],
     ["vpip_intelligence", intelligence],
+    ["vpip_repo_reports", repoReports],
+    ["vpip_repo_env", repoEnv],
   ];
   for (const [table, res] of loaded) {
     rememberIds(table, res.data.map((r) => r['id'] as string));
@@ -354,6 +362,8 @@ export async function vaultRead<T>(): Promise<T | null> {
         lastCommitSha: undef(r['last_commit_sha'] as string | null),
         lastCommitMessage: undef(r['last_commit_message'] as string | null),
         lastCommitAt: undef(r['last_commit_at'] as string | null),
+        lastPushAt: undef(r['last_push_at'] as string | null),
+        classification: (r['classification'] as Repository["classification"]) ?? undefined,
         createdAt: r['created_at'] as string,
         updatedAt: r['updated_at'] as string,
       }),
@@ -604,6 +614,35 @@ export async function vaultRead<T>(): Promise<T | null> {
         model: undef(r['model'] as string | null),
         author: str(r['author'], "You"),
         createdAt: r['created_at'] as string,
+        updatedAt: r['updated_at'] as string,
+      }),
+    ),
+    repoReports: ((repoReports.data ?? []) as Row[]).map(
+      (r): RepoReport => ({
+        id: r['id'] as string,
+        projectId: r['project_id'] as string,
+        repositoryId: undef(r['repository_id'] as string | null),
+        buildSessionId: undef(r['build_session_id'] as string | null),
+        branch: str(r['branch']),
+        commitSha: undef(r['commit_sha'] as string | null),
+        classification: r['classification'] as RepoReport["classification"],
+        dependencies: arr(r['dependencies']),
+        imports: arr(r['imports']),
+        aliases: arr(r['aliases']),
+        environment: arr(r['environment']),
+        unsupported: arr(r['unsupported']),
+        previewDiagnostics: (r['preview_diagnostics'] as RepoReport["previewDiagnostics"]) ?? { buildStatus: "Unknown", repairs: [], runtimeErrors: [] },
+        health: r['health'] as RepoReport["health"],
+        createdAt: r['created_at'] as string,
+      }),
+    ),
+    repoEnv: ((repoEnv.data ?? []) as Row[]).map(
+      (r): RepoEnvVar => ({
+        id: r['id'] as string,
+        projectId: r['project_id'] as string,
+        repositoryId: r['repository_id'] as string,
+        key: str(r['key']),
+        value: str(r['value']),
         updatedAt: r['updated_at'] as string,
       }),
     ),
@@ -909,10 +948,49 @@ async function writeWorkspace(value: unknown): Promise<void> {
       last_commit_sha: r.lastCommitSha ?? null,
       last_commit_message: r.lastCommitMessage ?? null,
       last_commit_at: r.lastCommitAt ?? null,
+      last_push_at: r.lastPushAt ?? null,
+      classification: r.classification ? json(r.classification) : null,
       created_at: r.createdAt,
       updated_at: r.updatedAt,
     })),
     repositories.map((r) => r.id),
+  );
+
+  const repoReports = inProject(ws.repoReports).filter((x) => !x.repositoryId || repositories.some((r) => r.id === x.repositoryId));
+  await syncTable(
+    "vpip_repo_reports",
+    repoReports.map((x) => ({
+      id: x.id,
+      project_id: x.projectId,
+      repository_id: x.repositoryId ?? null,
+      build_session_id: x.buildSessionId ?? null,
+      branch: x.branch,
+      commit_sha: x.commitSha ?? null,
+      classification: json(x.classification),
+      dependencies: json(x.dependencies),
+      imports: json(x.imports),
+      aliases: json(x.aliases),
+      environment: json(x.environment),
+      unsupported: json(x.unsupported),
+      preview_diagnostics: json(x.previewDiagnostics),
+      health: json(x.health),
+      created_at: x.createdAt,
+    })),
+    repoReports.map((x) => x.id),
+  );
+
+  const repoEnv = inProject(ws.repoEnv).filter((x) => repositories.some((r) => r.id === x.repositoryId));
+  await syncTable(
+    "vpip_repo_env",
+    repoEnv.map((x) => ({
+      id: x.id,
+      project_id: x.projectId,
+      repository_id: x.repositoryId,
+      key: x.key,
+      value: x.value,
+      updated_at: x.updatedAt,
+    })),
+    repoEnv.map((x) => x.id),
   );
 
   const repoIds = repositories.map((r) => r.id);

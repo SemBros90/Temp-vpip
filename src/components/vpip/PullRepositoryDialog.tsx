@@ -17,28 +17,12 @@ import * as gh from "@/lib/vpip/github";
 import { isGenericRemote } from "@/lib/vpip/git-remote";
 import type { GhFile } from "@/lib/vpip/github";
 import { coderTrace } from "@/lib/vpip/coder";
+import { analyzeRepository, classify } from "@/lib/vpip/repo-analyzer";
 
 /** Detect the framework from package.json and config files. */
 export function detectFramework(files: GhFile[]): string {
-  const has = (re: RegExp) => files.some((f) => re.test(f.path));
-  let deps: Record<string, string> = {};
-  const pkg = files.find((f) => f.path === "package.json");
-  if (pkg) {
-    try {
-      const j = JSON.parse(pkg.content) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
-      deps = { ...j.dependencies, ...j.devDependencies };
-    } catch {
-      /* invalid package.json */
-    }
-  }
-  const found: string[] = [];
-  if (deps["next"] || has(/^next\.config\./)) found.push("Next.js");
-  if (deps["@remix-run/react"] || deps["@remix-run/dev"]) found.push("Remix");
-  if (deps["@angular/core"] || has(/^angular\.json$/)) found.push("Angular");
-  if (deps["vue"] || has(/\.vue$/)) found.push("Vue");
-  if (deps["react"]) found.push("React");
-  if (deps["vite"] || has(/^vite\.config\./)) found.push("Vite");
-  return found.length ? found.join(" + ") : pkg ? "Node.js" : "Static / unknown";
+  const c = classify(files);
+  return c.frameworks.length ? c.frameworks.join(" + ") : c.primary;
 }
 
 function tree(files: GhFile[]) {
@@ -87,10 +71,14 @@ export function PullRepositoryDialog() {
       const last = commits[0];
       const pulledAt = new Date().toISOString();
 
+      setBusy("Scanning compatibility…");
+      const analysis = analyzeRepository(files, { branch: br, commitSha: last?.sha });
+      const c = analysis.classification;
+
       setBusy("Creating project…");
       const project = actions.createProject(
         info.name,
-        `Repository-based project imported from ${info.htmlUrl || info.fullName} (branch ${br}). Framework: ${framework}.`,
+        `Repository-Based Project imported from ${info.htmlUrl || info.fullName} (branch ${br}). Framework: ${framework} · ${c.language} · ${c.packageManager} · ${c.buildSystem} · ${c.workspaceType}.`,
       );
       const repo = actions.addRepository({
         projectId: project.id,
@@ -110,6 +98,7 @@ export function PullRepositoryDialog() {
         lastCommitSha: last?.sha,
         lastCommitMessage: last?.message,
         lastCommitAt: last?.date,
+        classification: c,
       });
       actions.syncRepoBranches(repo.id, branches);
 
@@ -165,9 +154,16 @@ export function PullRepositoryDialog() {
         repositoryProvider: generic ? "Git" : "GitHub",
         repositoryBranch: br,
       });
+      actions.saveRepoReport({
+        ...analysis,
+        projectId: project.id,
+        repositoryId: repo.id,
+        buildSessionId: session.id,
+        previewDiagnostics: { ...analysis.previewDiagnostics, buildStatus: "Scanned on import", lastRunAt: pulledAt },
+      });
       actions.createDiscussion({ projectId: project.id, title: `Repository: ${info.name}`, type: "Architecture" });
 
-      toast.success(`Imported ${info.fullName} — ${files.length} files, ${framework}`);
+      toast.success(`Imported ${info.fullName} — ${files.length} files, ${framework}, health ${analysis.health.overall}%`);
       setOpen(false);
       setUrl("");
       setBranch("");

@@ -197,7 +197,7 @@ export function buildSessionSource(b: BuildSession): ExtractionSource {
   };
 }
 
-export function repositorySource(r: Repository, commits: RepoCommit[]): ExtractionSource {
+export function repositorySource(r: Repository, commits: RepoCommit[], diagnostics = ""): ExtractionSource {
   const log = commits
     .filter((c) => c.repositoryId === r.id)
     .map(
@@ -213,6 +213,7 @@ export function repositorySource(r: Repository, commits: RepoCommit[]): Extracti
       `REPOSITORY ${r.fullName} · default ${r.defaultBranch} · status ${r.status}`,
       r.description ? `DESCRIPTION: ${r.description}` : "",
       log ? `COMMIT HISTORY\n${log}` : "COMMIT HISTORY\n(none recorded)",
+      diagnostics,
     ]
       .filter(Boolean)
       .join("\n\n"),
