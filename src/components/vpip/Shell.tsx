@@ -20,6 +20,7 @@ import {
   Settings as SettingsIcon,
   Sparkles,
   Table2,
+  Stethoscope,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useVpip } from "@/lib/vpip/store";
@@ -39,6 +40,7 @@ const projectNav = [
   { to: "/projects/$projectId/context", label: "Context Packages", icon: Layers },
   { to: "/projects/$projectId/builds", label: "Build Sessions", icon: HardDriveDownload },
   { to: "/projects/$projectId/repositories", label: "Repositories", icon: GitBranch },
+  { to: "/projects/$projectId/import-diagnostics", label: "Import Diagnostics", icon: Stethoscope },
   { to: "/projects/$projectId/artifacts", label: "Artifacts & Builds", icon: Package },
   { to: "/projects/$projectId/outcomes", label: "Outcomes & Failures", icon: ShieldAlert },
   { to: "/projects/$projectId/lessons", label: "Lessons Learned", icon: GraduationCap },
