@@ -44,7 +44,7 @@ export const Route = createFileRoute("/")({
 });
 
 function ProjectsPage() {
-  const { ws, loaded } = useVpip();
+  const { ws, loaded, loadError, reload } = useVpip();
   const actions = useVpipActions();
   const navigate = useNavigate();
   const [showArchived, setShowArchived] = useState(false);
