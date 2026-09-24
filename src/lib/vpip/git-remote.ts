@@ -116,51 +116,97 @@ export function bytesToBase64(bytes: Uint8Array) {
 
 /** Decodes a stored file back to bytes for commits (data URLs → binary). Returns null for placeholders. */
 export function fileBytes(content: string): Uint8Array | string | null {
-  if (content.startsWith("vpip-skipped:")) return null;
+  if (/^vpip-(skipped|symlink|submodule):/.test(content)) return null;
   const m = /^data:[\w/+.-]+;base64,(.*)$/s.exec(content);
   if (m) return Uint8Array.from(atob(m[1]!), (c) => c.charCodeAt(0));
   return content;
 }
 
-async function walk(fs: { promises: any }, dir: string, out: GhFile[], root = dir) {
+/** Result of a full-tree ingestion: every file found, imported, ignored or failed. */
+export interface IngestionAudit {
+  found: string[];
+  imported: string[];
+  ignored: Array<{ path: string; reason: string }>;
+  failed: Array<{ path: string; reason: string }>;
+  missing: string[];
+  at: string;
+}
+
+/** Largest single file kept (text or binary). Larger files are recorded as Ignored (too large). */
+export const MAX_FILE_BYTES = 2_000_000;
+
+export function emptyAudit(): IngestionAudit {
+  return { found: [], imported: [], ignored: [], failed: [], missing: [], at: new Date().toISOString() };
+}
+
+/** Stores bytes as UTF-8 text when valid text, otherwise as a base64 data URL. Nothing is discarded. */
+export function encodeFileBytes(path: string, bytes: Uint8Array): string {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const asset = ASSET_MIME[ext];
+  if (!asset && !bytes.includes(0)) {
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      /* not valid UTF-8 — store as binary */
+    }
+  }
+  return `data:${asset ?? "application/octet-stream"};base64,${bytesToBase64(bytes)}`;
+}
+
+/** Closes the audit: missing = found but neither imported nor ignored. */
+export function finalizeAudit(a: IngestionAudit): IngestionAudit {
+  const done = new Set([...a.imported, ...a.ignored.map((i) => i.path)]);
+  a.missing = a.found.filter((p) => !done.has(p));
+  return a;
+}
+
+async function walk(fs: { promises: any }, dir: string, out: GhFile[], audit: IngestionAudit, root = dir) {
   for (const entry of (await fs.promises.readdir(dir)) as string[]) {
-    if (entry === ".git" || entry === "node_modules" || entry === "dist" || entry === "build") continue;
     const p = `${dir}/${entry}`;
-    const st = await fs.promises.stat(p);
-    if (st.isDirectory()) await walk(fs, p, out, root);
-    else {
-      const asset = ASSET_MIME[entry.split(".").pop()?.toLowerCase() ?? ""];
-      if (asset) {
-        const rel = p.slice(root.length + 1);
-        if (st.size > 2_000_000) out.push({ path: rel, content: `vpip-skipped:too-large:${st.size}` });
-        else {
-          const bytes = (await fs.promises.readFile(p)) as Uint8Array;
-          out.push({ path: rel, content: `data:${asset};base64,${bytesToBase64(bytes)}` });
-        }
+    if (p === `${root}/.git`) continue; // git metadata, not a repository file
+    const st = await fs.promises.lstat(p);
+    if (st.isDirectory()) {
+      await walk(fs, p, out, audit, root);
+      continue;
+    }
+    const rel = p.slice(root.length + 1);
+    audit.found.push(rel);
+    try {
+      if (st.isSymbolicLink()) {
+        const target = (await fs.promises.readlink(p)) as string;
+        out.push({ path: rel, content: `vpip-symlink:${target}` });
+        audit.imported.push(rel);
         continue;
       }
-      if (st.size > 400_000 || /\.(mp4|mp3|pdf|zip|gz|lockb)$/i.test(entry)) continue;
-      try {
-        const content = (await fs.promises.readFile(p, { encoding: "utf8" })) as string;
-        if (content.includes("\u0000")) continue;
-        out.push({ path: p.slice(root.length + 1), content });
-      } catch {
-        /* binary — skipped */
+      if (st.size > MAX_FILE_BYTES) {
+        out.push({ path: rel, content: `vpip-skipped:too-large:${st.size}` });
+        audit.ignored.push({ path: rel, reason: `too large (${st.size} bytes, limit ${MAX_FILE_BYTES})` });
+        continue;
       }
+      const bytes = (await fs.promises.readFile(p)) as Uint8Array;
+      out.push({ path: rel, content: encodeFileBytes(rel, bytes) });
+      audit.imported.push(rel);
+    } catch (e) {
+      audit.failed.push({ path: rel, reason: e instanceof Error ? e.message : String(e) });
     }
   }
 }
 
-export async function readBranchFiles(token: string, url: string, branch: string): Promise<GhFile[]> {
+export async function readBranchFilesAudited(token: string, url: string, branch: string): Promise<{ files: GhFile[]; audit: IngestionAudit }> {
   const s = await session(url, token);
   try {
     await s.git.clone({ ...s.base, ref: branch, singleBranch: true, depth: 1 });
     const out: GhFile[] = [];
-    await walk(s.fs, "/repo", out);
-    return out;
+    const audit = emptyAudit();
+    await walk(s.fs, "/repo", out, audit);
+    return { files: out, audit: finalizeAudit(audit) };
   } finally {
     s.done();
   }
+}
+
+export async function readBranchFiles(token: string, url: string, branch: string): Promise<GhFile[]> {
+  return (await readBranchFilesAudited(token, url, branch)).files;
 }
 
 export async function listCommits(token: string, url: string, branch: string): Promise<GhCommit[]> {

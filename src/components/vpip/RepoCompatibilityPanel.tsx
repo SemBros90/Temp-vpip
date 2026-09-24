@@ -1,13 +1,12 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, CheckCircle2, Loader2, PackagePlus, RefreshCw, Sparkles, Wrench, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVpip, useVpipActions } from "@/lib/vpip/store";
-import { coderTrace } from "@/lib/vpip/coder";
 import { compileCheck } from "@/lib/vpip/coder-fs";
 import {
-  addMissingDependencies,
   analyzeRepository,
   importVerdict,
   repoDiagnosticsSummary,
@@ -97,6 +96,7 @@ export function RepoCompatibilityPanel({
   runtimeErrors = [],
   onPreview,
   onAskAI,
+  onRequestRepair,
   compact = false,
 }: {
   projectId: string;
@@ -107,9 +107,13 @@ export function RepoCompatibilityPanel({
   runtimeErrors?: string[];
   onPreview?: (() => void) | undefined;
   onAskAI?: ((summary: string) => void) | undefined;
+  /** Opens the Safe Repair simulation → approval flow. No file changes happen here. */
+  onRequestRepair?: (() => void) | undefined;
   compact?: boolean;
 }) {
   const actions = useVpipActions();
+  const navigate = useNavigate();
+  const requestRepair = () => (onRequestRepair ? onRequestRepair() : void navigate({ to: "/projects/$projectId/import-diagnostics", params: { projectId } }));
   const report = useRepoReport(projectId, repository?.id ?? build?.repositoryId, build?.id);
   const env = useRepoEnv(repository?.id ?? build?.repositoryId);
   const run = useRunCompatibility();
@@ -134,48 +138,6 @@ export function RepoCompatibilityPanel({
     }
   }
 
-  /** Adds missing packages to package.json in the build; returns the updated file list. */
-  async function installMissing(files: AnalyzerFile[], rep: RepoReport): Promise<{ files: AnalyzerFile[]; added: string[] }> {
-    const missing = rep.dependencies.filter((d) => d.status === "Missing");
-    if (!missing.length || !build) return { files, added: [] };
-    const pkgPath = rep.classification.appRoot ? `${rep.classification.appRoot}/package.json` : "package.json";
-    const current = files.find((f) => f.path === pkgPath)?.content;
-    const { content, added } = addMissingDependencies(current, missing);
-    actions.writeCoderFile(build.id, pkgPath, content, { note: `Add missing dependencies: ${added.join(", ")}`, trace: coderTrace(build, [], []) });
-    return { files: files.map((f) => (f.path === pkgPath ? { ...f, content } : f)).concat(current === undefined ? [{ path: pkgPath, content }] : []), added };
-  }
-
-  const repair = () =>
-    wrap("Repairing…", async () => {
-      const repairs: string[] = [];
-      let files = await loadFiles();
-      const first = await scan({ buildStatus: "Repairing" }, files);
-      // 1. dependencies
-      const inst = await installMissing(files, first);
-      files = inst.files;
-      repairs.push(inst.added.length ? `Installed ${inst.added.length} missing dependencies: ${inst.added.join(", ")}` : "Dependencies: nothing missing");
-      // 2. aliases
-      repairs.push(`Resolved ${first.aliases.length} aliases: ${first.aliases.map((a) => `${a.alias}→${a.target}`).join(", ") || "none"}`);
-      // 3. stubs + backend isolation
-      const ins = first.previewDiagnostics.insights;
-      const backend = Object.values(ins?.codeSplit ?? {}).filter((v) => v === "Backend").length;
-      repairs.push(`Server-only imports replaced with stubs (${ins?.serverOnly.length ?? 0} files use Node/server APIs)`);
-      repairs.push(`Backend execution skipped: ${backend} backend files excluded from the preview`);
-      // 4. cache
-      repairs.push("Preview cache cleared — preview-safe version generated");
-      // 4. re-validate
-      const second = await scan({ repairs, buildStatus: second_status(first) }, files);
-      repairs.push(`Re-validated: health ${first.health.overall}% → ${second.health.overall}%`);
-      actions.updateRepoReport(second.id, { previewDiagnostics: { ...second.previewDiagnostics, repairs } });
-      toast.success(`Repair finished — health ${second.health.overall}%`);
-      // 5. launch
-      onPreview?.();
-    });
-
-  function second_status(r: RepoReport) {
-    return r.unsupported.some((u) => u.blocking) ? "Blocked — see runtime limits" : "Ready";
-  }
-
   const c = report?.classification;
   const badDeps = report?.dependencies.filter((d) => d.status !== "OK") ?? [];
   const codeIssues = report?.imports.filter((i) => i.kind !== "Missing asset") ?? [];
@@ -192,21 +154,14 @@ export function RepoCompatibilityPanel({
           size="sm"
           variant="outline"
           className="h-8"
-          disabled={!!busy || !report || !build || !report.dependencies.some((d) => d.status === "Missing")}
-          onClick={() =>
-            void wrap("Installing…", async () => {
-              const files = await loadFiles();
-              const { files: next, added } = await installMissing(files, report!);
-              await scan({ repairs: [`Installed: ${added.join(", ")}`] }, next);
-              toast.success(`Added ${added.length} packages to package.json`);
-            })
-          }
-          title={!build ? "Pull the repository into a build first" : undefined}
+          disabled={!!busy || !report || !report.dependencies.some((d) => d.status === "Missing")}
+          onClick={requestRepair}
+          title="Opens Safe Repair: simulate, review and approve"
         >
           <PackagePlus className="size-4" /> Install missing dependencies
         </Button>
-        <Button size="sm" className="h-8" disabled={!!busy} onClick={() => void repair()}>
-          <Wrench className="size-4" /> Auto Repair &amp; preview
+        <Button size="sm" className="h-8" disabled={!!busy} onClick={requestRepair}>
+          <Wrench className="size-4" /> Auto Repair (simulate &amp; approve)
         </Button>
         {onAskAI && report ? (
           <Button size="sm" variant="outline" className="h-8" disabled={!!busy} onClick={() => onAskAI(repoDiagnosticsSummary(report))}>

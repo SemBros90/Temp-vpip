@@ -1088,6 +1088,136 @@ export type Database = {
           },
         ]
       }
+      vpip_repair_audit: {
+        Row: {
+          action: string
+          change_type: string | null
+          confidence: number | null
+          created_at: string
+          dependencies: Json
+          files: Json
+          id: string
+          note: string
+          project_id: string
+          repository_id: string | null
+          risk: string | null
+          user: string
+        }
+        Insert: {
+          action: string
+          change_type?: string | null
+          confidence?: number | null
+          created_at: string
+          dependencies?: Json
+          files?: Json
+          id: string
+          note?: string
+          project_id: string
+          repository_id?: string | null
+          risk?: string | null
+          user: string
+        }
+        Update: {
+          action?: string
+          change_type?: string | null
+          confidence?: number | null
+          created_at?: string
+          dependencies?: Json
+          files?: Json
+          id?: string
+          note?: string
+          project_id?: string
+          repository_id?: string | null
+          risk?: string | null
+          user?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_repair_audit_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_repair_proposals: {
+        Row: {
+          approved_files: Json
+          build_session_id: string | null
+          classification: string
+          confidence: number
+          confidence_note: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          dependencies: Json
+          files: Json
+          fix: string
+          id: string
+          impact: Json
+          problem: string
+          project_id: string
+          repository_id: string | null
+          risk: string
+          simulation_id: string
+          snapshot_id: string | null
+          status: string
+        }
+        Insert: {
+          approved_files?: Json
+          build_session_id?: string | null
+          classification: string
+          confidence: number
+          confidence_note: string
+          created_at: string
+          decided_at?: string | null
+          decided_by?: string | null
+          dependencies?: Json
+          files?: Json
+          fix: string
+          id: string
+          impact?: Json
+          problem: string
+          project_id: string
+          repository_id?: string | null
+          risk: string
+          simulation_id: string
+          snapshot_id?: string | null
+          status?: string
+        }
+        Update: {
+          approved_files?: Json
+          build_session_id?: string | null
+          classification?: string
+          confidence?: number
+          confidence_note?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          dependencies?: Json
+          files?: Json
+          fix?: string
+          id?: string
+          impact?: Json
+          problem?: string
+          project_id?: string
+          repository_id?: string | null
+          risk?: string
+          simulation_id?: string
+          snapshot_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_repair_proposals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vpip_repo_branches: {
         Row: {
           base_branch: string | null
@@ -1258,8 +1388,10 @@ export type Database = {
           health: Json
           id: string
           imports: Json
+          ingestion: Json | null
           preview_diagnostics: Json
           project_id: string
+          readiness: Json | null
           repository_id: string | null
           stages: Json | null
           unsupported: Json
@@ -1276,8 +1408,10 @@ export type Database = {
           health?: Json
           id: string
           imports?: Json
+          ingestion?: Json | null
           preview_diagnostics?: Json
           project_id: string
+          readiness?: Json | null
           repository_id?: string | null
           stages?: Json | null
           unsupported?: Json
@@ -1294,8 +1428,10 @@ export type Database = {
           health?: Json
           id?: string
           imports?: Json
+          ingestion?: Json | null
           preview_diagnostics?: Json
           project_id?: string
+          readiness?: Json | null
           repository_id?: string | null
           stages?: Json | null
           unsupported?: Json
@@ -1313,6 +1449,53 @@ export type Database = {
             columns: ["repository_id"]
             isOneToOne: false
             referencedRelation: "vpip_repositories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_repo_snapshots: {
+        Row: {
+          build_session_id: string | null
+          created_at: string
+          files: Json
+          id: string
+          is_zero: boolean
+          label: string
+          metadata: Json
+          project_id: string
+          repository_id: string | null
+          tree: Json
+        }
+        Insert: {
+          build_session_id?: string | null
+          created_at: string
+          files?: Json
+          id: string
+          is_zero?: boolean
+          label: string
+          metadata?: Json
+          project_id: string
+          repository_id?: string | null
+          tree?: Json
+        }
+        Update: {
+          build_session_id?: string | null
+          created_at?: string
+          files?: Json
+          id?: string
+          is_zero?: boolean
+          label?: string
+          metadata?: Json
+          project_id?: string
+          repository_id?: string | null
+          tree?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_repo_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
             referencedColumns: ["id"]
           },
         ]
@@ -1470,6 +1653,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vpip_validation_runs: {
+        Row: {
+          created_at: string
+          id: string
+          metrics: Json
+          results: Json
+          targets: Json
+        }
+        Insert: {
+          created_at: string
+          id: string
+          metrics?: Json
+          results?: Json
+          targets?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metrics?: Json
+          results?: Json
+          targets?: Json
+        }
+        Relationships: []
       }
     }
     Views: {

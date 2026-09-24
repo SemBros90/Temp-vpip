@@ -3,7 +3,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Shell } from "@/components/vpip/Shell";
 import { EmptyState } from "@/components/vpip/common";
 import { Input } from "@/components/ui/input";
-import { RepoCompatibilityPanel, Section, StagesView, Table, useRepoReport } from "@/components/vpip/RepoCompatibilityPanel";
+import { RepoCompatibilityPanel, Section, StagesView, Table, useRepoEnv, useRepoReport } from "@/components/vpip/RepoCompatibilityPanel";
+import { SafeRepairPanel } from "@/components/vpip/SafeRepairPanel";
 import { importVerdict } from "@/lib/vpip/repo-analyzer";
 import * as gh from "@/lib/vpip/github";
 import { useProject } from "@/lib/vpip/store";
@@ -32,6 +33,8 @@ function ImportDiagnosticsPage() {
   const repo = repos.find((r) => r.id === repoId) ?? repos[0];
   const build = p.buildSessions.find((b) => b.repositoryId === repo?.id) ?? (!repo ? p.buildSessions.find((b) => (b.files?.length ?? 0) > 0) : undefined);
   const report = useRepoReport(projectId, repo?.id, build?.id);
+  const env = useRepoEnv(repo?.id ?? build?.repositoryId);
+  const openPreview = build ? () => void navigate({ to: "/projects/$projectId/coder/$buildId", params: { projectId, buildId: build.id } }) : undefined;
 
   return (
     <Shell title="Import Diagnostics">
@@ -54,6 +57,9 @@ function ImportDiagnosticsPage() {
         ) : (
           <>
             {report ? <Overview report={report} /> : null}
+            <div id="safe-repair">
+              <SafeRepairPanel projectId={projectId} repository={repo} build={build} report={report} env={env} onPreview={openPreview} />
+            </div>
             <RepoCompatibilityPanel
               projectId={projectId}
               repository={repo}
@@ -65,7 +71,8 @@ function ImportDiagnosticsPage() {
                     ? gh.readBranchFiles(repo.token, repo.fullName, repo.currentBranch)
                     : []
               }
-              onPreview={build ? () => void navigate({ to: "/projects/$projectId/coder/$buildId", params: { projectId, buildId: build.id } }) : undefined}
+              onPreview={openPreview}
+              onRequestRepair={() => document.getElementById("safe-repair")?.scrollIntoView({ behavior: "smooth" })}
             />
           </>
         )}
