@@ -224,6 +224,21 @@ const PREVIEW_BRIDGE = `<script>
       try{ Object.defineProperty(window,name,{configurable:true,get:(function(store){return function(){return store}})(memoryStorage())}); }catch(e){}
     }
   });
+  /* Auth/data clients use navigator.locks to serialize session refreshes. The
+     Locks API exists in a sandboxed srcdoc but rejects every request because
+     the frame has an opaque origin. Replace it with a small in-frame queue so
+     those clients can initialize and the UI can render. */
+  try {
+    var lockQueue=Promise.resolve();
+    var memoryLocks={request:function(name,options,callback){
+      if(typeof options==='function'){callback=options;options={};}
+      var run=function(){return Promise.resolve(callback({name:String(name),mode:(options&&options.mode)||'exclusive'}));};
+      var result=lockQueue.then(run,run);
+      lockQueue=result.catch(function(){});
+      return result;
+    },query:function(){return Promise.resolve({held:[],pending:[]});}};
+    Object.defineProperty(navigator,'locks',{configurable:true,get:function(){return memoryLocks}});
+  } catch(e) {}
   ['pushState','replaceState'].forEach(function(m){
     var orig=window.history[m];
     window.history[m]=function(){
@@ -466,16 +481,55 @@ const SERVER_PKG_RE = /^(express|fastify|koa|@nestjs\/[\w-]+|pg|mysql2?|mongodb|
 
 const PREVIEW_BUILTIN = new Set(["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"]);
 
-/** Bare package specs required by the compiled modules that are not session files. */
-function collectBareSpecs(code: Record<string, string>): string[] {
+function resolveCompiledPath(
+  paths: string[],
+  from: string,
+  spec: string,
+  aliases: Array<{ alias: string; target: string }>,
+): string | undefined {
+  let base: string | undefined;
+  if (spec.startsWith(".")) base = joinRel(folderOf(from), spec);
+  else if (spec.startsWith("/")) base = normalizePath(spec);
+  else {
+    const alias = aliases.find((a) => spec === a.alias || spec.startsWith(`${a.alias}/`));
+    if (alias) base = joinRel(alias.target, spec.slice(alias.alias.length));
+    else if (spec.startsWith("@/")) base = `src/${spec.slice(2)}`;
+  }
+  return base ? resolveModulePath(paths, base) : undefined;
+}
+
+/**
+ * Bare packages needed by the selected browser entry only. Imported repositories
+ * often contain unrelated server functions; preloading their Node/Deno packages
+ * delayed the browser entry forever and left an entirely blank preview.
+ */
+function collectBareSpecs(
+  code: Record<string, string>,
+  entry: string | undefined,
+  aliases: Array<{ alias: string; target: string }>,
+): string[] {
   const out = new Set<string>();
   const re = /require\(\s*['"]([^'"]+)['"]\s*\)/g;
-  for (const c of Object.values(code)) {
+  const paths = Object.keys(code);
+  const pending = entry && code[entry] ? [entry] : paths;
+  const visited = new Set<string>();
+  while (pending.length) {
+    const path = pending.pop();
+    if (!path || visited.has(path)) continue;
+    visited.add(path);
+    const c = code[path];
+    if (!c) continue;
     let m: RegExpExecArray | null;
     while ((m = re.exec(c))) {
       const spec = m[1]!;
+      const local = resolveCompiledPath(paths, path, spec, aliases);
+      if (local) {
+        if (!visited.has(local)) pending.push(local);
+        continue;
+      }
       if (/^[./]/.test(spec) || /\.(css|scss|sass|less)$/.test(spec) || PREVIEW_BUILTIN.has(spec)) continue;
       if (NODE_BUILTIN_RE.test(spec) || SERVER_PKG_RE.test(spec) || ASSET_EXT_RE.test(spec)) continue;
+      if (/^(https?:|npm:|jsr:|deno:)/.test(spec)) continue;
       out.add(spec);
     }
   }
@@ -498,7 +552,7 @@ function runtimeScript(
   assets: Record<string, string> = {},
 ) {
   const aliases = [...(opts.aliases ?? [])].sort((a, b) => b.alias.length - a.alias.length);
-  const bare = collectBareSpecs(code).filter(
+  const bare = collectBareSpecs(code, entry, aliases).filter(
     (spec) => !aliases.some((a) => spec === a.alias || spec.startsWith(`${a.alias}/`)),
   );
   const extUrls = Object.fromEntries(bare.map((s) => [s, esmUrl(s, opts.packages ?? {})]));
@@ -654,7 +708,7 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
       var root = document.getElementById('root') || document.getElementById('app') || document.body;
       var alert = root && root.querySelector && root.querySelector('[role="alert"]');
       var text = root ? (root.innerText || '').trim() : '';
-      var rendered = !!root && root.childNodes.length > 0 && !alert && text.indexOf('No UI entry in this session') < 0;
+       var rendered = !!root && (root.children.length > 0 || text.length > 0) && !alert && text.indexOf('No UI entry in this session') < 0;
       try { parent.postMessage({ __vpipPreview: true, kind: 'status', text: JSON.stringify({ rendered: rendered, compileErrors: window.__vpipCompileErrors || [] }) }, '*'); } catch (e) {}
     }, 2500);
   }
@@ -664,7 +718,7 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
     var hasSources = Object.keys(sources).length > 0;
     if (!hasSources) return;
     var root = document.getElementById('root') || document.getElementById('app');
-    if (root && root.childNodes.length) return;
+    if (root && (root.children.length > 0 || (root.textContent || '').trim())) return;
     var found = findComponent(window.__vpipEntry);
     var React = externals['react'], client = externals['react-dom/client'];
     if (found.started) return;
@@ -703,9 +757,13 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
     window.__vpipShowError('Could not load React for the preview: ' + (e && e.message ? e.message : e));
   }
   const urls = window.__vpipExtUrls || {};
+  const timeout = (promise, ms) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timed out after ' + ms + 'ms')), ms))
+  ]);
   await Promise.all(Object.keys(urls).map(async (spec) => {
     try {
-      const m = await import(urls[spec]);
+      const m = await timeout(import(urls[spec]), 12000);
       window.__vpipExternals[spec] = m.default && typeof m.default === 'object' && !('default' in m.default) ? Object.assign({}, m.default, m, { __esModule: true }) : Object.assign({ __esModule: true }, m);
     } catch (e) {
       console.error('missing dependency: ' + spec + ' — ' + (e && e.message ? e.message : e));
