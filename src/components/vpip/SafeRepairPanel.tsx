@@ -153,7 +153,7 @@ export function SafeRepairPanel({
       toast.success(list.length ? `${list.length} repair proposals — nothing changed yet` : "No repairs needed");
     });
 
-  async function decide(p: RepairProposal, decision: "Approved" | "Rejected") {
+  async function decide(p: RepairProposal, decision: "Approved" | "Rejected", work: AnalyzerFile[] = [...files]) {
     if (decision === "Rejected") {
       const next = { ...p, status: "Rejected" as const, decidedAt: new Date().toISOString(), decidedBy: user };
       await updateProposal(next);
@@ -166,7 +166,7 @@ export function SafeRepairPanel({
     const op = p.impact.op;
     if (op.kind === "env" && !(envValues[op.key] ?? "").trim()) throw new Error(`Enter a value for ${op.key} before approving.`);
     if (op.kind === "env" && !repoId) throw new Error("Connect a repository to store environment values.");
-    const snap = await createSnapshot({ projectId, repositoryId: repoId, buildSessionId: build.id, label: `Before: ${p.fix}`, isZero: false, files, metadata: { proposalId: p.id, env: { ...env } } });
+    const snap = await createSnapshot({ projectId, repositoryId: repoId, buildSessionId: build.id, label: `Before: ${p.fix}`, isZero: false, files: work, metadata: { proposalId: p.id, env: { ...env } } });
     await logAudit({ projectId, repositoryId: repoId, user, action: "Approve", changeType: p.classification, risk: p.risk, confidence: p.confidence, files: approvedFiles, dependencies: p.dependencies.map((d) => `${d.op} ${d.name}${d.version ? "@" + d.version : ""}`), note: p.fix });
     const trace = coderTrace(build, [], []);
     const modified: string[] = [];
@@ -175,9 +175,12 @@ export function SafeRepairPanel({
       modified.push(`env:${op.key}`);
     } else {
       // Recompute against current files so several approved changes to one file stack correctly.
-      for (const c of applyOp(files, op)) {
+      for (const c of applyOp(work, op)) {
         if (!approvedFiles.includes(c.path)) continue;
         actions.writeCoderFile(build.id, c.path, c.after, { note: `Approved repair: ${p.fix}`, trace });
+        const i = work.findIndex((f) => f.path === c.path);
+        if (i >= 0) work[i] = { path: c.path, content: c.after };
+        else work.push({ path: c.path, content: c.after });
         modified.push(c.path);
       }
     }
@@ -222,7 +225,8 @@ export function SafeRepairPanel({
     wrap(d === "Approved" ? "Applying batch…" : "Rejecting batch…", async () => {
       const list = open.filter((p) => selected.has(p.id));
       if (!list.length) throw new Error("Select proposals first.");
-      for (const p of list) await decide(p, d);
+      const work = [...files];
+      for (const p of list) await decide(p, d, work);
       await logAudit({ projectId, repositoryId: repoId, user, action: d === "Approved" ? "Batch approve" : "Batch reject", files: list.flatMap((p) => p.approvedFiles), dependencies: list.flatMap((p) => p.dependencies.map((x) => x.name)), note: `${list.length} proposals` });
       setSelected(new Set());
       toast.success(`${list.length} proposals ${d === "Approved" ? "applied" : "rejected"}`);
