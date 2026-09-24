@@ -36,10 +36,16 @@ export interface GhFile {
   content: string;
 }
 
+/** Accepts "owner/repo" or any github.com URL and returns "owner/repo". */
+export function normalizeGithubName(input: string) {
+  const m = input.trim().match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/]+)\/([^/#?]+)/i);
+  return m ? `${m[1]}/${m[2]!.replace(/\.git$/, "")}` : input.trim();
+}
+
 function headers(token: string) {
   return {
     Accept: "application/vnd.github+json",
-    Authorization: `Bearer ${token}`,
+    ...(token.trim() ? { Authorization: `Bearer ${token}` } : {}),
     "X-GitHub-Api-Version": "2022-11-28",
     "Content-Type": "application/json",
   };
@@ -50,7 +56,6 @@ async function call<T>(
   path: string,
   init?: { method?: string; body?: unknown },
 ): Promise<T> {
-  if (!token.trim()) throw new Error("No access token supplied for this repository.");
   const res = await fetch(`${API}${path}`, {
     method: init?.method ?? "GET",
     headers: headers(token),
@@ -115,6 +120,7 @@ export async function createRepository(
 }
 
 export async function getRepository(token: string, fullName: string): Promise<GhRepoInfo> {
+  fullName = normalizeGithubName(fullName);
   if (remote.isGenericRemote(fullName)) return remote.getRepository(token, fullName);
   return toInfo(await call<RawRepo>(token, `/repos/${fullName}`));
 }
@@ -199,6 +205,13 @@ export async function readBranchFiles(
   branch: string,
 ): Promise<GhFile[]> {
   if (remote.isGenericRemote(fullName)) return remote.readBranchFiles(token, fullName, branch);
+  // Real git clone through the relay: one request, no API rate limits.
+  try {
+    const cred = token.trim() ? `x-access-token:${token.trim()}` : "";
+    return await remote.readBranchFiles(cred, `https://github.com/${fullName}.git`, branch);
+  } catch {
+    /* fall back to the REST API below */
+  }
   const tree = await call<{
     tree: Array<{ path: string; type: string; sha: string; size?: number }>;
   }>(token, `/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`);

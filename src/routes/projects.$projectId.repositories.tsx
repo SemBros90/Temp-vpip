@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
   ArrowDownToLine,
@@ -181,13 +181,13 @@ function RepoForm({
     try {
       const user = username.trim() || (host === "GitLab" ? "oauth2" : host === "Bitbucket" ? "x-token-auth" : "git");
       const cred = generic ? `${user}:${token}` : token;
-      const target = fullName.trim();
+      const target = generic ? fullName.trim() : gh.normalizeGithubName(fullName);
       if (generic && !/^https:\/\//i.test(target)) throw new Error("Enter the https clone URL of the repository.");
       const info = generic
         ? await gh.getRepository(cred, target)
         : kind === "create"
           ? await gh.createRepository(token, { name: name.trim(), description, visibility })
-          : await gh.getRepository(token, fullName.trim());
+          : await gh.getRepository(token, target);
       const created = actions.addRepository({
         projectId,
         provider: generic ? host : "GitHub",
@@ -496,6 +496,7 @@ function Operations({
 }) {
   const { ws } = useVpip();
   const actions = useVpipActions();
+  const navigate = useNavigate();
   const [buildId, setBuildId] = useState(builds[0]?.id ?? "");
   const build = builds.find((b) => b.id === buildId);
 
@@ -534,8 +535,41 @@ function Operations({
     toast.success(`${label} complete — ${files.length} files in ${session.code}`);
   }
 
+  async function importToBuilder() {
+    const session = actions.createBuildSession({
+      projectId: repo.projectId,
+      promptId: "",
+      promptTitle: `Imported ${repo.fullName}@${repo.currentBranch}`,
+      promptKind: "Lovable Prompt",
+      promptVersion: 1,
+      status: "In Progress",
+      contextPackage: `Imported from git repository ${repo.fullName} (branch ${repo.currentBranch}).`,
+      counts: { decisions: 0, requirements: 0, documents: 0, discussions: 0 },
+      note: `Imported from ${repo.htmlUrl || repo.fullName}`,
+    });
+    await pullInto(session, "Import");
+    setBuildId(session.id);
+    void navigate({
+      to: "/projects/$projectId/coder/$buildId",
+      params: { projectId: repo.projectId, buildId: session.id },
+    });
+  }
+
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-border p-3">
+        <Button
+          size="sm"
+          className="h-8"
+          disabled={busy !== null}
+          onClick={() => void run("import", importToBuilder)}
+        >
+          <ArrowDownToLine className="size-4" /> Pull into new build &amp; open in builder
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          Downloads the whole branch, saves it in this project and opens it in the builder with preview.
+        </span>
+      </div>
       <div className="grid gap-3 md:grid-cols-2">
         <Field label="Build session used for clone / pull / push">
           <Select value={buildId} onValueChange={setBuildId}>
@@ -629,6 +663,7 @@ function CommitPanel({
 }) {
   const { ws } = useVpip();
   const actions = useVpipActions();
+  const navigate = useNavigate();
   const [buildId, setBuildId] = useState(builds[0]?.id ?? "");
   const [message, setMessage] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
