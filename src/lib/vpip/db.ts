@@ -683,11 +683,35 @@ async function syncTable(table: string, rows: Row[], keepIds: string[]) {
     }
   }
   rememberIds(table, keepIds);
-  if (rows.length) {
-    const { error } = await supabase.from(table as never).upsert(rows as never, { onConflict: "id" });
-    if (error) throw error;
+  // Only rows whose content changed since the last successful write are sent,
+  // in size-bounded batches, so large build sessions cannot time out a save.
+  const written = (writtenHash[table] ??= new Map<string, string>());
+  const changed: Array<{ row: Row; body: string }> = [];
+  for (const row of rows) {
+    const body = JSON.stringify(row);
+    if (written.get(row['id'] as string) !== body) changed.push({ row, body });
   }
+  let batch: typeof changed = [];
+  let size = 0;
+  const flush = async () => {
+    if (!batch.length) return;
+    const { error } = await supabase.from(table as never).upsert(batch.map((b) => b.row) as never, { onConflict: "id" });
+    if (error) throw error;
+    for (const b of batch) written.set(b.row['id'] as string, b.body);
+    batch = [];
+    size = 0;
+  };
+  for (const item of changed) {
+    if (batch.length && (size + item.body.length > 1_500_000 || batch.length >= 200)) await flush();
+    batch.push(item);
+    size += item.body.length;
+  }
+  await flush();
+  for (const id of removed) written.delete(id);
 }
+
+/** Last successfully written body per row (per table). */
+const writtenHash: Record<string, Map<string, string>> = {};
 
 // Writes are serialised: concurrent flushes (debounced save + auto-save interval)
 // could interleave a parent delete with a child upsert and trip a foreign key.
