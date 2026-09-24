@@ -18,6 +18,7 @@ import {
   type ValidationReport,
   type ValidationStatus,
 } from "@/lib/vpip/types";
+import type { CalibratedReport } from "@/lib/vpip/validation-calibration";
 
 const statusTone: Record<RequirementStatus, string> = {
   "Not Started": "text-muted-foreground border-border-strong bg-muted",
@@ -44,6 +45,8 @@ export interface BuildManagerProps {
   requirements: BuildRequirement[];
   plan: BuildPlan | undefined;
   report: ValidationReport;
+  /** Unified verdict (same engine as Runtime Validation Center). */
+  calibrated?: CalibratedReport | undefined;
   health: BuildHealth;
   gate: { blocked: boolean; reasons: string[] };
   busy: boolean;
@@ -57,6 +60,8 @@ export interface BuildManagerProps {
 export function BuildManager(props: BuildManagerProps) {
   const { requirements, plan, report, health, gate } = props;
   const errors = report.issues.filter((i) => i.severity === "error");
+  const warns = report.issues.filter((i) => i.severity === "warning");
+  const cal = props.calibrated;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
@@ -113,6 +118,22 @@ export function BuildManager(props: BuildManagerProps) {
         </div>
       </section>
 
+      {cal ? (
+        <section className="panel space-y-1 px-3 py-2 text-xs">
+          <div>
+            <span className="label-mono">Unified verdict</span> · Runtime{" "}
+            <span className="font-mono font-semibold">{cal.runtimeResult}</span> · Validation{" "}
+            <span className={cn("font-mono font-semibold", cal.validationResult === "BLOCKED" ? "text-destructive" : cal.validationResult === "PASS" ? "text-success" : "text-warning")}>{cal.validationResult}</span>
+            {cal.runtimeOverride ? <span className="text-muted-foreground"> · static findings overridden by successful runtime</span> : null}
+          </div>
+          {cal.environment.length ? (
+            <div className="text-muted-foreground">
+              Environment limitations ({cal.environment.length}): <span className="font-mono">{cal.environment.map((e) => e.key).join(", ")}</span> — limit features, never block startup.
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* gate + recovery */}
       {gate.blocked ? (
         <section className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-3">
@@ -135,10 +156,12 @@ export function BuildManager(props: BuildManagerProps) {
 
       {/* validation issues */}
       <section className="space-y-2">
-        <h3 className="text-sm font-medium">Validation ({errors.length} errors)</h3>
+        <h3 className="text-sm font-medium">
+          Validation ({errors.length} errors · {warns.length} warnings)
+        </h3>
         {errors.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No dependency, startup, import, export or syntax errors detected.
+            No blocking errors.{warns.length ? ` ${warns.length} static findings are shown as warnings (one per package).` : ""}
           </p>
         ) : (
           <ul className="space-y-1">

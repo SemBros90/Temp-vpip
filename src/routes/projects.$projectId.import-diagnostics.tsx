@@ -8,6 +8,7 @@ import { SafeRepairPanel } from "@/components/vpip/SafeRepairPanel";
 import { importVerdict } from "@/lib/vpip/repo-analyzer";
 import * as gh from "@/lib/vpip/github";
 import { useProject } from "@/lib/vpip/store";
+import { useUnifiedVerdict } from "@/lib/vpip/use-unified-validation";
 import type { CodeSide, RepoReport } from "@/lib/vpip/types";
 
 export const Route = createFileRoute("/projects/$projectId/import-diagnostics")({
@@ -34,6 +35,8 @@ function ImportDiagnosticsPage() {
   const build = p.buildSessions.find((b) => b.repositoryId === repo?.id) ?? (!repo ? p.buildSessions.find((b) => (b.files?.length ?? 0) > 0) : undefined);
   const report = useRepoReport(projectId, repo?.id, build?.id);
   const env = useRepoEnv(repo?.id ?? build?.repositoryId);
+  const verdictFiles = useMemo(() => (build?.files ?? []).map((f) => ({ path: f.path, content: f.content })), [build?.files]);
+  const { cal } = useUnifiedVerdict(build?.id, report, verdictFiles);
   const openPreview = build ? () => void navigate({ to: "/projects/$projectId/coder/$buildId", params: { projectId, buildId: build.id } }) : undefined;
 
   return (
@@ -56,6 +59,13 @@ function ImportDiagnosticsPage() {
           <EmptyState title="No imported repository" description="Use Pull repository on the Projects page, or connect one on the Repositories page." />
         ) : (
           <>
+            {cal ? (
+              <div className="rounded-md border border-border px-3 py-2 text-xs">
+                <span className="font-medium">Unified verdict</span> · Runtime <span className="font-mono">{cal.runtimeResult}</span> · Validation{" "}
+                <span className="font-mono font-semibold">{cal.validationResult}</span> · {cal.blockers.length} blockers · {cal.warnings.length} warnings · {cal.environment.length} environment limitations
+                <div className="text-muted-foreground">Same engine as Runtime Validation Center and Build Manager. The in-browser preview verdict below describes only the browser preview.</div>
+              </div>
+            ) : null}
             {report ? <Overview report={report} /> : null}
             <div id="safe-repair">
               <SafeRepairPanel projectId={projectId} repository={repo} build={build} report={report} env={env} onPreview={openPreview} />

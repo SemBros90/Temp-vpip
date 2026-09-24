@@ -95,6 +95,8 @@ import {
   type TreeNode,
 } from "@/lib/vpip/coder-fs";
 import { BuildManager } from "@/components/vpip/BuildManager";
+import { useUnifiedVerdict } from "@/lib/vpip/use-unified-validation";
+import { unifyValidation } from "@/lib/vpip/validation-calibration";
 import {
   REPAIR_MODES,
   attachFiles,
@@ -251,6 +253,9 @@ function CoderPage() {
   }, [p.knowledge, p.documents, p.discussions, prompt]);
 
   const repoReport = useRepoReport(projectId, session?.repositoryId, session?.id);
+  const legacyReport = useMemo(() => validateBuild(files), [files]);
+  const analyzerFiles = useMemo(() => realFiles.map((f) => ({ path: f.path, content: f.content })), [realFiles]);
+  const { cal } = useUnifiedVerdict(session?.id, repoReport, analyzerFiles);
   const repoEnv = useRepoEnv(session?.repositoryId);
   const runCompat = useRunCompatibility();
   const autoScanned = useRef<string | null>(null);
@@ -345,7 +350,7 @@ function CoderPage() {
   /* ------------------------------- Module 16 — build orchestration */
 
   const requirements = session.requirements ?? [];
-  const report = validateBuild(files);
+  const report = unifyValidation(legacyReport, cal, Boolean(session?.repositoryId));
   const health = computeHealth(requirements, session.buildPlan, files, report);
   const gate = buildGate(report);
   const hasKey = Boolean(keys[provider] || cfg.apiKey?.trim());
@@ -407,7 +412,7 @@ function CoderPage() {
   };
 
   const runValidate = () => {
-    const fresh = validateBuild(files);
+    const fresh = unifyValidation(validateBuild(files), cal, Boolean(session.repositoryId));
     actions.updateBuildSession(session.id, { validation: fresh });
     const errs = fresh.issues.filter((i) => i.severity === "error");
     errs.slice(0, 20).forEach((i) =>
@@ -610,7 +615,7 @@ function CoderPage() {
         if (i >= 0) nextFiles[i] = entry;
         else nextFiles.push(entry);
       });
-      const post = validateBuild(nextFiles);
+      const post = unifyValidation(validateBuild(nextFiles), cal, Boolean(session.repositoryId));
       actions.updateBuildSession(session.id, {
         validation: post,
         requirements: attachFiles(
@@ -1201,6 +1206,7 @@ function CoderPage() {
                     requirements={requirements}
                     plan={session.buildPlan}
                     report={report}
+                    calibrated={cal}
                     health={health}
                     gate={gate}
                     busy={busy}
