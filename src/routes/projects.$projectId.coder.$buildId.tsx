@@ -253,6 +253,9 @@ function CoderPage() {
   }, [p.knowledge, p.documents, p.discussions, prompt]);
 
   const repoReport = useRepoReport(projectId, session?.repositoryId, session?.id);
+  const legacyReport = useMemo(() => validateBuild(files), [files]);
+  const analyzerFiles = useMemo(() => realFiles.map((f) => ({ path: f.path, content: f.content })), [realFiles]);
+  const { cal } = useUnifiedVerdict(session?.id, repoReport, analyzerFiles);
   const repoEnv = useRepoEnv(session?.repositoryId);
   const runCompat = useRunCompatibility();
   const autoScanned = useRef<string | null>(null);
@@ -347,9 +350,6 @@ function CoderPage() {
   /* ------------------------------- Module 16 — build orchestration */
 
   const requirements = session.requirements ?? [];
-  const legacyReport = useMemo(() => validateBuild(files), [files]);
-  const analyzerFiles = useMemo(() => realFiles.map((f) => ({ path: f.path, content: f.content })), [realFiles]);
-  const { cal } = useUnifiedVerdict(session?.id, repoReport, analyzerFiles);
   const report = unifyValidation(legacyReport, cal, Boolean(session?.repositoryId));
   const health = computeHealth(requirements, session.buildPlan, files, report);
   const gate = buildGate(report);
