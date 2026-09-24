@@ -937,6 +937,41 @@ export type Database = {
           },
         ]
       }
+      vpip_project_members: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          project_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          project_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          project_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vpip_projects: {
         Row: {
           archived: boolean
@@ -1583,6 +1618,199 @@ export type Database = {
           },
         ]
       }
+      vpip_runtime_audit: {
+        Row: {
+          action: string
+          build_id: string | null
+          created_at: string
+          detail: Json
+          duration_ms: number | null
+          e2b_sandbox_id: string | null
+          error: string | null
+          id: string
+          project_id: string
+          sandbox_row_id: string | null
+          status: string
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          build_id?: string | null
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          e2b_sandbox_id?: string | null
+          error?: string | null
+          id?: string
+          project_id: string
+          sandbox_row_id?: string | null
+          status: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          build_id?: string | null
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          e2b_sandbox_id?: string | null
+          error?: string | null
+          id?: string
+          project_id?: string
+          sandbox_row_id?: string | null
+          status?: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_runtime_audit_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_runtime_sandboxes: {
+        Row: {
+          build_id: string
+          created_at: string
+          destroyed_at: string | null
+          dev_command: string | null
+          e2b_sandbox_id: string | null
+          env_report: Json
+          id: string
+          last_active_at: string
+          last_error: string | null
+          last_sync_at: string | null
+          node_source: string | null
+          node_version: string | null
+          owner_id: string
+          package_manager: string | null
+          phase: string
+          phase_events: Json
+          phase_events_seen: number
+          port: number
+          preview_slug: string | null
+          project_id: string
+          running_since: string | null
+          runtime_seconds: number
+          status: string
+          sync_errors: Json
+          sync_stats: Json
+          sync_status: string
+          updated_at: string
+        }
+        Insert: {
+          build_id: string
+          created_at?: string
+          destroyed_at?: string | null
+          dev_command?: string | null
+          e2b_sandbox_id?: string | null
+          env_report?: Json
+          id: string
+          last_active_at?: string
+          last_error?: string | null
+          last_sync_at?: string | null
+          node_source?: string | null
+          node_version?: string | null
+          owner_id: string
+          package_manager?: string | null
+          phase?: string
+          phase_events?: Json
+          phase_events_seen?: number
+          port?: number
+          preview_slug?: string | null
+          project_id: string
+          running_since?: string | null
+          runtime_seconds?: number
+          status?: string
+          sync_errors?: Json
+          sync_stats?: Json
+          sync_status?: string
+          updated_at?: string
+        }
+        Update: {
+          build_id?: string
+          created_at?: string
+          destroyed_at?: string | null
+          dev_command?: string | null
+          e2b_sandbox_id?: string | null
+          env_report?: Json
+          id?: string
+          last_active_at?: string
+          last_error?: string | null
+          last_sync_at?: string | null
+          node_source?: string | null
+          node_version?: string | null
+          owner_id?: string
+          package_manager?: string | null
+          phase?: string
+          phase_events?: Json
+          phase_events_seen?: number
+          port?: number
+          preview_slug?: string | null
+          project_id?: string
+          running_since?: string | null
+          runtime_seconds?: number
+          status?: string
+          sync_errors?: Json
+          sync_stats?: Json
+          sync_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_runtime_sandboxes_build_id_fkey"
+            columns: ["build_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_build_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vpip_runtime_sandboxes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_runtime_secrets: {
+        Row: {
+          domain: string | null
+          envd_token: string | null
+          sandbox_row_id: string
+          traffic_token: string | null
+          updated_at: string
+        }
+        Insert: {
+          domain?: string | null
+          envd_token?: string | null
+          sandbox_row_id: string
+          traffic_token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          domain?: string | null
+          envd_token?: string | null
+          sandbox_row_id?: string
+          traffic_token?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_runtime_secrets_sandbox_row_id_fkey"
+            columns: ["sandbox_row_id"]
+            isOneToOne: true
+            referencedRelation: "vpip_runtime_sandboxes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vpip_settings: {
         Row: {
           author: string
@@ -1683,7 +1911,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_project_member: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

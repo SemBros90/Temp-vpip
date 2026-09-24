@@ -16,9 +16,11 @@ import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as DiagnosticsIndexRouteImport } from './routes/diagnostics.index'
 import { Route as DiagnosticsPersistenceRouteImport } from './routes/diagnostics.persistence'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
+import { Route as RuntimeSplatRouteImport } from './routes/runtime.$'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai.chat'
 import { Route as ApiAiStatusRouteImport } from './routes/api/ai.status'
 import { Route as ApiGitProxySplatRouteImport } from './routes/api/git-proxy.$'
+import { Route as ApiPublicRuntimeSweepRouteImport } from './routes/api/public/runtime-sweep'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdArtifactsRouteImport } from './routes/projects.$projectId.artifacts'
 import { Route as ProjectsProjectIdAskRouteImport } from './routes/projects.$projectId.ask'
@@ -74,6 +76,11 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RuntimeSplatRoute = RuntimeSplatRouteImport.update({
+  id: '/runtime/$',
+  path: '/runtime/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAiChatRoute = ApiAiChatRouteImport.update({
   id: '/api/ai/chat',
   path: '/api/ai/chat',
@@ -87,6 +94,11 @@ const ApiAiStatusRoute = ApiAiStatusRouteImport.update({
 const ApiGitProxySplatRoute = ApiGitProxySplatRouteImport.update({
   id: '/api/git-proxy/$',
   path: '/api/git-proxy/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicRuntimeSweepRoute = ApiPublicRuntimeSweepRouteImport.update({
+  id: '/api/public/runtime-sweep',
+  path: '/api/public/runtime-sweep',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
@@ -206,10 +218,12 @@ export interface FileRoutesByFullPath {
   '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/runtime/$': typeof RuntimeSplatRoute
   '/diagnostics/': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
   '/api/git-proxy/$': typeof ApiGitProxySplatRoute
+  '/api/public/runtime-sweep': typeof ApiPublicRuntimeSweepRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
@@ -236,10 +250,12 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
+  '/runtime/$': typeof RuntimeSplatRoute
   '/diagnostics': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
   '/api/git-proxy/$': typeof ApiGitProxySplatRoute
+  '/api/public/runtime-sweep': typeof ApiPublicRuntimeSweepRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
@@ -268,10 +284,12 @@ export interface FileRoutesById {
   '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/runtime/$': typeof RuntimeSplatRoute
   '/diagnostics/': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
   '/api/git-proxy/$': typeof ApiGitProxySplatRoute
+  '/api/public/runtime-sweep': typeof ApiPublicRuntimeSweepRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
@@ -301,10 +319,12 @@ export interface FileRouteTypes {
     | '/validation'
     | '/diagnostics/persistence'
     | '/projects/$projectId'
+    | '/runtime/$'
     | '/diagnostics/'
     | '/api/ai/chat'
     | '/api/ai/status'
     | '/api/git-proxy/$'
+    | '/api/public/runtime-sweep'
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/builds'
@@ -331,10 +351,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/validation'
     | '/diagnostics/persistence'
+    | '/runtime/$'
     | '/diagnostics'
     | '/api/ai/chat'
     | '/api/ai/status'
     | '/api/git-proxy/$'
+    | '/api/public/runtime-sweep'
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/builds'
@@ -362,10 +384,12 @@ export interface FileRouteTypes {
     | '/validation'
     | '/diagnostics/persistence'
     | '/projects/$projectId'
+    | '/runtime/$'
     | '/diagnostics/'
     | '/api/ai/chat'
     | '/api/ai/status'
     | '/api/git-proxy/$'
+    | '/api/public/runtime-sweep'
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/builds'
@@ -394,10 +418,12 @@ export interface RootRouteChildren {
   ValidationRoute: typeof ValidationRoute
   DiagnosticsPersistenceRoute: typeof DiagnosticsPersistenceRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
+  RuntimeSplatRoute: typeof RuntimeSplatRoute
   DiagnosticsIndexRoute: typeof DiagnosticsIndexRoute
   ApiAiChatRoute: typeof ApiAiChatRoute
   ApiAiStatusRoute: typeof ApiAiStatusRoute
   ApiGitProxySplatRoute: typeof ApiGitProxySplatRoute
+  ApiPublicRuntimeSweepRoute: typeof ApiPublicRuntimeSweepRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -451,6 +477,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runtime/$': {
+      id: '/runtime/$'
+      path: '/runtime/$'
+      fullPath: '/runtime/$'
+      preLoaderRoute: typeof RuntimeSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/ai/chat': {
       id: '/api/ai/chat'
       path: '/api/ai/chat'
@@ -470,6 +503,13 @@ declare module '@tanstack/react-router' {
       path: '/api/git-proxy/$'
       fullPath: '/api/git-proxy/$'
       preLoaderRoute: typeof ApiGitProxySplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/runtime-sweep': {
+      id: '/api/public/runtime-sweep'
+      path: '/api/public/runtime-sweep'
+      fullPath: '/api/public/runtime-sweep'
+      preLoaderRoute: typeof ApiPublicRuntimeSweepRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId/': {
@@ -665,10 +705,12 @@ const rootRouteChildren: RootRouteChildren = {
   ValidationRoute: ValidationRoute,
   DiagnosticsPersistenceRoute: DiagnosticsPersistenceRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
+  RuntimeSplatRoute: RuntimeSplatRoute,
   DiagnosticsIndexRoute: DiagnosticsIndexRoute,
   ApiAiChatRoute: ApiAiChatRoute,
   ApiAiStatusRoute: ApiAiStatusRoute,
   ApiGitProxySplatRoute: ApiGitProxySplatRoute,
+  ApiPublicRuntimeSweepRoute: ApiPublicRuntimeSweepRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
