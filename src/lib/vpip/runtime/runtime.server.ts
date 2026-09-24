@@ -254,13 +254,17 @@ do_install(){
 ensure_swap(){
   # Small sandboxes (~512MB) OOM-kill esbuild during Vite dependency optimisation; add swap once.
   if [ "$(awk '/SwapTotal/{print $2}' /proc/meminfo)" = "0" ]; then
-    ( sudo fallocate -l 2G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none ) && \\
-      sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile && echo "swap enabled (2G)"
+    SUDO=""; [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && SUDO=sudo
+    ( $SUDO fallocate -l 1536M /tmp/vpip.swap 2>/dev/null || $SUDO dd if=/dev/zero of=/tmp/vpip.swap bs=1M count=1536 status=none ) && \
+      $SUDO chmod 600 /tmp/vpip.swap && $SUDO mkswap /tmp/vpip.swap >/dev/null && $SUDO swapon /tmp/vpip.swap && echo "swap enabled (1.5G)"
   fi
 }
 do_dev(){
   export PATH="$V/node/bin:$PATH"
-  export GOMEMLIMIT=256MiB GOGC=50
+  # Keep Vite and esbuild together below the base sandbox's memory ceiling.
+  # esbuild is a separate Go process, so limiting Node alone is insufficient.
+  export NODE_OPTIONS="--max-old-space-size=192 \${NODE_OPTIONS:-}"
+  export GOMEMLIMIT=160MiB GOGC=25 GOMAXPROCS=1
   ensure_swap >> "$V/run.log" 2>&1 || true
   ev starting
   if [ -f "$V/dev.pid" ]; then kill -- -"$(cat "$V/dev.pid")" 2>/dev/null; rm -f "$V/dev.pid"; fi
@@ -273,10 +277,16 @@ do_dev(){
   for i in $(seq 1 180); do
     if ! kill -0 "$pid" 2>/dev/null; then wait "$pid"; ev runtime_failed $?; rm -f "$V/dev.pid"; return 1; fi
     code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$BASE_PATH" || true)
-    if [ -n "$code" ] && [ "$code" != "000" ]; then
+    if [ -n "$code" ] && [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
       ev running 0
-      if [ "$code" -lt 500 ]; then ev preview_ready "$code"; else ev runtime_failed "$code"; fi
+      ev preview_ready "$code"
       return 0
+    fi
+    if tail -n 20 "$V/dev.log" 2>/dev/null | grep -qE 'The service was stopped|JavaScript heap out of memory|Killed$'; then
+      kill -- -"$pid" 2>/dev/null || true
+      ev runtime_failed 137
+      rm -f "$V/dev.pid"
+      return 1
     fi
     sleep 1
   done
@@ -550,7 +560,7 @@ export async function startRuntime(c: Caller, rowId: string) {
   await runCommand(h, `rm -f ${V}/phases.log`);
   await startBackground(h, "dev");
   await audit({ projectId: row.project_id, buildId: row.build_id, rowId, sandboxId: h.sandboxId, userId: c.userId, email: c.email, action: "sandbox_start", status: "started", detail: { command: cfg.dev.command } });
-  return patchRow(rowId, { phase: "starting", phase_events_seen: 0, phase_events: [] as never, last_active_at: nowIso() });
+  return patchRow(rowId, { phase: "starting", phase_events_seen: 0, phase_events: [] as never, last_error: null, last_active_at: nowIso() });
 }
 
 export async function stopRuntime(c: Caller, rowId: string) {
@@ -603,13 +613,15 @@ export async function resume(c: Caller, row: Row) {
       const probe = await runCommand(
         h,
         `source ${V}/env.sh 2>/dev/null; alive=no; if [ -f ${V}/dev.pid ] && kill -0 "$(cat ${V}/dev.pid)" 2>/dev/null; then alive=yes; fi; ` +
-          `code=000; for i in 1 2 3 4 5; do code=$(curl -s -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$BASE_PATH" || true); [ -n "$code" ] && [ "$code" != "000" ] && break; sleep 1; done; ` +
+          `code=$(curl -s -m 1 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$BASE_PATH" || true); code=\${code:-000}; ` +
           `mods=no; [ -d ${APP}/node_modules ] && mods=yes; echo "$alive $code $mods"`,
-        30_000,
+        8_000,
       );
       const [alive = "no", code = "000", mods = "no"] = probe.stdout.trim().split(/\s+/).slice(-3);
       const healthy = alive === "yes" && code !== "000" && Number(code) < 500;
       if (!healthy && mods === "yes") {
+        const build = await loadBuild(c, row.build_id);
+        await writeRuntimeConfig(h, row, build.files, await loadEnv(c, build.projectId, build.repositoryId));
         await runCommand(h, `rm -f ${V}/phases.log`);
         await startBackground(h, "dev");
         await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_start", status: "started", detail: { reason: "resume_recovery", devAlive: alive, httpCode: code, command: row.dev_command } });
