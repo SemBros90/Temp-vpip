@@ -7,7 +7,7 @@
  * overrides every static-analysis guess. Never touches repositories,
  * sandboxes, packages or repair tasks.
  */
-import type { RepoReport } from "./types";
+import type { RepoReport, ValidationIssue, ValidationReport } from "./types";
 import type { AnalyzerFile } from "./repo-analyzer";
 
 export type FindingClass = "BLOCKER" | "WARNING";
@@ -153,7 +153,6 @@ export function calibrate(report: RepoReport | undefined, files: AnalyzerFile[],
  * Runtime Validation Center: the calibrated engine above. The legacy
  * Coder checker (orchestration.validateBuild) is only an input.
  * ------------------------------------------------------------------ */
-import type { ValidationIssue, ValidationReport } from "./types";
 
 export const RUNTIME_AUDIT_ACTIONS = ["repository_sync", "dependency_install", "runtime_startup", "sandbox_start", "preview_create", "preview_health", "preview_recovery"];
 
