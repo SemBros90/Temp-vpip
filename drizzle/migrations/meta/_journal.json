@@ -71,6 +71,13 @@
       "when": 1790249319076,
       "tag": "0009_vpip_runtime_phase_events",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790250301033,
+      "tag": "0010_single_owner_no_auth",
+      "breakpoints": true
     }
   ]
 }
