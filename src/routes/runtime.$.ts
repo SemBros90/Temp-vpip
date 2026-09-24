@@ -56,8 +56,8 @@ async function relay(request: Request, splat: string) {
   const isDocument = dest === "document" || dest === "iframe" || dest === "frame";
   if (isDocument) {
     const userId = await rt.verifyPreviewToken(rowId, cookieValue(request.headers.get("cookie"), `vpip_rt_${rowId}`));
-    if (!userId || !(await rt.isMemberAdmin(target.projectId, userId))) {
-      return page(403, "Preview access denied", "Open this preview from VPIP Coder while signed in as the project owner or an authorized user.");
+    if (!userId) {
+      return page(403, "Preview access denied", "Open this preview from VPIP Coder.");
     }
     if (target.status === "paused") {
       return page(409, "Sandbox paused", "The sandbox was paused after 10 minutes idle. Press Resume in VPIP Coder.");
@@ -80,7 +80,7 @@ async function relay(request: Request, splat: string) {
     res = await fetch(upstream, {
       method: request.method,
       headers,
-      body: request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer(),
+      body: request.method === "GET" || request.method === "HEAD" ? null : (await request.arrayBuffer()) as BodyInit,
       redirect: "manual",
     });
   } catch (e) {

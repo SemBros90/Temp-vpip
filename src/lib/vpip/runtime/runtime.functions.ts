@@ -118,11 +118,9 @@ export const runtimeRemoveMember = createServerFn({ method: "POST" })
 export const runtimeDashboard = createServerFn({ method: "POST" })
   .handler(async () => {
     const c = await caller();
-    const { data: mems } = await c.supabase.from("vpip_project_members").select("project_id").eq("user_id", c.userId);
-    const projectIds = (mems ?? []).map((m) => m.project_id);
+    const { data: projects } = await c.supabase.from("vpip_projects").select("id");
+    const projectIds = (projects ?? []).map((p) => p.id);
     if (projectIds.length) await rt.sweep({ projectIds });
-    const { data: rows } = projectIds.length
-      ? await c.supabase.from("vpip_runtime_sandboxes").select("*").in("project_id", projectIds).order("created_at", { ascending: false }).limit(500)
-      : { data: [] };
+    const { data: rows } = await c.supabase.from("vpip_runtime_sandboxes").select("*").order("created_at", { ascending: false }).limit(500);
     return { configured: rt.hasE2BKey(), rows: rows ?? [] };
   });
