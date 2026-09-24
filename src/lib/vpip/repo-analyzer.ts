@@ -852,6 +852,10 @@ export function repoDiagnosticsSummary(r: RepoReport | undefined, maxItems = 40)
   const missingEnv = r.environment.filter((e) => !e.configured);
   if (missingEnv.length) lines.push("", "### Missing environment variables", ...missingEnv.map((e) => `- ${e.key} (used in ${e.sources.slice(0, 2).join(", ")})`));
   if (r.unsupported.length) lines.push("", "### Runtime limits", ...r.unsupported.map((u) => `- ${u.reason}${u.blocking ? " (blocks preview)" : ""}: ${u.evidence}`));
+  if (r.stages)
+    lines.push("", "### Build stages", ...(["dependencies", "imports", "compile", "runtime", "preview"] as const).map((k) => `- ${k}: ${r.stages![k].status} — ${r.stages![k].detail}`));
+  const so = r.previewDiagnostics.insights?.serverOnly ?? [];
+  if (so.length) lines.push("", "### Server-only files (stubbed in preview)", ...so.slice(0, 20).map((x) => `- ${x.path}: ${x.apis.join(", ")}`));
   if (r.previewDiagnostics.runtimeErrors.length)
     lines.push("", "### Last preview errors", ...r.previewDiagnostics.runtimeErrors.slice(0, 10).map((e) => `- ${e}`));
   return lines.join("\n");
@@ -879,6 +883,8 @@ export interface PreviewOptions {
   aliases?: Array<{ alias: string; target: string }>;
   packages?: Record<string, string>;
   env?: Record<string, string>;
+  /** Backend files that must never run in the preview (replaced with stubs). */
+  excludePaths?: string[];
 }
 
 export function previewOptionsFrom(report: RepoReport | undefined, files: AnalyzerFile[], env: Record<string, string>): PreviewOptions {
@@ -886,5 +892,7 @@ export function previewOptionsFrom(report: RepoReport | undefined, files: Analyz
   const pkg = readPkg(files, report?.classification.appRoot ? `${report.classification.appRoot}/package.json` : "package.json") ?? readPkg(files, "package.json");
   for (const [k, v] of Object.entries({ ...pkg?.dependencies })) packages[k] = v;
   for (const d of report?.dependencies ?? []) if (!packages[d.name] && !d.dev) packages[d.name] = d.installed ?? d.required;
-  return { aliases: report?.aliases ?? readAliases(files), packages, env };
+  const split = report?.previewDiagnostics.insights?.codeSplit ?? {};
+  const excludePaths = Object.entries(split).filter(([, side]) => side === "Backend").map(([p]) => p);
+  return { aliases: report?.aliases ?? readAliases(files), packages, env, excludePaths };
 }
