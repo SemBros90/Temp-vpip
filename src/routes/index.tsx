@@ -44,7 +44,7 @@ export const Route = createFileRoute("/")({
 });
 
 function ProjectsPage() {
-  const { ws, loaded } = useVpip();
+  const { ws, loaded, loadError, reload } = useVpip();
   const actions = useVpipActions();
   const navigate = useNavigate();
   const [showArchived, setShowArchived] = useState(false);
@@ -135,6 +135,12 @@ function ProjectsPage() {
 
         {!loaded ? (
           <div className="label-mono">Opening vault…</div>
+        ) : loadError && ws.projects.length === 0 ? (
+          <EmptyState
+            title="Could not reach the database"
+            description={`Your projects are safe. ${loadError}`}
+            action={<Button size="sm" onClick={() => void reload()}>Retry</Button>}
+          />
         ) : projects.length === 0 ? (
           <EmptyState
             title={showArchived ? "No archived projects" : "No projects yet"}
