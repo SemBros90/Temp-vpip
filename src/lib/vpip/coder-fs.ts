@@ -690,11 +690,11 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
       import('https://esm.sh/react-dom@19.2.0'),
     ]);
     const ext = window.__vpipExternals;
-    ext['react'] = React.default ? Object.assign({}, React, React.default) : React;
-    ext['react-dom'] = dom;
-    ext['react-dom/client'] = client;
-    ext['react/jsx-runtime'] = jsx;
-    ext['react/jsx-dev-runtime'] = jsxDev;
+    ext['react'] = Object.assign({ __esModule: true }, React.default ? Object.assign({}, React, React.default) : React);
+    ext['react-dom'] = Object.assign({ __esModule: true }, dom);
+    ext['react-dom/client'] = Object.assign({ __esModule: true }, client);
+    ext['react/jsx-runtime'] = Object.assign({ __esModule: true }, jsx);
+    ext['react/jsx-dev-runtime'] = Object.assign({ __esModule: true }, jsxDev);
   } catch (e) {
     window.__vpipShowError('Could not load React for the preview: ' + (e && e.message ? e.message : e));
   }
