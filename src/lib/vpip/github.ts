@@ -4,6 +4,8 @@
  * vault. Nothing here is hardcoded and no token is ever defaulted.
  */
 
+import * as remote from "./git-remote";
+
 const API = "https://api.github.com";
 
 export interface GhRepoInfo {
@@ -90,7 +92,8 @@ function toInfo(r: RawRepo): GhRepoInfo {
   };
 }
 
-export async function whoAmI(token: string) {
+export async function whoAmI(token: string, fullName?: string) {
+  if (fullName && remote.isGenericRemote(fullName)) return remote.whoAmI(token, fullName);
   const user = await call<{ login: string }>(token, "/user");
   return user.login;
 }
@@ -112,10 +115,12 @@ export async function createRepository(
 }
 
 export async function getRepository(token: string, fullName: string): Promise<GhRepoInfo> {
+  if (remote.isGenericRemote(fullName)) return remote.getRepository(token, fullName);
   return toInfo(await call<RawRepo>(token, `/repos/${fullName}`));
 }
 
 export async function listBranches(token: string, fullName: string): Promise<GhBranch[]> {
+  if (remote.isGenericRemote(fullName)) return remote.listBranches(token, fullName);
   const raw = await call<Array<{ name: string; commit: { sha: string } }>>(
     token,
     `/repos/${fullName}/branches?per_page=100`,
@@ -128,6 +133,7 @@ export async function listCommits(
   fullName: string,
   branch: string,
 ): Promise<GhCommit[]> {
+  if (remote.isGenericRemote(fullName)) return remote.listCommits(token, fullName, branch);
   const raw = await call<
     Array<{
       sha: string;
@@ -150,6 +156,7 @@ export async function createBranch(
   name: string,
   fromBranch: string,
 ): Promise<GhBranch> {
+  if (remote.isGenericRemote(fullName)) return remote.createBranch(token, fullName, name, fromBranch);
   const ref = await call<{ object: { sha: string } }>(
     token,
     `/repos/${fullName}/git/ref/heads/${encodeURIComponent(fromBranch)}`,
@@ -168,6 +175,7 @@ export async function mergeBranch(
   head: string,
   message: string,
 ): Promise<string> {
+  if (remote.isGenericRemote(fullName)) return remote.mergeBranch(token, fullName, base, head, message);
   const res = await call<{ sha?: string }>(token, `/repos/${fullName}/merges`, {
     method: "POST",
     body: { base, head, commit_message: message },
@@ -190,6 +198,7 @@ export async function readBranchFiles(
   fullName: string,
   branch: string,
 ): Promise<GhFile[]> {
+  if (remote.isGenericRemote(fullName)) return remote.readBranchFiles(token, fullName, branch);
   const tree = await call<{
     tree: Array<{ path: string; type: string; sha: string; size?: number }>;
   }>(token, `/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
@@ -231,6 +240,7 @@ export async function commitFiles(
   message: string,
   files: GhFile[],
 ): Promise<GhCommit> {
+  if (remote.isGenericRemote(fullName)) return remote.commitFiles(token, fullName, branch, message, files);
   if (files.length === 0) throw new Error("No files selected for this commit.");
 
   const ref = await call<{ object: { sha: string } }>(

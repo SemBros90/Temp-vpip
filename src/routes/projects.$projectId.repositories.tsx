@@ -172,17 +172,25 @@ function RepoForm({
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<RepoVisibility>("private");
   const [busy, setBusy] = useState(false);
+  const [host, setHost] = useState<"GitHub" | "GitLab" | "Bitbucket" | "Git">("GitHub");
+  const [username, setUsername] = useState("");
+  const generic = kind === "connect" && host !== "GitHub";
 
   async function submit() {
     setBusy(true);
     try {
-      const info =
-        kind === "create"
+      const user = username.trim() || (host === "GitLab" ? "oauth2" : host === "Bitbucket" ? "x-token-auth" : "git");
+      const cred = generic ? `${user}:${token}` : token;
+      const target = fullName.trim();
+      if (generic && !/^https:\/\//i.test(target)) throw new Error("Enter the https clone URL of the repository.");
+      const info = generic
+        ? await gh.getRepository(cred, target)
+        : kind === "create"
           ? await gh.createRepository(token, { name: name.trim(), description, visibility })
           : await gh.getRepository(token, fullName.trim());
       const created = actions.addRepository({
         projectId,
-        provider: "GitHub",
+        provider: generic ? host : "GitHub",
         owner: info.owner,
         name: info.name,
         fullName: info.fullName,
@@ -191,11 +199,11 @@ function RepoForm({
         defaultBranch: info.defaultBranch,
         currentBranch: info.defaultBranch,
         htmlUrl: info.htmlUrl,
-        token,
+        token: cred,
         status: "Connected",
         validatedAt: new Date().toISOString(),
       });
-      const branches = await gh.listBranches(token, info.fullName);
+      const branches = await gh.listBranches(cred, info.fullName);
       actions.syncRepoBranches(created.id, branches);
       toast.success(
         kind === "create" ? `Repository ${info.fullName} created` : `Connected to ${info.fullName}`,
@@ -232,15 +240,39 @@ function RepoForm({
             </Field>
           </>
         ) : (
-          <Field label="Repository (owner/name)">
-            <Input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="octocat/my-app"
-            />
-          </Field>
+          <>
+            <Field label="Git host">
+              <Select value={host} onValueChange={(v) => setHost(v as typeof host)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GitHub">GitHub</SelectItem>
+                  <SelectItem value="GitLab">GitLab</SelectItem>
+                  <SelectItem value="Bitbucket">Bitbucket</SelectItem>
+                  <SelectItem value="Git">Any git URL</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label={generic ? "Clone URL (https)" : "Repository (owner/name)"}>
+              <Input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder={generic ? "https://gitlab.com/team/app.git" : "octocat/my-app"}
+              />
+            </Field>
+            {generic ? (
+              <Field label="Username (optional)">
+                <Input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder={host === "GitLab" ? "oauth2" : host === "Bitbucket" ? "your Bitbucket username" : "username"}
+                />
+              </Field>
+            ) : null}
+          </>
         )}
-        <Field label="GitHub access token">
+        <Field label={generic ? `${host === "Git" ? "Git" : host} access token / app password` : "GitHub access token"}>
           <Input
             type="password"
             value={token}
@@ -362,7 +394,7 @@ function RepoDetail({
             disabled={busy !== null}
             onClick={() =>
               void run("validate", async () => {
-                const login = await gh.whoAmI(repo.token);
+                const login = await gh.whoAmI(repo.token, repo.fullName);
                 const info = await gh.getRepository(repo.token, repo.fullName);
                 actions.updateRepository(repo.id, {
                   status: "Connected",

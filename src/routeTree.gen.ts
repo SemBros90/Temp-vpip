@@ -17,6 +17,7 @@ import { Route as DiagnosticsPersistenceRouteImport } from './routes/diagnostics
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai.chat'
 import { Route as ApiAiStatusRouteImport } from './routes/api/ai.status'
+import { Route as ApiGitProxySplatRouteImport } from './routes/api/git-proxy.$'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdArtifactsRouteImport } from './routes/projects.$projectId.artifacts'
 import { Route as ProjectsProjectIdAskRouteImport } from './routes/projects.$projectId.ask'
@@ -74,6 +75,11 @@ const ApiAiChatRoute = ApiAiChatRouteImport.update({
 const ApiAiStatusRoute = ApiAiStatusRouteImport.update({
   id: '/api/ai/status',
   path: '/api/ai/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGitProxySplatRoute = ApiGitProxySplatRouteImport.update({
+  id: '/api/git-proxy/$',
+  path: '/api/git-proxy/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
@@ -189,6 +195,7 @@ export interface FileRoutesByFullPath {
   '/diagnostics/': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
+  '/api/git-proxy/$': typeof ApiGitProxySplatRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
@@ -216,6 +223,7 @@ export interface FileRoutesByTo {
   '/diagnostics': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
+  '/api/git-proxy/$': typeof ApiGitProxySplatRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
@@ -245,6 +253,7 @@ export interface FileRoutesById {
   '/diagnostics/': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
   '/api/ai/status': typeof ApiAiStatusRoute
+  '/api/git-proxy/$': typeof ApiGitProxySplatRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
@@ -275,6 +284,7 @@ export interface FileRouteTypes {
     | '/diagnostics/'
     | '/api/ai/chat'
     | '/api/ai/status'
+    | '/api/git-proxy/$'
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/builds'
@@ -302,6 +312,7 @@ export interface FileRouteTypes {
     | '/diagnostics'
     | '/api/ai/chat'
     | '/api/ai/status'
+    | '/api/git-proxy/$'
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/builds'
@@ -330,6 +341,7 @@ export interface FileRouteTypes {
     | '/diagnostics/'
     | '/api/ai/chat'
     | '/api/ai/status'
+    | '/api/git-proxy/$'
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
     | '/projects/$projectId/builds'
@@ -359,6 +371,7 @@ export interface RootRouteChildren {
   DiagnosticsIndexRoute: typeof DiagnosticsIndexRoute
   ApiAiChatRoute: typeof ApiAiChatRoute
   ApiAiStatusRoute: typeof ApiAiStatusRoute
+  ApiGitProxySplatRoute: typeof ApiGitProxySplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -417,6 +430,13 @@ declare module '@tanstack/react-router' {
       path: '/api/ai/status'
       fullPath: '/api/ai/status'
       preLoaderRoute: typeof ApiAiStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/git-proxy/$': {
+      id: '/api/git-proxy/$'
+      path: '/api/git-proxy/$'
+      fullPath: '/api/git-proxy/$'
+      preLoaderRoute: typeof ApiGitProxySplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId/': {
@@ -604,6 +624,7 @@ const rootRouteChildren: RootRouteChildren = {
   DiagnosticsIndexRoute: DiagnosticsIndexRoute,
   ApiAiChatRoute: ApiAiChatRoute,
   ApiAiStatusRoute: ApiAiStatusRoute,
+  ApiGitProxySplatRoute: ApiGitProxySplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
