@@ -279,7 +279,7 @@ const PREVIEW_BRIDGE = `<script>
       try{ window.scrollTo(0,0); }catch(e){}
     }
     if(hash)setTimeout(function(){scrollToId(hash)},0);
-  },true);
+  });
 
 
   document.addEventListener('submit',function(e){
@@ -288,7 +288,7 @@ const PREVIEW_BRIDGE = `<script>
     var action=form.getAttribute('action');
     if(action&&/^(https?:)?\\/\\//i.test(action))return;
     e.preventDefault();
-  },true);
+  });
 
 
   post('log','preview loaded');
@@ -503,7 +503,19 @@ function runtimeScript(
   );
   const extUrls = Object.fromEntries(bare.map((s) => [s, esmUrl(s, opts.packages ?? {})]));
   return `<script>
-window.__vpipEnv = Object.assign({ MODE: 'development', DEV: true, PROD: false, NODE_ENV: 'development', BASE_URL: '/' }, JSON.parse(${jsonScript(JSON.stringify(opts.env ?? {}))}));
+window.__vpipEnv = Object.assign({
+  MODE: 'development', DEV: true, PROD: false, NODE_ENV: 'development', BASE_URL: '/',
+  /* Browser previews must be able to render a repository before its private
+     backend settings are supplied. These non-routable values let SDK clients
+     initialise; their requests fail normally without exposing any credential. */
+  VITE_SUPABASE_URL: 'https://preview.invalid',
+  SUPABASE_URL: 'https://preview.invalid',
+  NEXT_PUBLIC_SUPABASE_URL: 'https://preview.invalid',
+  VITE_SUPABASE_PUBLISHABLE_KEY: 'vpip-preview-key',
+  VITE_SUPABASE_ANON_KEY: 'vpip-preview-key',
+  SUPABASE_ANON_KEY: 'vpip-preview-key',
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'vpip-preview-key'
+}, JSON.parse(${jsonScript(JSON.stringify(opts.env ?? {}))}));
 window.__vpipAliases = JSON.parse(${jsonScript(JSON.stringify(aliases))});
 window.__vpipExtUrls = JSON.parse(${jsonScript(JSON.stringify(extUrls))});
 window.__vpipSources = JSON.parse(${jsonScript(JSON.stringify(code))});
@@ -555,7 +567,11 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
     if (spec.charAt(0) === '.') base = join(from, spec);
     else {
       for (var a=0;a<al.length;a++) if (spec === al[a].alias || spec.indexOf(al[a].alias + '/') === 0) { base = al[a].target + spec.slice(al[a].alias.length); break; }
-      if (base === null) base = spec.replace(/^@\\//,'src/').replace(/^\\//,'');
+      if (base === null && spec.indexOf('@/') === 0) base = spec.replace(/^@\\//,'src/');
+      if (base === null && spec.charAt(0) === '/') base = spec.replace(/^\\//,'');
+      /* Bare package subpaths such as react-dom/client must not use basename
+         fallback, which could incorrectly select a repository client.ts. */
+      if (base === null) return null;
     }
     var tries = [base, base+'.tsx', base+'.ts', base+'.jsx', base+'.js', base+'/index.tsx', base+'/index.ts', base+'/index.jsx', base+'/index.js'];
     for (var i=0;i<tries.length;i++) if (sources[tries[i]]) return tries[i];
@@ -587,7 +603,7 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
     if (cache[path]) return cache[path].exports;
     var mod = { exports: {} };
     cache[path] = mod;
-    var fn = new Function('require','module','exports', sources[path]);
+    var fn = new Function('require','module','exports', sources[path] + '\\n//# sourceURL=vpip-preview:///' + path);
     fn(function(s){ return req(path, s); }, mod, mod.exports);
     return mod.exports;
   }
@@ -600,7 +616,7 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
         if (typeof entryComponent === 'function') return { path: entry, comp: entryComponent };
         var entryName = entry.split('/').pop().toLowerCase();
         if (entryName.indexOf('main.') === 0 || entryName.indexOf('index.') === 0) return { path: entry, started: true };
-      } catch (e) { console.error(entry+': '+(e && e.message ? e.message : String(e))); }
+      } catch (e) { console.error(entry+': '+(e && e.stack ? e.stack : (e && e.message ? e.message : String(e)))); }
       order.push(entry);
     }
     for (p in sources) if (sources.hasOwnProperty(p) && order.indexOf(p) < 0) order.push(p);
@@ -608,7 +624,7 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
     for (var i=0;i<order.length;i++){
       var path = order[i], exp;
       try { exp = req(path, './'+path.split('/').pop()); }
-      catch (e) { console.error(path+': '+(e && e.message ? e.message : String(e))); continue; }
+      catch (e) { console.error(path+': '+(e && e.stack ? e.stack : (e && e.message ? e.message : String(e)))); continue; }
       var comp = exp && (exp.default || exp.App);
       if (typeof comp === 'function') return { path: path, comp: comp };
       summary.push(path + (exp ? ' → ' + Object.keys(exp).join(', ') : ''));
@@ -678,11 +694,11 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
       import('https://esm.sh/react-dom@19.2.0'),
     ]);
     const ext = window.__vpipExternals;
-    ext['react'] = React.default ? Object.assign({}, React, React.default) : React;
-    ext['react-dom'] = dom;
-    ext['react-dom/client'] = client;
-    ext['react/jsx-runtime'] = jsx;
-    ext['react/jsx-dev-runtime'] = jsxDev;
+    ext['react'] = Object.assign({ __esModule: true }, React.default ? Object.assign({}, React, React.default) : React);
+    ext['react-dom'] = Object.assign({ __esModule: true }, dom);
+    ext['react-dom/client'] = Object.assign({ __esModule: true }, client);
+    ext['react/jsx-runtime'] = Object.assign({ __esModule: true }, jsx);
+    ext['react/jsx-dev-runtime'] = Object.assign({ __esModule: true }, jsxDev);
   } catch (e) {
     window.__vpipShowError('Could not load React for the preview: ' + (e && e.message ? e.message : e));
   }
@@ -695,6 +711,17 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
       console.error('missing dependency: ' + spec + ' — ' + (e && e.message ? e.message : e));
     }
   }));
+  /* A srcdoc/blob preview has no trustworthy pathname. BrowserRouter would
+     otherwise read VPIP's own /projects/... URL and render the imported app's
+     not-found page. Keep repository navigation entirely in memory instead. */
+  const router = window.__vpipExternals['react-router-dom'];
+  if (router) {
+    if (router.MemoryRouter) {
+      router.BrowserRouter = router.MemoryRouter;
+      router.HashRouter = router.MemoryRouter;
+    }
+    if (router.createMemoryRouter) router.createBrowserRouter = router.createMemoryRouter;
+  }
   window.__vpipStart();
 </script>`;
 }
@@ -721,7 +748,9 @@ export function buildPreviewDoc(
     .filter((f) => f.path.endsWith(".css"))
     .map((f) => inlineCssAssets(f.content, f.path, cssAssets, opts.aliases ?? []))
     .join("\n");
-  const styleTag = css ? `\n<style>\n${css}\n</style>` : "";
+  const needsTailwindRuntime = real.some((f) => f.path.endsWith(".css") && /@tailwind\s+(base|components|utilities)/.test(f.content));
+  const tailwindRuntime = needsTailwindRuntime ? `\n<script src="https://cdn.tailwindcss.com"><\/script>` : "";
+  const styleTag = `${tailwindRuntime}${css ? `\n<style>\n${css}\n</style>` : ""}`;
 
   const html =
     real.find((f) => f.path === entryPath && f.path.endsWith(".html")) ??
