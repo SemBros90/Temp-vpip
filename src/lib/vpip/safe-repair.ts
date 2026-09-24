@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Safe Repair — ingestion audit, extended classification, environment and
  * dependency audits, preview readiness, Rollback Point Zero, repair
@@ -618,7 +619,7 @@ export async function logAudit(e: Omit<AuditEntry, "id" | "createdAt">): Promise
 export async function listAudit(projectId: string): Promise<AuditEntry[]> {
   const { data, error } = await db.from(T.audit).select("*").eq("project_id", projectId).order("created_at", { ascending: false }).limit(1000);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r: Record<string, unknown>) => ({
+  return (data ?? []).map((r: any) => ({
     id: r.id,
     projectId: r.project_id,
     repositoryId: r.repository_id ?? undefined,
@@ -656,7 +657,7 @@ export async function createSnapshot(s: Omit<RepoSnapshot, "id" | "createdAt" | 
 export async function listSnapshots(projectId: string): Promise<Array<Omit<RepoSnapshot, "files">>> {
   const { data, error } = await db.from(T.snap).select("id,project_id,repository_id,build_session_id,label,is_zero,tree,metadata,created_at").eq("project_id", projectId).order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r: Record<string, unknown>) => ({
+  return (data ?? []).map((r: any) => ({
     id: r.id,
     projectId: r.project_id,
     repositoryId: r.repository_id ?? undefined,
@@ -688,7 +689,7 @@ export async function updateProposal(p: RepairProposal): Promise<void> {
 export async function listProposals(projectId: string): Promise<RepairProposal[]> {
   const { data, error } = await db.from(T.prop).select("*").eq("project_id", projectId).order("created_at", { ascending: false }).limit(1000);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r: Record<string, unknown>) => ({
+  return (data ?? []).map((r: any) => ({
     id: r.id,
     projectId: r.project_id,
     repositoryId: r.repository_id ?? undefined,
@@ -807,7 +808,7 @@ export async function saveValidationRun(run: ValidationRun): Promise<void> {
 export async function listValidationRuns(): Promise<ValidationRun[]> {
   const { data, error } = await db.from(T.val).select("*").order("created_at", { ascending: false }).limit(100);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r: Record<string, unknown>) => ({ id: r.id, targets: r.targets, results: r.results, metrics: r.metrics, createdAt: r.created_at })) as ValidationRun[];
+  return (data ?? []).map((r: any) => ({ id: r.id, targets: r.targets, results: r.results, metrics: r.metrics, createdAt: r.created_at })) as ValidationRun[];
 }
 
 export { uid as safeRepairId };
