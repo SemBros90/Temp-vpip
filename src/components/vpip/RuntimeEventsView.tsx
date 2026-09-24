@@ -32,7 +32,7 @@ function actionsFor(kind: "type" | "category", value: string): string[] {
 
 const PAGE = 50;
 
-export function RuntimeEventsView({ mode, initialProjectId, initialBuildId }: { mode: "history" | "audit"; initialProjectId?: string; initialBuildId?: string }) {
+export function RuntimeEventsView({ mode, initialProjectId, initialBuildId }: { mode: "history" | "audit"; initialProjectId?: string | undefined; initialBuildId?: string | undefined }) {
   const { ws } = useVpip();
   const load = useServerFn(runtimeEvents);
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
