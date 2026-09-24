@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVpip, useVpipActions } from "@/lib/vpip/store";
 import { coderTrace } from "@/lib/vpip/coder";
+import { compileCheck } from "@/lib/vpip/coder-fs";
 import {
   addMissingDependencies,
   analyzeRepository,
+  importVerdict,
   repoDiagnosticsSummary,
   type AnalyzerFile,
 } from "@/lib/vpip/repo-analyzer";
@@ -44,7 +46,9 @@ export function useRunCompatibility() {
     opts: { repository?: Repository | undefined; build?: BuildSession | undefined; runtimeErrors?: string[]; repairs?: string[]; buildStatus?: string },
   ) => {
     const configured = (ws.repoEnv ?? []).filter((e) => e.repositoryId === opts.repository?.id && e.value).map((e) => e.key);
-    const result = analyzeRepository(files, {
+    const repoId = opts.repository?.id ?? opts.build?.repositoryId;
+    const previous = (ws.repoReports ?? []).find((r) => r.projectId === projectId && ((repoId && r.repositoryId === repoId) || (opts.build && r.buildSessionId === opts.build.id)));
+    const baseOpts = {
       configuredEnv: configured,
       branch: opts.repository?.currentBranch ?? opts.build?.repositoryBranch ?? "",
       commitSha: opts.repository?.lastCommitSha ?? opts.build?.lastCommitSha,
@@ -56,7 +60,18 @@ export function useRunCompatibility() {
         runtimeErrors: opts.runtimeErrors ?? [],
         lastRunAt: new Date().toISOString(),
       },
-    });
+      previousStages: previous?.stages,
+    };
+    // First pass finds backend files; the compile check then runs on frontend code only.
+    const first = analyzeRepository(files, baseOpts);
+    const backend = Object.entries(first.previewDiagnostics.insights?.codeSplit ?? {}).filter(([, v]) => v === "Backend").map(([k]) => k);
+    let compileErrors: string[] | undefined;
+    try {
+      compileErrors = compileCheck(files, backend);
+    } catch {
+      compileErrors = undefined;
+    }
+    const result = analyzeRepository(files, { ...baseOpts, compileErrors });
     return actions.saveRepoReport({ ...result, projectId });
   };
 }
@@ -141,8 +156,13 @@ export function RepoCompatibilityPanel({
       repairs.push(inst.added.length ? `Installed ${inst.added.length} missing dependencies: ${inst.added.join(", ")}` : "Dependencies: nothing missing");
       // 2. aliases
       repairs.push(`Resolved ${first.aliases.length} aliases: ${first.aliases.map((a) => `${a.alias}→${a.target}`).join(", ") || "none"}`);
-      // 3. cache
-      repairs.push("Preview cache cleared");
+      // 3. stubs + backend isolation
+      const ins = first.previewDiagnostics.insights;
+      const backend = Object.values(ins?.codeSplit ?? {}).filter((v) => v === "Backend").length;
+      repairs.push(`Server-only imports replaced with stubs (${ins?.serverOnly.length ?? 0} files use Node/server APIs)`);
+      repairs.push(`Backend execution skipped: ${backend} backend files excluded from the preview`);
+      // 4. cache
+      repairs.push("Preview cache cleared — preview-safe version generated");
       // 4. re-validate
       const second = await scan({ repairs, buildStatus: second_status(first) }, files);
       repairs.push(`Re-validated: health ${first.health.overall}% → ${second.health.overall}%`);
@@ -186,7 +206,7 @@ export function RepoCompatibilityPanel({
           <PackagePlus className="size-4" /> Install missing dependencies
         </Button>
         <Button size="sm" className="h-8" disabled={!!busy} onClick={() => void repair()}>
-          <Wrench className="size-4" /> Repair &amp; preview
+          <Wrench className="size-4" /> Auto Repair &amp; preview
         </Button>
         {onAskAI && report ? (
           <Button size="sm" variant="outline" className="h-8" disabled={!!busy} onClick={() => onAskAI(repoDiagnosticsSummary(report))}>
@@ -249,6 +269,8 @@ export function RepoCompatibilityPanel({
               ) : null}
             </div>
           </div>
+
+          <StagesView report={report} />
 
           {report.unsupported.length ? (
             <Section title="Why the preview may not run">
@@ -339,7 +361,7 @@ export function RepoCompatibilityPanel({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-md border border-border">
       <div className="border-b border-border bg-surface-2 px-3 py-1.5 text-xs font-medium">{title}</div>
@@ -348,7 +370,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Table({ head, rows, empty }: { head: string[]; rows: React.ReactNode[][]; empty: string }) {
+export function Table({ head, rows, empty }: { head: string[]; rows: React.ReactNode[][]; empty: string }) {
   if (!rows.length) return <p className="text-xs text-muted-foreground">{empty}</p>;
   return (
     <table className="w-full text-left text-xs">
@@ -363,5 +385,28 @@ function Table({ head, rows, empty }: { head: string[]; rows: React.ReactNode[][
         ))}
       </tbody>
     </table>
+  );
+}
+
+const STAGE_LABEL = { dependencies: "Dependency resolution", imports: "Import resolution", compile: "Compile", runtime: "Runtime", preview: "Preview" } as const;
+
+export function StagesView({ report }: { report: RepoReport }) {
+  const v = importVerdict(report);
+  const tone = v.verdict === "Preview can run" ? "text-success" : v.verdict === "Preview cannot run" ? "text-destructive" : "text-warning";
+  return (
+    <Section title={`Build health stages — ${v.verdict}`}>
+      <div className={`mb-1 text-xs font-medium ${tone}`}>{v.verdict}</div>
+      {(Object.keys(STAGE_LABEL) as Array<keyof typeof STAGE_LABEL>).map((k) => {
+        const st = report.stages?.[k] ?? { status: "Not run" as const, detail: "Re-scan to compute this stage." };
+        const c = st.status === "Pass" ? "text-success" : st.status === "Warn" ? "text-warning" : st.status === "Fail" ? "text-destructive" : "text-muted-foreground";
+        return (
+          <div key={k} className="grid grid-cols-[10rem_4rem_minmax(0,1fr)] gap-2 border-t border-border py-1 text-xs first:border-t-0">
+            <span>{STAGE_LABEL[k]}</span>
+            <span className={`font-medium ${c}`}>{st.status}</span>
+            <span className="break-words text-muted-foreground">{st.detail}</span>
+          </div>
+        );
+      })}
+    </Section>
   );
 }
