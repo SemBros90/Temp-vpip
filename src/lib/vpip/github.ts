@@ -275,6 +275,7 @@ export async function commitFiles(
 
   const tree: Array<{ path: string; mode: string; type: string; sha: string }> = [];
   for (const file of files) {
+    if (file.content.startsWith("vpip-skipped:")) continue;
     const blob = await call<{ sha: string }>(token, `/repos/${fullName}/git/blobs`, {
       method: "POST",
       body: { content: toBase64(file.content), encoding: "base64" },
