@@ -5,6 +5,13 @@
  */
 import type {
   AliasEntry,
+  BuildStages,
+  CodeSide,
+  GraphEdge,
+  RepoInsights,
+  ServerOnlyFile,
+  StageResult,
+  StageStatus,
   DepReportRow,
   EnvReportRow,
   ImportIssue,
@@ -471,22 +478,214 @@ export function detectUnsupported(files: AnalyzerFile[], c: RepoClassification, 
 
 /* --------------------------------------------------------------- health */
 
-export function healthScore(r: Pick<RepoReport, "dependencies" | "imports" | "environment" | "unsupported">, totalImports: number): RepoHealth {
+/* ------------------------------------------------ graph / split / server */
+
+const SERVER_PATH = /(^|\/)(server|backend|api|functions|netlify\/functions|supabase\/functions|prisma|scripts)\/|(^|\/)pages\/api\/|(^|\/)app\/(.+\/)?route\.[cm]?[jt]s$|\.server\.[cm]?[jt]sx?$|(^|\/)(middleware|server|index\.server)\.[cm]?[jt]s$|(^|\/)(vite|next|remix|webpack|tailwind|postcss|eslint|astro|nuxt|svelte|drizzle|jest|vitest|playwright)\.config\.[cm]?[jt]s$/;
+const SHARED_PATH = /(^|\/)(shared|common|types|lib\/shared)\/|\.d\.ts$|(^|\/)types?\.[jt]s$/;
+const BUILTIN_ALT = [...NODE_BUILTINS].join("|");
+const SERVER_API_RES: Array<[string, RegExp]> = [
+  ["node: import", /from\s+['"]node:[\w/]+['"]|require\(\s*['"]node:/],
+  ["Node built-in", new RegExp(`(?:from\\s+|require\\(\\s*)['"](?:${BUILTIN_ALT})(?:/[\\w/]*)?['"]`)],
+  ["res.setHeader", /\bres\.(setHeader|writeHead|status|send|json|end)\s*\(/],
+  ["req object", /\breq\.(body|query|params|headers|method|url|cookies)\b/],
+  ["process API", /\bprocess\.(cwd|exit|argv|on|platform|pid|memoryUsage|stdout|stderr)\b/],
+  ["__dirname", /\b__dirname\b|\b__filename\b/],
+  ["server framework", /(?:from\s+|require\(\s*)['"](express|fastify|koa|hono\/node-server|@nestjs\/[\w-]+|http-proxy|ws)['"]/],
+  ["use server", /^\s*['"]use server['"]/m],
+  ["database driver", /(?:from\s+|require\(\s*)['"](pg|mysql2?|mongodb|mongoose|@prisma\/client|better-sqlite3|sqlite3|redis|ioredis)['"]/],
+];
+
+export function detectServerApis(files: AnalyzerFile[]): ServerOnlyFile[] {
+  const out: ServerOnlyFile[] = [];
+  for (const f of files) {
+    if (!CODE_RE.test(f.path) || /(^|\/)node_modules\//.test(f.path) || /\.d\.ts$/.test(f.path)) continue;
+    const src = f.content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const apis: string[] = [];
+    for (const [label, re] of SERVER_API_RES) {
+      const m = re.exec(src);
+      if (m) apis.push(label === "Node built-in" ? `Node built-in (${/['"]([^'"]+)['"]/.exec(m[0])?.[1] ?? "?"})` : label);
+    }
+    if (apis.length) out.push({ path: f.path, apis });
+  }
+  return out;
+}
+
+function resolveTo(paths: Set<string>, aliases: AliasEntry[], from: string, spec: string): string | undefined {
+  let base: string | undefined;
+  if (spec.startsWith(".")) base = joinPath(dirname(from), spec);
+  else {
+    const al = [...aliases].sort((a, b) => b.alias.length - a.alias.length).find((a) => spec === a.alias || spec.startsWith(`${a.alias}/`));
+    if (al) base = joinPath(al.target, spec.slice(al.alias.length).replace(/^\//, ""));
+    else if (spec.startsWith("/")) base = spec.slice(1);
+  }
+  if (base === undefined) return undefined;
+  const b = base.split("?")[0]!;
+  for (const e of RESOLVE_EXT) if (paths.has(b + e)) return b + e;
+  for (const e of INDEX) if (paths.has(b + e)) return b + e;
+  return undefined;
+}
+
+export function pickEntry(files: AnalyzerFile[], appRoot = ""): string | undefined {
+  const pre = appRoot ? `${appRoot}/` : "";
+  const html = files.find((f) => f.path === `${pre}index.html`);
+  const src = html ? /<script[^>]*type=["']module["'][^>]*src=["']\/?([^"']+)["']/i.exec(html.content)?.[1] : undefined;
+  const cands = [src && `${pre}${src}`, ...["src/main.tsx", "src/main.ts", "src/main.jsx", "src/main.js", "src/index.tsx", "src/index.jsx", "src/index.js", "app/root.tsx", "src/routes/__root.tsx", "app/layout.tsx", "src/app/layout.tsx", "pages/_app.tsx", "pages/index.tsx", "src/App.tsx"].map((p) => pre + p)];
+  const set = new Set(files.map((f) => f.path));
+  return cands.find((c): c is string => Boolean(c && set.has(c)));
+}
+
+export function buildDependencyGraph(files: AnalyzerFile[], aliases: AliasEntry[], entry?: string) {
+  const paths = new Set(files.map((f) => f.path));
+  const edges: GraphEdge[] = [];
+  const packagesByFile: Record<string, string[]> = {};
+  const adj = new Map<string, string[]>();
+  for (const f of files) {
+    if (!(CODE_RE.test(f.path) || STYLE_RE.test(f.path)) || /(^|\/)node_modules\//.test(f.path)) continue;
+    const outs: string[] = [];
+    for (const spec of extractSpecs(f.content, f.path)) {
+      const to = resolveTo(paths, aliases, f.path, spec);
+      if (to) {
+        if (!outs.includes(to)) outs.push(to);
+        continue;
+      }
+      if (/^[./]/.test(spec) || /^(node:|https?:|data:|virtual:)/.test(spec)) continue;
+      const al = aliases.some((a) => spec === a.alias || spec.startsWith(`${a.alias}/`));
+      if (al) continue;
+      const name = pkgName(spec);
+      (packagesByFile[f.path] ??= []).includes(name) || packagesByFile[f.path]!.push(name);
+    }
+    adj.set(f.path, outs);
+    for (const to of outs) edges.push({ from: f.path, to });
+  }
+  const reach = new Set<string>();
+  const stack = entry ? [entry] : [];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (reach.has(n)) continue;
+    reach.add(n);
+    for (const m of adj.get(n) ?? []) stack.push(m);
+  }
+  const unreachable = entry
+    ? [...adj.keys()].filter((p) => !reach.has(p) && /\.[jt]sx?$/.test(p) && !SERVER_PATH.test(p) && !/\.(test|spec|stories)\./.test(p) && !/\.d\.ts$/.test(p))
+    : [];
+  return { edges, packagesByFile, unreachable, reach, adj };
+}
+
+export function splitCode(files: AnalyzerFile[], serverOnly: ServerOnlyFile[], adj: Map<string, string[]>, reach: Set<string>): Record<string, CodeSide> {
+  const server = new Set(serverOnly.filter((s) => !s.apis.every((a) => a === "process API")).map((s) => s.path));
+  const side: Record<string, CodeSide> = {};
+  for (const f of files) {
+    if (!CODE_RE.test(f.path) || /(^|\/)node_modules\//.test(f.path)) continue;
+    if (SERVER_PATH.test(f.path) || (server.has(f.path) && !reach.has(f.path))) side[f.path] = "Backend";
+    else if (SHARED_PATH.test(f.path)) side[f.path] = "Shared";
+    else side[f.path] = "Frontend";
+  }
+  // A module imported by both a backend and a frontend file is shared.
+  const importers = new Map<string, Set<CodeSide>>();
+  for (const [from, outs] of adj) for (const to of outs) {
+    const s = importers.get(to) ?? new Set<CodeSide>();
+    if (side[from]) s.add(side[from]!);
+    importers.set(to, s);
+  }
+  for (const [p, s] of importers) if (side[p] && s.has("Backend") && s.has("Frontend") && !server.has(p)) side[p] = "Shared";
+  return side;
+}
+
+export function parseTailwindConfig(files: AnalyzerFile[]): { content: string[]; plugins: string[] } | undefined {
+  const f = files.find((x) => /(^|\/)tailwind\.config\.[cm]?[jt]s$/.test(x.path));
+  if (!f) return undefined;
+  const content = [...(/content\s*:\s*\[([\s\S]*?)\]/.exec(f.content)?.[1] ?? "").matchAll(/['"`]([^'"`]+)['"`]/g)].map((m) => m[1]!);
+  const plugins = [...f.content.matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)|import\s+\w+\s+from\s+['"]([^'"]+)['"]/g)]
+    .map((m) => m[1] ?? m[2] ?? "")
+    .filter((s) => s && !s.startsWith(".") && s !== "tailwindcss");
+  return { content, plugins: [...new Set(plugins.map(pkgName))] };
+}
+
+export function parseRemixConfig(files: AnalyzerFile[]): { appDirectory?: string | undefined } | undefined {
+  const f = files.find((x) => /(^|\/)remix\.config\.[cm]?[jt]s$/.test(x.path));
+  if (!f) return undefined;
+  return { appDirectory: /appDirectory\s*:\s*['"]([^'"]+)['"]/.exec(f.content)?.[1] ?? "app" };
+}
+
+/* --------------------------------------------------------------- stages */
+
+const NOT_RUN: StageResult = { status: "Not run", detail: "Not run yet — open the preview to record this stage." };
+
+export function staticStages(
+  deps: DepReportRow[],
+  imports: ImportIssue[],
+  totalImports: number,
+  compileErrors: string[] | undefined,
+  prev?: BuildStages,
+): BuildStages {
+  const missing = deps.filter((d) => d.status === "Missing" || d.status === "Invalid");
+  const warnDeps = deps.filter((d) => d.status === "Version conflict" || d.status === "Not locked");
+  const codeIssues = imports.filter((i) => i.kind !== "Missing asset");
+  const now = new Date().toISOString();
+  return {
+    dependencies: missing.length
+      ? { status: missing.length > 5 ? "Fail" : "Warn", detail: `${missing.length} missing: ${missing.slice(0, 6).map((d) => d.name).join(", ")}`, at: now }
+      : warnDeps.length
+        ? { status: "Warn", detail: `${warnDeps.length} not locked or conflicting`, at: now }
+        : { status: "Pass", detail: `${deps.length} dependencies resolve`, at: now },
+    imports: codeIssues.length
+      ? { status: codeIssues.length / Math.max(totalImports, 1) > 0.05 ? "Fail" : "Warn", detail: `${codeIssues.length} of ${totalImports} imports unresolved`, at: now }
+      : { status: "Pass", detail: `${totalImports} imports resolve`, at: now },
+    compile: compileErrors
+      ? compileErrors.length
+        ? { status: "Fail", detail: `${compileErrors.length} file(s) failed to compile: ${compileErrors[0]}`, at: now }
+        : { status: "Pass", detail: "All frontend files compile", at: now }
+      : prev?.compile ?? NOT_RUN,
+    runtime: prev?.runtime ?? NOT_RUN,
+    preview: prev?.preview ?? NOT_RUN,
+  };
+}
+
+/* --------------------------------------------------------------- health */
+
+const STAGE_PCT: Record<StageStatus, number | null> = { Pass: 100, Warn: 60, Fail: 0, "Not run": null };
+
+/** Health is based on resolution + compile/runtime/preview outcomes — never on file count. */
+export function healthScore(
+  r: Pick<RepoReport, "dependencies" | "imports" | "environment" | "unsupported"> & { stages?: BuildStages | undefined },
+  totalImports: number,
+): RepoHealth {
   const pct = (bad: number, total: number) => (total <= 0 ? 100 : Math.max(0, Math.round(100 - (bad / total) * 100)));
-  const badDeps = r.dependencies.filter((d) => d.status !== "OK").length;
-  const dependencies = pct(badDeps, Math.max(r.dependencies.length, 1));
+  const badDeps = r.dependencies.filter((d) => d.status === "Missing" || d.status === "Invalid").length;
+  const softDeps = r.dependencies.filter((d) => d.status === "Version conflict").length;
+  const dependencies = Math.max(0, pct(badDeps, Math.max(r.dependencies.length, 1)) - softDeps * 2);
   const codeIssues = r.imports.filter((i) => i.kind !== "Missing asset").length;
   const assetIssues = r.imports.length - codeIssues;
   const imports = pct(codeIssues, Math.max(totalImports, 1));
   const assets = assetIssues === 0 ? 100 : Math.max(0, 100 - assetIssues * 10);
   const environment = pct(r.environment.filter((e) => !e.configured).length, r.environment.length);
   const blocking = r.unsupported.filter((u) => u.blocking).length;
-  const warn = r.unsupported.length - blocking;
-  const previewReadiness = blocking
-    ? Math.max(0, 25 - blocking * 5)
-    : Math.max(0, Math.round((imports + dependencies + environment) / 3) - warn * 8);
-  const overall = Math.round(dependencies * 0.2 + imports * 0.25 + assets * 0.1 + environment * 0.15 + previewReadiness * 0.3);
-  return { overall, dependencies, imports, assets, environment, previewReadiness };
+  const compile = r.stages ? STAGE_PCT[r.stages.compile.status] : null;
+  const runtime = r.stages ? STAGE_PCT[r.stages.runtime.status] : null;
+  const preview = r.stages ? STAGE_PCT[r.stages.preview.status] : null;
+  const estimate = blocking ? Math.max(0, 25 - blocking * 5) : Math.round((imports + dependencies + (compile ?? 100)) / 3);
+  const previewReadiness = preview ?? estimate;
+  const parts: Array<[number | null, number]> = [
+    [dependencies, 25],
+    [imports, 25],
+    [compile, 20],
+    [runtime, 15],
+    [preview ?? estimate, 15],
+  ];
+  const used = parts.filter(([v]) => v !== null) as Array<[number, number]>;
+  const w = used.reduce((a, [, x]) => a + x, 0);
+  const overall = Math.round(used.reduce((a, [v, x]) => a + v * x, 0) / Math.max(w, 1));
+  return {
+    overall,
+    dependencies,
+    imports,
+    assets,
+    environment,
+    previewReadiness,
+    compile: compile ?? undefined,
+    runtime: runtime ?? undefined,
+    preview: preview ?? undefined,
+  };
 }
 
 /* ------------------------------------------------------------- analyse */
@@ -495,7 +694,16 @@ export type AnalysisResult = Omit<RepoReport, "id" | "createdAt" | "projectId">;
 
 export function analyzeRepository(
   files: AnalyzerFile[],
-  opts: { configuredEnv?: string[] | undefined; branch?: string | undefined; commitSha?: string | undefined; repositoryId?: string | undefined; buildSessionId?: string | undefined; previewDiagnostics?: PreviewDiagnostics | undefined } = {},
+  opts: {
+    configuredEnv?: string[] | undefined;
+    branch?: string | undefined;
+    commitSha?: string | undefined;
+    repositoryId?: string | undefined;
+    buildSessionId?: string | undefined;
+    previewDiagnostics?: PreviewDiagnostics | undefined;
+    compileErrors?: string[] | undefined;
+    previousStages?: BuildStages | undefined;
+  } = {},
 ): AnalysisResult {
   const classification = classify(files);
   const aliases = readAliases(files, classification.appRoot);
@@ -505,10 +713,45 @@ export function analyzeRepository(
     for (const k of Object.keys({ ...j?.dependencies, ...j?.devDependencies, ...j?.peerDependencies })) declared.add(k);
   }
   const { issues, usedPackages, total } = validateImports(files, aliases, declared);
+  const tailwind = parseTailwindConfig(files);
+  for (const p of tailwind?.plugins ?? []) {
+    const l = usedPackages.get(p) ?? [];
+    usedPackages.set(p, l.concat("tailwind.config"));
+  }
   const dependencies = validateDependencies(files, usedPackages, classification.appRoot);
   const environment = scanEnv(files, new Set(opts.configuredEnv ?? []));
+  const serverOnly = detectServerApis(files);
+  const entry = pickEntry(files, classification.appRoot);
+  const graph = buildDependencyGraph(files, aliases, entry);
+  const codeSplit = splitCode(files, serverOnly, graph.adj, graph.reach);
   const unsupported = detectUnsupported(files, classification, dependencies);
-  const health = healthScore({ dependencies, imports: issues, environment, unsupported }, total);
+  const reachedBackend = [...graph.reach].filter((p) => codeSplit[p] === "Backend");
+  if (reachedBackend.length)
+    unsupported.push({
+      reason: "Backend code imported by the frontend",
+      evidence: `${reachedBackend.slice(0, 4).join(", ")} ${reachedBackend.length > 4 ? `and ${reachedBackend.length - 4} more ` : ""}will be replaced with stubs in the preview.`,
+      blocking: false,
+    });
+  const stages = staticStages(dependencies, issues, total, opts.compileErrors, opts.previousStages);
+  const health = healthScore({ dependencies, imports: issues, environment, unsupported, stages }, total);
+  const isBin = (p: string) => /\.(png|jpe?g|gif|webp|ico|avif|bmp|woff2?|ttf|otf|eot|svg)$/i.test(p);
+  const skippedTooLarge = files.filter((f) => f.content.startsWith("vpip-skipped:")).map((f) => f.path);
+  const insights: RepoInsights = {
+    totalFiles: files.length,
+    entry,
+    codeSplit,
+    serverOnly,
+    edges: graph.edges.slice(0, 4000),
+    packagesByFile: graph.packagesByFile,
+    unreachable: graph.unreachable.slice(0, 300),
+    assets: {
+      present: files.filter((f) => isBin(f.path) && !f.content.startsWith("vpip-skipped:")).length,
+      missing: issues.filter((i) => i.kind === "Missing asset").length,
+      skippedTooLarge,
+    },
+    tailwind,
+    remix: parseRemixConfig(files),
+  };
   return {
     repositoryId: opts.repositoryId,
     buildSessionId: opts.buildSessionId,
@@ -520,10 +763,71 @@ export function analyzeRepository(
     aliases,
     environment,
     unsupported,
-    previewDiagnostics: opts.previewDiagnostics ?? { buildStatus: "Not run", repairs: [], runtimeErrors: [] },
+    previewDiagnostics: { ...(opts.previewDiagnostics ?? { buildStatus: "Not run", repairs: [], runtimeErrors: [] }), insights },
     health,
+    stages,
   };
 }
+
+/** Records a live preview result (runtime + preview stages) and re-scores health. */
+export function applyPreviewResult(
+  report: RepoReport,
+  result: { rendered: boolean; runtimeErrors: string[]; compileErrors?: string[] | undefined },
+): Pick<RepoReport, "stages" | "health" | "previewDiagnostics"> {
+  const now = new Date().toISOString();
+  const base = report.stages ?? staticStages(report.dependencies, report.imports, 0, undefined);
+  const stages: BuildStages = {
+    ...base,
+    compile: result.compileErrors
+      ? result.compileErrors.length
+        ? { status: "Fail", detail: `${result.compileErrors.length} file(s) failed to compile: ${result.compileErrors[0]}`, at: now }
+        : { status: "Pass", detail: "All frontend files compile", at: now }
+      : base.compile,
+    runtime: result.runtimeErrors.length
+      ? { status: result.rendered ? "Warn" : "Fail", detail: `${result.runtimeErrors.length} runtime error(s): ${result.runtimeErrors[0]?.slice(0, 200)}`, at: now }
+      : { status: "Pass", detail: "No runtime errors", at: now },
+    preview: result.rendered ? { status: "Pass", detail: "The preview rendered content", at: now } : { status: "Fail", detail: "The preview stayed empty or showed an error", at: now },
+  };
+  const totalImports = Math.max(report.imports.length * 20, 1);
+  const health = healthScore({ ...report, stages }, totalImports);
+  // Keep the resolution scores computed with the real import total.
+  health.imports = report.health.imports;
+  health.dependencies = report.health.dependencies;
+  const used: Array<[number, number]> = [
+    [health.dependencies, 25],
+    [health.imports, 25],
+    [health.compile ?? 100, 20],
+    [health.runtime ?? 100, 15],
+    [health.preview ?? health.previewReadiness, 15],
+  ];
+  health.overall = Math.round(used.reduce((a, [v, w]) => a + v * w, 0) / 100);
+  return {
+    stages,
+    health,
+    previewDiagnostics: { ...report.previewDiagnostics, runtimeErrors: result.runtimeErrors.slice(-20), lastRunAt: now, buildStatus: result.rendered ? "Preview rendered" : "Preview failed — see stages" },
+  };
+}
+
+/** Preview-verdict + must-fix list for the Import Diagnostics page. */
+export function importVerdict(r: RepoReport): { verdict: "Preview can run" | "Preview can run with stubs" | "Preview cannot run"; mustFix: Array<{ file: string; problem: string; fix: string }> } {
+  const mustFix: Array<{ file: string; problem: string; fix: string }> = [];
+  const pm = r.classification.packageManager.startsWith("pnpm") ? "pnpm add" : r.classification.packageManager.startsWith("yarn") ? "yarn add" : r.classification.packageManager.startsWith("bun") ? "bun add" : "npm i";
+  for (const d of r.dependencies.filter((x) => x.status === "Missing"))
+    mustFix.push({ file: d.usedBy?.[0] ?? "package.json", problem: `Package "${d.name}" is imported but not declared`, fix: `Run \`${pm} ${d.name}\` (or Auto Repair)` });
+  for (const d of r.dependencies.filter((x) => x.status === "Invalid")) mustFix.push({ file: "package.json", problem: `Invalid package name "${d.name}"`, fix: "Correct or remove it in package.json" });
+  for (const i of r.imports)
+    mustFix.push({ file: i.referencedBy, problem: `${i.kind}: "${i.spec}"`, fix: i.kind === "Missing asset" ? `Add the file at ${i.expectedPath}` : i.kind === "Broken alias" ? `Create ${i.expectedPath} or fix the alias in tsconfig paths` : `Create ${i.expectedPath} or fix the import path` });
+  for (const e of r.environment.filter((x) => !x.configured)) mustFix.push({ file: e.sources[0] ?? "", problem: `Environment variable ${e.key} is not set`, fix: `Set ${e.key} in the Environment section` });
+  const s = r.stages;
+  if (s?.compile.status === "Fail") mustFix.push({ file: s.compile.detail.split(":")[1]?.trim() ?? "", problem: "Compile failed", fix: s.compile.detail });
+  if (s?.runtime.status === "Fail") mustFix.push({ file: "", problem: "Runtime error", fix: s.runtime.detail });
+  const blocking = r.unsupported.filter((u) => u.blocking);
+  for (const u of blocking) mustFix.push({ file: "", problem: u.reason, fix: u.evidence });
+  const stubs = (r.previewDiagnostics.insights?.serverOnly.length ?? 0) > 0 || r.unsupported.length > 0;
+  const verdict = blocking.length || s?.preview.status === "Fail" ? "Preview cannot run" : stubs ? "Preview can run with stubs" : "Preview can run";
+  return { verdict, mustFix };
+}
+
 
 /** Plain-text summary the AI reads (names only — never env values). */
 export function repoDiagnosticsSummary(r: RepoReport | undefined, maxItems = 40): string {
