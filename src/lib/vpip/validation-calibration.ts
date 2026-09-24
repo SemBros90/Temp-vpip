@@ -61,7 +61,7 @@ export function evidenceFromAudit(rows: AuditRow[]): RuntimeEvidence {
   const run = latest(["runtime_startup", "sandbox_start"]);
   const preview = latest(["preview_create", "preview_health", "preview_recovery"]);
   const d = (sync?.detail ?? {}) as Record<string, unknown>;
-  const mismatch = Array.isArray(d["mismatched"]) ? (d["mismatched"] as unknown[]).length > 0 : Boolean(d["checksumMismatch"]);
+  const mismatch = sync?.status === "failed" && (/missing or corrupted/i.test(sync.error ?? "") || (Array.isArray(d["errors"]) && (d["errors"] as unknown[]).length > 0));
   return {
     synced: st(sync),
     installed: st(install),

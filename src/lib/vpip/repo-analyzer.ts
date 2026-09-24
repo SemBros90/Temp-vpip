@@ -37,8 +37,9 @@ type Pkg = {
   scripts?: Record<string, string>;
 };
 
+/** All Node built-ins — valid with or without the `node:` prefix, never a missing dependency. */
 const NODE_BUILTINS = new Set(
-  "assert buffer child_process cluster crypto dgram dns events fs http http2 https module net os path perf_hooks process querystring readline stream string_decoder timers tls tty url util v8 vm worker_threads zlib async_hooks inspector".split(
+  "assert buffer child_process cluster console constants crypto dgram diagnostics_channel dns domain events fs http http2 https module net os path perf_hooks process punycode querystring readline repl stream string_decoder sys timers tls trace_events tty url util v8 vm wasi worker_threads zlib async_hooks inspector test sqlite sea".split(
     " ",
   ),
 );
@@ -236,7 +237,7 @@ function satisfiesLoose(range: string, version: string): boolean {
 export function readAliases(files: AnalyzerFile[], appRoot = ""): AliasEntry[] {
   const out: AliasEntry[] = [];
   const pre = appRoot ? `${appRoot}/` : "";
-  for (const name of ["tsconfig.json", "tsconfig.app.json", "jsconfig.json"]) {
+  for (const name of ["tsconfig.json", "tsconfig.app.json", "tsconfig.base.json", "jsconfig.json"]) {
     for (const f of files.filter((x) => x.path === name || x.path === `${pre}${name}`)) {
       try {
         const j = parseJsonc(f.content) as { compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> } };
@@ -618,18 +619,24 @@ export function staticStages(
   compileErrors: string[] | undefined,
   prev?: BuildStages,
 ): BuildStages {
-  const missing = deps.filter((d) => d.status === "Missing" || d.status === "Invalid");
+  // Calibrated (Phase 4A.1): only an invalid package name fails statically.
+  // Undeclared packages, version/lockfile advisories and unresolved imports are
+  // static guesses — warnings until a real install or runtime start proves otherwise.
+  const invalid = deps.filter((d) => d.status === "Invalid");
+  const missing = deps.filter((d) => d.status === "Missing");
   const warnDeps = deps.filter((d) => d.status === "Version conflict" || d.status === "Not locked");
   const codeIssues = imports.filter((i) => i.kind !== "Missing asset");
   const now = new Date().toISOString();
   return {
-    dependencies: missing.length
-      ? { status: missing.length > 5 ? "Fail" : "Warn", detail: `${missing.length} missing: ${missing.slice(0, 6).map((d) => d.name).join(", ")}`, at: now }
-      : warnDeps.length
-        ? { status: "Warn", detail: `${warnDeps.length} not locked or conflicting`, at: now }
-        : { status: "Pass", detail: `${deps.length} dependencies resolve`, at: now },
+    dependencies: invalid.length
+      ? { status: "Fail", detail: `${invalid.length} invalid package name(s): ${invalid.slice(0, 6).map((d) => d.name).join(", ")}`, at: now }
+      : missing.length
+        ? { status: "Warn", detail: `${missing.length} undeclared (static check only): ${missing.slice(0, 6).map((d) => d.name).join(", ")}`, at: now }
+        : warnDeps.length
+          ? { status: "Warn", detail: `${warnDeps.length} lockfile/version advisories (static check only)`, at: now }
+          : { status: "Pass", detail: `${deps.length} dependencies resolve`, at: now },
     imports: codeIssues.length
-      ? { status: codeIssues.length / Math.max(totalImports, 1) > 0.05 ? "Fail" : "Warn", detail: `${codeIssues.length} of ${totalImports} imports unresolved`, at: now }
+      ? { status: "Warn", detail: `${codeIssues.length} of ${totalImports} imports unresolved (static check only)`, at: now }
       : { status: "Pass", detail: `${totalImports} imports resolve`, at: now },
     compile: compileErrors
       ? compileErrors.length
