@@ -599,7 +599,7 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
     if (cache[path]) return cache[path].exports;
     var mod = { exports: {} };
     cache[path] = mod;
-    var fn = new Function('require','module','exports', sources[path]);
+    var fn = new Function('require','module','exports', sources[path] + '\n//# sourceURL=vpip-preview:///' + path);
     fn(function(s){ return req(path, s); }, mod, mod.exports);
     return mod.exports;
   }
@@ -612,7 +612,7 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
         if (typeof entryComponent === 'function') return { path: entry, comp: entryComponent };
         var entryName = entry.split('/').pop().toLowerCase();
         if (entryName.indexOf('main.') === 0 || entryName.indexOf('index.') === 0) return { path: entry, started: true };
-      } catch (e) { console.error(entry+': '+(e && e.message ? e.message : String(e))); }
+      } catch (e) { console.error(entry+': '+(e && e.stack ? e.stack : (e && e.message ? e.message : String(e)))); }
       order.push(entry);
     }
     for (p in sources) if (sources.hasOwnProperty(p) && order.indexOf(p) < 0) order.push(p);
@@ -620,7 +620,7 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
     for (var i=0;i<order.length;i++){
       var path = order[i], exp;
       try { exp = req(path, './'+path.split('/').pop()); }
-      catch (e) { console.error(path+': '+(e && e.message ? e.message : String(e))); continue; }
+      catch (e) { console.error(path+': '+(e && e.stack ? e.stack : (e && e.message ? e.message : String(e)))); continue; }
       var comp = exp && (exp.default || exp.App);
       if (typeof comp === 'function') return { path: path, comp: comp };
       summary.push(path + (exp ? ' → ' + Object.keys(exp).join(', ') : ''));
