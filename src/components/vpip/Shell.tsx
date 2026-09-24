@@ -21,6 +21,7 @@ import {
   Sparkles,
   Table2,
   Stethoscope,
+  ShieldCheck,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useVpip } from "@/lib/vpip/store";
@@ -130,6 +131,7 @@ export function Shell({
           <div className="label-mono px-2 pb-1.5">Workspace</div>
           <NavItem to="/" icon={Library} label="Projects" exact />
           <NavItem to="/intelligence" icon={Network} label="Intelligence Register" />
+          <NavItem to="/validation" icon={ShieldCheck} label="Repository Validation" />
           <NavItem to="/settings" icon={SettingsIcon} label="Settings" />
 
           {project ? (
