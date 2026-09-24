@@ -15,6 +15,7 @@ export function packCredentials(username: string, token: string) {
 }
 
 function creds(token: string) {
+  if (!token.trim()) return { username: "", password: "" };
   const i = token.indexOf(":");
   if (i < 0) return { username: "oauth2", password: token };
   return { username: token.slice(0, i), password: token.slice(i + 1) };
@@ -43,9 +44,13 @@ async function session(url: string, token: string) {
     dir: "/repo",
     url,
     corsProxy: `${window.location.origin}/api/git-proxy`,
-    onAuth: () => ({ username: c.username, password: c.password }),
+    onAuth: () => (c.password ? { username: c.username, password: c.password } : { cancel: true }),
     onAuthFailure: () => {
-      throw new Error("Git host rejected the credentials (check username and token).");
+      throw new Error(
+        c.password
+          ? "Git host rejected the credentials (check username and token)."
+          : "This repository needs an access token (it is private or does not exist).",
+      );
     },
   };
   const author = { name: c.username || "vpip", email: `${c.username || "vpip"}@users.noreply.vpip` };
@@ -99,13 +104,15 @@ export async function whoAmI(token: string, url: string) {
 
 async function walk(fs: { promises: any }, dir: string, out: GhFile[], root = dir) {
   for (const entry of (await fs.promises.readdir(dir)) as string[]) {
-    if (entry === ".git") continue;
+    if (entry === ".git" || entry === "node_modules" || entry === "dist" || entry === "build") continue;
     const p = `${dir}/${entry}`;
     const st = await fs.promises.stat(p);
     if (st.isDirectory()) await walk(fs, p, out, root);
     else {
+      if (st.size > 400_000 || /\.(png|jpe?g|gif|webp|ico|woff2?|ttf|eot|otf|mp4|mp3|pdf|zip|gz|lockb)$/i.test(entry)) continue;
       try {
         const content = (await fs.promises.readFile(p, { encoding: "utf8" })) as string;
+        if (content.includes("\u0000")) continue;
         out.push({ path: p.slice(root.length + 1), content });
       } catch {
         /* binary — skipped */
