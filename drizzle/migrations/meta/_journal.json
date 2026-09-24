@@ -64,6 +64,13 @@
       "when": 1790249204140,
       "tag": "0008_vpip_runtime_phase1",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790249319076,
+      "tag": "0009_vpip_runtime_phase_events",
+      "breakpoints": true
     }
   ]
 }

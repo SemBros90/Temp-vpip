@@ -1691,6 +1691,8 @@ export type Database = {
           owner_id: string
           package_manager: string | null
           phase: string
+          phase_events: Json
+          phase_events_seen: number
           port: number
           preview_slug: string | null
           project_id: string
@@ -1718,6 +1720,8 @@ export type Database = {
           owner_id: string
           package_manager?: string | null
           phase?: string
+          phase_events?: Json
+          phase_events_seen?: number
           port?: number
           preview_slug?: string | null
           project_id: string
@@ -1745,6 +1749,8 @@ export type Database = {
           owner_id?: string
           package_manager?: string | null
           phase?: string
+          phase_events?: Json
+          phase_events_seen?: number
           port?: number
           preview_slug?: string | null
           project_id?: string
