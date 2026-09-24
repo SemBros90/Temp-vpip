@@ -16,7 +16,7 @@ export const runtimeInfo = createServerFn({ method: "POST" })
     const c = await caller();
     const role = await rt.requireProjectAccess(c, data.projectId);
     const row = await rt.activeRowForBuild(data.buildId);
-    return { configured: rt.hasE2BKey(), role, row: row && row.project_id === data.projectId ? row : null };
+    return { configured: await rt.e2bReady(), role, row: row && row.project_id === data.projectId ? row : null };
   });
 
 export const runtimeLaunch = createServerFn({ method: "POST" })
@@ -91,30 +91,43 @@ export const runtimeAudit = createServerFn({ method: "POST" })
     return rows ?? [];
   });
 
-export const runtimeMembers = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ projectId: z.string() }).parse(d))
+/** Runtime History / Audit Center query: read-only, server-side filters + pagination. */
+const eventsInput = z.object({
+  projectId: z.string().max(64).optional(),
+  buildId: z.string().max(64).optional(),
+  runtimeId: z.string().max(80).optional(),
+  actions: z.array(z.string().max(64)).max(40).optional(),
+  status: z.enum(["started", "success", "failed", "info"]).optional(),
+  from: z.string().max(40).optional(),
+  to: z.string().max(40).optional(),
+  search: z.string().max(200).optional(),
+  page: z.number().int().min(0).max(100000).default(0),
+  pageSize: z.number().int().min(1).max(5000).default(50),
+});
+
+export const runtimeEvents = createServerFn({ method: "POST" })
+  .inputValidator((d) => eventsInput.parse(d))
   .handler(async ({ data }) => {
     const c = await caller();
-    const role = await rt.requireProjectAccess(c, data.projectId);
-    const { data: rows } = await c.supabase.from("vpip_project_members").select("user_id, email, role, created_at").eq("project_id", data.projectId);
-    return { role, members: rows ?? [], me: c.userId };
+    let q = c.supabase.from("vpip_runtime_audit").select("*", { count: "exact" }).order("created_at", { ascending: false });
+    if (data.projectId) q = q.eq("project_id", data.projectId);
+    if (data.buildId) q = q.eq("build_id", data.buildId);
+    if (data.runtimeId) q = q.or(`sandbox_row_id.eq.${data.runtimeId.replace(/[^\w-]/g, "")},e2b_sandbox_id.eq.${data.runtimeId.replace(/[^\w-]/g, "")}`);
+    if (data.actions?.length) q = q.in("action", data.actions);
+    if (data.status) q = q.eq("status", data.status);
+    if (data.from) q = q.gte("created_at", data.from);
+    if (data.to) q = q.lte("created_at", data.to);
+    if (data.search) {
+      const s = data.search.replace(/[%,()*]/g, " ").trim();
+      if (s) q = q.or(`action.ilike.%${s}%,error.ilike.%${s}%,e2b_sandbox_id.ilike.%${s}%,sandbox_row_id.ilike.%${s}%,build_id.ilike.%${s}%`);
+    }
+    const start = data.page * data.pageSize;
+    const { data: rows, count, error } = await q.range(start, start + data.pageSize - 1);
+    if (error) throw new Error(error.message);
+    return { rows: rows ?? [], total: count ?? 0 };
   });
 
-export const runtimeAddMember = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ projectId: z.string(), email: z.string().email().max(255) }).parse(d))
-  .handler(async ({ data }) => {
-    await rt.addMember(await caller(), data.projectId, data.email);
-    return { ok: true };
-  });
-
-export const runtimeRemoveMember = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ projectId: z.string(), userId: z.string().uuid() }).parse(d))
-  .handler(async ({ data }) => {
-    await rt.removeMember(await caller(), data.projectId, data.userId);
-    return { ok: true };
-  });
-
-/** Runtime dashboard: sandboxes of projects the caller can access, plus cost totals. */
+/** Runtime dashboard: all sandboxes plus provider readiness. */
 export const runtimeDashboard = createServerFn({ method: "POST" })
   .handler(async () => {
     const c = await caller();
@@ -122,5 +135,45 @@ export const runtimeDashboard = createServerFn({ method: "POST" })
     const projectIds = (projects ?? []).map((p) => p.id);
     if (projectIds.length) await rt.sweep({ projectIds });
     const { data: rows } = await c.supabase.from("vpip_runtime_sandboxes").select("*").order("created_at", { ascending: false }).limit(500);
-    return { configured: rt.hasE2BKey(), rows: rows ?? [] };
+    return { configured: await rt.e2bReady(), rows: rows ?? [] };
+  });
+
+/* ---------------- provider framework ---------------- */
+
+export const runtimeProviders = createServerFn({ method: "POST" }).handler(async () => {
+  const { providerStatuses } = await import("./providers.server");
+  return providerStatuses();
+});
+
+export const runtimeProviderTest = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ id: z.string().max(40) }).parse(d))
+  .handler(async ({ data }) => {
+    const { testProvider } = await import("./providers.server");
+    const r = await testProvider(data.id);
+    const c = await caller();
+    const { data: p } = await c.supabase.from("vpip_projects").select("id").limit(1).maybeSingle();
+    if (p) await rt.audit({ projectId: p.id, userId: c.userId, action: "provider_test", status: r.ok ? "success" : "failed", error: r.ok ? null : r.message, detail: { provider: data.id, scope: "global" } });
+    return r;
+  });
+
+export const runtimeProviderSetEnabled = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ id: z.string().max(40), enabled: z.boolean() }).parse(d))
+  .handler(async ({ data }) => {
+    const { setProviderEnabled } = await import("./providers.server");
+    await setProviderEnabled(data.id, data.enabled);
+    const c = await caller();
+    const { data: p } = await c.supabase.from("vpip_projects").select("id").limit(1).maybeSingle();
+    if (p) await rt.audit({ projectId: p.id, userId: c.userId, action: data.enabled ? "provider_connect" : "provider_disconnect", status: "success", detail: { provider: data.id, scope: "global" } });
+    return { ok: true };
+  });
+
+/* ---------------- validation center (readiness only, never runs) ---------------- */
+
+export const runtimeReadiness = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ buildId: z.string().max(64) }).parse(d))
+  .handler(async ({ data }) => {
+    const c = await caller();
+    const r = await rt.readiness(c, data.buildId);
+    await rt.audit({ projectId: r.projectId, buildId: data.buildId, userId: c.userId, action: "validation_readiness", status: r.ready ? "success" : "info", detail: { ready: r.ready, blockers: r.stages.filter((s) => s.state === "blocked").map((s) => s.stage), warning: r.stages.some((s) => s.state === "warning") } });
+    return r;
   });

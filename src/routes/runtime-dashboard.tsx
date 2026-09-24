@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Pause, RotateCcw, Square, Trash2, RefreshCw } from "lucide-react";
 import { Shell } from "@/components/vpip/Shell";
+import { RuntimeNav } from "@/components/vpip/RuntimeEventsView";
 import { Button } from "@/components/ui/button";
 import { useVpip } from "@/lib/vpip/store";
 import {
@@ -94,7 +95,8 @@ function RuntimeDashboardPage() {
           </div>
           <Button variant="outline" size="sm" onClick={() => void refresh()}><RefreshCw className="size-3.5" /> Refresh</Button>
         </div>
-        {configured === false ? <div className="rounded border border-border bg-surface-2 p-3 text-sm">E2B API key not configured — sandboxes cannot be created yet.</div> : null}
+        <RuntimeNav />
+        {configured === false ? <div className="rounded border border-border bg-surface-2 p-3 text-sm">Provider Not Configured — E2B key missing or provider disconnected (Runtime Settings). Sandboxes cannot be created yet.</div> : null}
         {error ? <div className="text-sm text-destructive">{error}</div> : null}
         <div className="grid grid-cols-4 gap-3">
           {[

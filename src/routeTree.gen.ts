@@ -11,7 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
+import { Route as RuntimeAuditRouteImport } from './routes/runtime-audit'
 import { Route as RuntimeDashboardRouteImport } from './routes/runtime-dashboard'
+import { Route as RuntimeHistoryRouteImport } from './routes/runtime-history'
+import { Route as RuntimeSettingsRouteImport } from './routes/runtime-settings'
+import { Route as RuntimeValidationRouteImport } from './routes/runtime-validation'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as DiagnosticsIndexRouteImport } from './routes/diagnostics.index'
@@ -52,9 +56,29 @@ const IntelligenceRoute = IntelligenceRouteImport.update({
   path: '/intelligence',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RuntimeAuditRoute = RuntimeAuditRouteImport.update({
+  id: '/runtime-audit',
+  path: '/runtime-audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RuntimeDashboardRoute = RuntimeDashboardRouteImport.update({
   id: '/runtime-dashboard',
   path: '/runtime-dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RuntimeHistoryRoute = RuntimeHistoryRouteImport.update({
+  id: '/runtime-history',
+  path: '/runtime-history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RuntimeSettingsRoute = RuntimeSettingsRouteImport.update({
+  id: '/runtime-settings',
+  path: '/runtime-settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RuntimeValidationRoute = RuntimeValidationRouteImport.update({
+  id: '/runtime-validation',
+  path: '/runtime-validation',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -220,7 +244,11 @@ const ProjectsProjectIdDiscussionsDiscussionIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
+  '/runtime-audit': typeof RuntimeAuditRoute
   '/runtime-dashboard': typeof RuntimeDashboardRoute
+  '/runtime-history': typeof RuntimeHistoryRoute
+  '/runtime-settings': typeof RuntimeSettingsRoute
+  '/runtime-validation': typeof RuntimeValidationRoute
   '/settings': typeof SettingsRoute
   '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
@@ -254,7 +282,11 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
+  '/runtime-audit': typeof RuntimeAuditRoute
   '/runtime-dashboard': typeof RuntimeDashboardRoute
+  '/runtime-history': typeof RuntimeHistoryRoute
+  '/runtime-settings': typeof RuntimeSettingsRoute
+  '/runtime-validation': typeof RuntimeValidationRoute
   '/settings': typeof SettingsRoute
   '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
@@ -288,7 +320,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
+  '/runtime-audit': typeof RuntimeAuditRoute
   '/runtime-dashboard': typeof RuntimeDashboardRoute
+  '/runtime-history': typeof RuntimeHistoryRoute
+  '/runtime-settings': typeof RuntimeSettingsRoute
+  '/runtime-validation': typeof RuntimeValidationRoute
   '/settings': typeof SettingsRoute
   '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
@@ -324,7 +360,11 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/intelligence'
+    | '/runtime-audit'
     | '/runtime-dashboard'
+    | '/runtime-history'
+    | '/runtime-settings'
+    | '/runtime-validation'
     | '/settings'
     | '/validation'
     | '/diagnostics/persistence'
@@ -358,7 +398,11 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/intelligence'
+    | '/runtime-audit'
     | '/runtime-dashboard'
+    | '/runtime-history'
+    | '/runtime-settings'
+    | '/runtime-validation'
     | '/settings'
     | '/validation'
     | '/diagnostics/persistence'
@@ -391,7 +435,11 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/intelligence'
+    | '/runtime-audit'
     | '/runtime-dashboard'
+    | '/runtime-history'
+    | '/runtime-settings'
+    | '/runtime-validation'
     | '/settings'
     | '/validation'
     | '/diagnostics/persistence'
@@ -426,7 +474,11 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   IntelligenceRoute: typeof IntelligenceRoute
+  RuntimeAuditRoute: typeof RuntimeAuditRoute
   RuntimeDashboardRoute: typeof RuntimeDashboardRoute
+  RuntimeHistoryRoute: typeof RuntimeHistoryRoute
+  RuntimeSettingsRoute: typeof RuntimeSettingsRoute
+  RuntimeValidationRoute: typeof RuntimeValidationRoute
   SettingsRoute: typeof SettingsRoute
   ValidationRoute: typeof ValidationRoute
   DiagnosticsPersistenceRoute: typeof DiagnosticsPersistenceRoute
@@ -455,11 +507,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IntelligenceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runtime-audit': {
+      id: '/runtime-audit'
+      path: '/runtime-audit'
+      fullPath: '/runtime-audit'
+      preLoaderRoute: typeof RuntimeAuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/runtime-dashboard': {
       id: '/runtime-dashboard'
       path: '/runtime-dashboard'
       fullPath: '/runtime-dashboard'
       preLoaderRoute: typeof RuntimeDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runtime-history': {
+      id: '/runtime-history'
+      path: '/runtime-history'
+      fullPath: '/runtime-history'
+      preLoaderRoute: typeof RuntimeHistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runtime-settings': {
+      id: '/runtime-settings'
+      path: '/runtime-settings'
+      fullPath: '/runtime-settings'
+      preLoaderRoute: typeof RuntimeSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runtime-validation': {
+      id: '/runtime-validation'
+      path: '/runtime-validation'
+      fullPath: '/runtime-validation'
+      preLoaderRoute: typeof RuntimeValidationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -721,7 +801,11 @@ const ProjectsProjectIdRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   IntelligenceRoute: IntelligenceRoute,
+  RuntimeAuditRoute: RuntimeAuditRoute,
   RuntimeDashboardRoute: RuntimeDashboardRoute,
+  RuntimeHistoryRoute: RuntimeHistoryRoute,
+  RuntimeSettingsRoute: RuntimeSettingsRoute,
+  RuntimeValidationRoute: RuntimeValidationRoute,
   SettingsRoute: SettingsRoute,
   ValidationRoute: ValidationRoute,
   DiagnosticsPersistenceRoute: DiagnosticsPersistenceRoute,

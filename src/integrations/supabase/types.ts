@@ -1674,6 +1674,36 @@ export type Database = {
           },
         ]
       }
+      vpip_runtime_providers: {
+        Row: {
+          enabled: boolean
+          id: string
+          is_active: boolean
+          last_test_at: string | null
+          last_test_message: string | null
+          last_test_ok: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          id: string
+          is_active?: boolean
+          last_test_at?: string | null
+          last_test_message?: string | null
+          last_test_ok?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          id?: string
+          is_active?: boolean
+          last_test_at?: string | null
+          last_test_message?: string | null
+          last_test_ok?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vpip_runtime_sandboxes: {
         Row: {
           build_id: string

@@ -59,7 +59,7 @@ const nowIso = () => new Date().toISOString();
 
 /* ------------------------------------------------------------ security */
 
-/** Signed-in + project access. First signed-in user on an unclaimed project becomes its owner. */
+/** VPIP is single-owner: every runtime action runs as this local owner identity. */
 export const OWNER_ID = "00000000-0000-0000-0000-000000000001";
 
 /** Single-owner mode: the local VPIP owner, acting through the server client. */
@@ -67,11 +67,20 @@ export async function ownerCaller(): Promise<Caller> {
   return { userId: OWNER_ID, email: null, supabase: await admin() };
 }
 
-export async function requireProjectAccess(c: Caller, projectId: string): Promise<"owner" | "member"> {
+/** Confirms the project exists. Single-owner: no per-user access rules. */
+export async function requireProjectAccess(c: Caller, projectId: string): Promise<"owner"> {
   const { data: project, error } = await c.supabase.from("vpip_projects").select("id").eq("id", projectId).maybeSingle();
   if (error) throw new Error(`Could not read project: ${error.message}`);
   if (!project) throw new Error("Project not found.");
   return "owner";
+}
+
+/** Provider gate: E2B key present AND the provider not disconnected in Runtime Settings. */
+export async function e2bReady(): Promise<boolean> {
+  if (!hasE2BKey()) return false;
+  const db = await admin();
+  const { data } = await db.from("vpip_runtime_providers").select("enabled").eq("id", "e2b").maybeSingle();
+  return data ? data.enabled : true;
 }
 
 /* ------------------------------------------------------------ audit */
@@ -416,7 +425,7 @@ export async function activeRowForBuild(buildId: string) {
 }
 
 async function createRow(c: Caller, build: LoadedBuild): Promise<Row> {
-  if (!hasE2BKey()) throw new Error("E2B_API_KEY is not configured. Add your E2B API key to enable the real runtime.");
+  if (!(await e2bReady())) throw new Error("Provider Not Configured: E2B key missing or provider disconnected in Runtime Settings.");
   const started = Date.now();
   const rowId = randomId(14);
   const db = await admin();
@@ -773,44 +782,41 @@ export async function previewTarget(rowId: string, slug: string) {
   };
 }
 
-export async function isMemberAdmin(projectId: string, userId: string) {
-  const db = await admin();
-  const { data } = await db.from("vpip_project_members").select("id").eq("project_id", projectId).eq("user_id", userId).maybeSingle();
-  return !!data;
-}
-
 export async function touchActive(rowId: string) {
   const db = await admin();
   await db.from("vpip_runtime_sandboxes").update({ last_active_at: nowIso() }).eq("id", rowId);
 }
 
-/* ------------------------------------------------------------ members */
-
-export async function addMember(c: Caller, projectId: string, email: string) {
-  const role = await requireProjectAccess(c, projectId);
-  if (role !== "owner") throw new Error("Only the project owner can authorize users.");
-  const db = await admin();
-  const target = email.trim().toLowerCase();
-  let found: { id: string; email?: string } | null = null;
-  for (let page = 1; page <= 20 && !found; page++) {
-    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) throw new Error(error.message);
-    found = data.users.find((u) => (u.email ?? "").toLowerCase() === target) ?? null;
-    if (data.users.length < 200) break;
-  }
-  if (!found) throw new Error("No VPIP account uses that email. Ask them to sign up first.");
-  const { error } = await db.from("vpip_project_members").upsert({ project_id: projectId, user_id: found.id, email: target, role: "member" }, { onConflict: "project_id,user_id" });
-  if (error) throw new Error(error.message);
-  await audit({ projectId, userId: c.userId, email: c.email, action: "member_added", status: "success", detail: { member: target } });
-}
-
-export async function removeMember(c: Caller, projectId: string, userId: string) {
-  const role = await requireProjectAccess(c, projectId);
-  if (role !== "owner") throw new Error("Only the project owner can remove users.");
-  if (userId === c.userId) throw new Error("The owner cannot remove themselves.");
-  const db = await admin();
-  await db.from("vpip_project_members").delete().eq("project_id", projectId).eq("user_id", userId).eq("role", "member");
-  await audit({ projectId, userId: c.userId, email: c.email, action: "member_removed", status: "success", detail: { member: userId } });
-}
-
 export { hasE2BKey };
+
+/* ------------------------------------------------------------ validation readiness (read-only, never runs) */
+
+export type ReadinessState = "ready" | "warning" | "blocked" | "pending";
+export interface ReadinessStage { stage: string; state: ReadinessState; detail: string }
+
+export async function readiness(c: Caller, buildId: string): Promise<{ projectId: string; buildId: string; ready: boolean; stages: ReadinessStage[] }> {
+  const build = await loadBuild(c, buildId);
+  const providerOk = await e2bReady();
+  const pkgOk = build.files.some((f) => f.path === "package.json");
+  const pm = detectPackageManager(build.files);
+  const node = detectNodeVersion(build.files);
+  const dev = detectDevCommand(build.files, pm.manager, "/");
+  const env = envAuditForRuntime(build.files, await loadEnv(c, build.projectId, build.repositoryId));
+  const active = await activeRowForBuild(buildId);
+  const lock = build.files.some((f) => /^(pnpm-lock\.yaml|yarn\.lock|package-lock\.json)$/.test(f.path));
+  const S = (stage: string, state: ReadinessState, detail: string): ReadinessStage => ({ stage, state, detail });
+  const stages: ReadinessStage[] = [
+    S("Provider", providerOk ? "ready" : "blocked", providerOk ? "E2B configured and connected." : "Provider Not Configured (Runtime Settings → Runtime Provider)."),
+    S("Pull", build.repositoryId ? "ready" : "warning", build.repositoryId ? "Build session linked to a repository." : "No linked repository — build session files are used as-is."),
+    S("Sync", build.files.length ? "ready" : "blocked", `${build.files.length} file(s) in the VPIP master copy.`),
+    S("Integrity Check", build.files.length ? "ready" : "blocked", "SHA-256 per file is compared after upload."),
+    S("Install", pkgOk ? (lock ? "ready" : "warning") : "blocked", pkgOk ? `${pm.manager} (${pm.source})${lock ? "" : " — no lockfile"}` : "package.json missing."),
+    S("Run", dev.ok ? "ready" : "blocked", dev.ok ? `Node ${node.version} · ${dev.script}` : dev.error ?? "No dev script."),
+    S("Environment", env.missing.length || env.invalid.length ? "warning" : "ready", env.missing.length ? `Missing: ${env.missing.join(", ")}` : env.invalid.length ? `Invalid: ${env.invalid.map((i) => i.key).join(", ")}` : `${env.configured.length} configured.`),
+    S("Preview", providerOk && dev.ok ? "pending" : "blocked", "Served only through the VPIP relay."),
+    S("Pause", "pending", active ? "Runtime live — available from the Runtime panel." : "Available once running."),
+    S("Resume", "pending", "Available once paused."),
+    S("Destroy", "pending", "Available for any live runtime."),
+  ];
+  return { projectId: build.projectId, buildId, ready: !stages.some((s) => s.state === "blocked"), stages };
+}
