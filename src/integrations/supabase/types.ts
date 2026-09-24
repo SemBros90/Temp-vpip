@@ -1261,6 +1261,7 @@ export type Database = {
           preview_diagnostics: Json
           project_id: string
           repository_id: string | null
+          stages: Json | null
           unsupported: Json
         }
         Insert: {
@@ -1278,6 +1279,7 @@ export type Database = {
           preview_diagnostics?: Json
           project_id: string
           repository_id?: string | null
+          stages?: Json | null
           unsupported?: Json
         }
         Update: {
@@ -1295,6 +1297,7 @@ export type Database = {
           preview_diagnostics?: Json
           project_id?: string
           repository_id?: string | null
+          stages?: Json | null
           unsupported?: Json
         }
         Relationships: [
