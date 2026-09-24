@@ -425,7 +425,7 @@ export async function activeRowForBuild(buildId: string) {
 }
 
 async function createRow(c: Caller, build: LoadedBuild): Promise<Row> {
-  if (!hasE2BKey()) throw new Error("E2B_API_KEY is not configured. Add your E2B API key to enable the real runtime.");
+  if (!(await e2bReady())) throw new Error("Provider Not Configured: E2B key missing or provider disconnected in Runtime Settings.");
   const started = Date.now();
   const rowId = randomId(14);
   const db = await admin();
