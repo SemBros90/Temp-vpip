@@ -27,7 +27,7 @@ async function relay(request: Request, splat: string) {
   const res = await fetch(target, {
     method: request.method,
     headers,
-    body: request.method === "POST" ? await request.arrayBuffer() : undefined,
+    body: request.method === "POST" ? await request.arrayBuffer() : null,
     redirect: "follow",
   });
   const out = new Headers();

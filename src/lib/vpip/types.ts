@@ -624,7 +624,7 @@ export interface BuildHealth {
 
 /* ------------------------------------------- Module 13 — Repositories */
 
-export type RepoProvider = "GitHub";
+export type RepoProvider = "GitHub" | "GitLab" | "Bitbucket" | "Git";
 
 export type RepoVisibility = "public" | "private";
 
