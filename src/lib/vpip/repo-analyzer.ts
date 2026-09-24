@@ -156,7 +156,7 @@ export function classify(files: AnalyzerFile[]): RepoClassification {
   }
 
   const primary =
-    fw.find((f) => !["Vite", "Monorepo", "Turborepo", "Nx Workspace", "Express"].includes(f)) ?? fw[0] ?? (rootPkg ? "Node.js" : "Static / unknown");
+    fw.find((f) => !["Vite", "Monorepo", "Turborepo", "Nx Workspace", "Express", "Full-stack"].includes(f)) ?? fw[0] ?? (rootPkg ? "Node.js" : "Static / unknown");
   return {
     frameworks: fw,
     primary,
