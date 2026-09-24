@@ -323,7 +323,8 @@ export function dependencyAudit(files: AnalyzerFile[], report: RepoReport | unde
   const invalid = rows.filter((d) => d.status === "Invalid").map((d) => d.name);
   const unresolvedImports = (report?.imports ?? []).filter((i) => i.kind === "Missing module").map((i) => ({ spec: i.spec, referencedBy: i.referencedBy }));
   const codeProblems = (report?.imports ?? []).filter((i) => i.kind !== "Missing module").map((i) => ({ ...i }));
-  const status: DependencyAudit["status"] = missing.length || invalid.length || unresolvedImports.length ? "Unresolved" : conflicts.length || peer.some((p) => !p.satisfied) ? "Resolved with warnings" : "Resolved";
+  // Calibrated: only invalid names are unresolved; undeclared/unresolved static findings are warnings.
+  const status: DependencyAudit["status"] = invalid.length ? "Unresolved" : missing.length || unresolvedImports.length || conflicts.length || peer.some((p) => !p.satisfied) ? "Resolved with warnings" : "Resolved";
   return { manifests, lockfiles, lockSource: source, installed, missing, peer, conflicts, invalid, unresolvedImports, codeProblems, status };
 }
 
