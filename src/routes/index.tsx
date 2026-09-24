@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useVpip, useVpipActions } from "@/lib/vpip/store";
+import { PullRepositoryDialog } from "@/components/vpip/PullRepositoryDialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -70,6 +71,7 @@ function ProjectsPage() {
       actions={
         <>
           <EnginePicker />
+          <PullRepositoryDialog />
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="h-8">

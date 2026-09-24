@@ -16,6 +16,7 @@ import { useVpip, useVpipActions } from "@/lib/vpip/store";
 import * as gh from "@/lib/vpip/github";
 import { isGenericRemote } from "@/lib/vpip/git-remote";
 import type { GhFile } from "@/lib/vpip/github";
+import { coderTrace } from "@/lib/vpip/coder";
 
 /** Detect the framework from package.json and config files. */
 export function detectFramework(files: GhFile[]): string {
@@ -145,15 +146,18 @@ export function PullRepositoryDialog() {
         counts: { decisions: 0, requirements: 0, documents: 1, discussions: 0 },
         note: `Imported from ${info.htmlUrl || info.fullName}`,
       });
+      const trace = coderTrace(session, [], []);
       for (const f of files) {
         actions.writeCoderFile(session.id, f.path, f.content, {
           note: `Import from ${info.fullName}@${br}`,
+          trace,
         });
       }
       actions.logCoderAction(session.id, {
         kind: "Generate Code",
         summary: `Import ${files.length} files from ${info.fullName}@${br}${last ? ` (${gh.shortSha(last.sha)})` : ""}`,
         filesModified: files.map((f) => f.path),
+        trace,
       });
       actions.linkBuildRepository(session.id, {
         repositoryId: repo.id,
@@ -161,7 +165,7 @@ export function PullRepositoryDialog() {
         repositoryProvider: generic ? "Git" : "GitHub",
         repositoryBranch: br,
       });
-      actions.createDiscussion(project.id, `Repository: ${info.name}`, "Architecture");
+      actions.createDiscussion({ projectId: project.id, title: `Repository: ${info.name}`, type: "Architecture" });
 
       toast.success(`Imported ${info.fullName} — ${files.length} files, ${framework}`);
       setOpen(false);
