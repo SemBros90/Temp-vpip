@@ -12,3 +12,5 @@
 - [x] Coder preview errors: build tooling files (vite.config.ts etc.) excluded from preview/validation; misplaced relative imports resolved by unique file name.
 - [ ] Perplexity / Gemini / Claude keys not stored yet — add them in Settings or ask for server-side secrets.
 - [x] Lovable-style AI Coder workspace: adjustable 20/80 chat and preview split, retained tools, narrow-screen layout, and browser verification.
+
+- [x] Repository compatibility engine + preview diagnostics (reports saved, repair & preview, AI sees diagnostics)
