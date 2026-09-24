@@ -59,7 +59,7 @@ const nowIso = () => new Date().toISOString();
 
 /* ------------------------------------------------------------ security */
 
-/** Signed-in + project access. First signed-in user on an unclaimed project becomes its owner. */
+/** VPIP is single-owner: every runtime action runs as this local owner identity. */
 export const OWNER_ID = "00000000-0000-0000-0000-000000000001";
 
 /** Single-owner mode: the local VPIP owner, acting through the server client. */
@@ -67,11 +67,20 @@ export async function ownerCaller(): Promise<Caller> {
   return { userId: OWNER_ID, email: null, supabase: await admin() };
 }
 
-export async function requireProjectAccess(c: Caller, projectId: string): Promise<"owner" | "member"> {
+/** Confirms the project exists. Single-owner: no per-user access rules. */
+export async function requireProjectAccess(c: Caller, projectId: string): Promise<"owner"> {
   const { data: project, error } = await c.supabase.from("vpip_projects").select("id").eq("id", projectId).maybeSingle();
   if (error) throw new Error(`Could not read project: ${error.message}`);
   if (!project) throw new Error("Project not found.");
   return "owner";
+}
+
+/** Provider gate: E2B key present AND the provider not disconnected in Runtime Settings. */
+export async function e2bReady(): Promise<boolean> {
+  if (!hasE2BKey()) return false;
+  const db = await admin();
+  const { data } = await db.from("vpip_runtime_providers").select("enabled").eq("id", "e2b").maybeSingle();
+  return data ? data.enabled : true;
 }
 
 /* ------------------------------------------------------------ audit */
@@ -773,44 +782,9 @@ export async function previewTarget(rowId: string, slug: string) {
   };
 }
 
-export async function isMemberAdmin(projectId: string, userId: string) {
-  const db = await admin();
-  const { data } = await db.from("vpip_project_members").select("id").eq("project_id", projectId).eq("user_id", userId).maybeSingle();
-  return !!data;
-}
-
 export async function touchActive(rowId: string) {
   const db = await admin();
   await db.from("vpip_runtime_sandboxes").update({ last_active_at: nowIso() }).eq("id", rowId);
-}
-
-/* ------------------------------------------------------------ members */
-
-export async function addMember(c: Caller, projectId: string, email: string) {
-  const role = await requireProjectAccess(c, projectId);
-  if (role !== "owner") throw new Error("Only the project owner can authorize users.");
-  const db = await admin();
-  const target = email.trim().toLowerCase();
-  let found: { id: string; email?: string } | null = null;
-  for (let page = 1; page <= 20 && !found; page++) {
-    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) throw new Error(error.message);
-    found = data.users.find((u) => (u.email ?? "").toLowerCase() === target) ?? null;
-    if (data.users.length < 200) break;
-  }
-  if (!found) throw new Error("No VPIP account uses that email. Ask them to sign up first.");
-  const { error } = await db.from("vpip_project_members").upsert({ project_id: projectId, user_id: found.id, email: target, role: "member" }, { onConflict: "project_id,user_id" });
-  if (error) throw new Error(error.message);
-  await audit({ projectId, userId: c.userId, email: c.email, action: "member_added", status: "success", detail: { member: target } });
-}
-
-export async function removeMember(c: Caller, projectId: string, userId: string) {
-  const role = await requireProjectAccess(c, projectId);
-  if (role !== "owner") throw new Error("Only the project owner can remove users.");
-  if (userId === c.userId) throw new Error("The owner cannot remove themselves.");
-  const db = await admin();
-  await db.from("vpip_project_members").delete().eq("project_id", projectId).eq("user_id", userId).eq("role", "member");
-  await audit({ projectId, userId: c.userId, email: c.email, action: "member_removed", status: "success", detail: { member: userId } });
 }
 
 export { hasE2BKey };
