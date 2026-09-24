@@ -198,49 +198,55 @@ export async function fetchRefs(token: string, fullName: string) {
   return { info, branches };
 }
 
-/** Clone / Pull — read every text file on a branch. */
-export async function readBranchFiles(
+/** Clone / Pull — read every file on a branch, with a full ingestion audit. */
+export async function readBranchFilesAudited(
   token: string,
   fullName: string,
   branch: string,
-): Promise<GhFile[]> {
-  if (remote.isGenericRemote(fullName)) return remote.readBranchFiles(token, fullName, branch);
+): Promise<{ files: GhFile[]; audit: remote.IngestionAudit }> {
+  if (remote.isGenericRemote(fullName)) return remote.readBranchFilesAudited(token, fullName, branch);
   // Real git clone through the relay: one request, no API rate limits.
   try {
     const cred = token.trim() ? `x-access-token:${token.trim()}` : "";
-    return await remote.readBranchFiles(cred, `https://github.com/${fullName}.git`, branch);
+    return await remote.readBranchFilesAudited(cred, `https://github.com/${fullName}.git`, branch);
   } catch {
     /* fall back to the REST API below */
   }
   const tree = await call<{
     tree: Array<{ path: string; type: string; sha: string; size?: number }>;
+    truncated?: boolean;
   }>(token, `/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
-
-  const blobs = tree.tree.filter(
-    (t) => t.type === "blob" && ((t.size ?? 0) <= 400_000 || Boolean(remote.ASSET_MIME[t.path.split(".").pop()?.toLowerCase() ?? ""])),
-  );
+  if (tree.truncated) throw new Error("GitHub returned a truncated file tree; the import was stopped so no files are lost.");
+  const audit = remote.emptyAudit();
   const out: GhFile[] = [];
-  for (const blob of blobs) {
-    const data = await call<{ content: string; encoding: string }>(
-      token,
-      `/repos/${fullName}/git/blobs/${blob.sha}`,
-    );
-    if (data.encoding !== "base64") continue;
-    const mime = remote.ASSET_MIME[blob.path.split(".").pop()?.toLowerCase() ?? ""];
-    if (mime) {
-      out.push({ path: blob.path, content: (blob.size ?? 0) > 2_000_000 ? `vpip-skipped:too-large:${blob.size}` : `data:${mime};base64,${data.content.replace(/\n/g, "")}` });
+  for (const blob of tree.tree) {
+    if (blob.type === "commit") {
+      audit.found.push(blob.path);
+      out.push({ path: blob.path, content: `vpip-submodule:${blob.sha}` });
+      audit.imported.push(blob.path);
+      continue;
+    }
+    if (blob.type !== "blob") continue;
+    audit.found.push(blob.path);
+    if ((blob.size ?? 0) > remote.MAX_FILE_BYTES) {
+      out.push({ path: blob.path, content: `vpip-skipped:too-large:${blob.size}` });
+      audit.ignored.push({ path: blob.path, reason: `too large (${blob.size} bytes, limit ${remote.MAX_FILE_BYTES})` });
       continue;
     }
     try {
-      const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), (c) =>
-        c.charCodeAt(0),
-      );
-      out.push({ path: blob.path, content: new TextDecoder().decode(bytes) });
-    } catch {
-      /* binary or undecodable — skipped */
+      const data = await call<{ content: string; encoding: string }>(token, `/repos/${fullName}/git/blobs/${blob.sha}`);
+      const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), (c) => c.charCodeAt(0));
+      out.push({ path: blob.path, content: remote.encodeFileBytes(blob.path, bytes) });
+      audit.imported.push(blob.path);
+    } catch (e) {
+      audit.failed.push({ path: blob.path, reason: e instanceof Error ? e.message : String(e) });
     }
   }
-  return out;
+  return { files: out, audit: remote.finalizeAudit(audit) };
+}
+
+export async function readBranchFiles(token: string, fullName: string, branch: string): Promise<GhFile[]> {
+  return (await readBranchFilesAudited(token, fullName, branch)).files;
 }
 
 function toBase64(text: string) {
