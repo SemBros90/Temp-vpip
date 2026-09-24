@@ -105,8 +105,8 @@ async function validateOne(t: ValidationTarget): Promise<ValidationResult> {
     const deps = dependencyAudit(files, report);
     const proposals = simulateRepair(files, report, env, deps, { projectId: "validation" });
     base.proposals = proposals.length;
-    const fixable = new Set(proposals.flatMap((p) => p.problem));
-    base.repairable = deps.missing.length + deps.conflicts.length + deps.invalid.length + env.missing.length === 0 || fixable.size > 0;
+    const problems = deps.missing.length + deps.conflicts.length + deps.invalid.length + env.missing.length + deps.codeProblems.length;
+    base.repairable = problems === 0 || proposals.length > 0;
     const coderFiles: CoderFile[] = files.map((f) => ({ id: f.path, path: f.path, content: f.content, createdAt: "", updatedAt: "", versions: [] }));
     const doc = buildPreviewDoc(coderFiles, undefined, previewOptionsFrom(report, files, {}));
     if (!doc) base.failures.push("No previewable entry (index.html or app entry) found");
@@ -134,7 +134,10 @@ function ValidationPage() {
 
   async function run() {
     const list = fromText(targets);
-    if (!list.length) return toast.error("Add at least one target: Category | owner/repo | branch");
+    if (!list.length) {
+      toast.error("Add at least one target: Category | owner/repo | branch");
+      return;
+    }
     const results: ValidationResult[] = [];
     setLive([]);
     for (const [i, t] of list.entries()) {

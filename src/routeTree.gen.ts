@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as DiagnosticsIndexRouteImport } from './routes/diagnostics.index'
 import { Route as DiagnosticsPersistenceRouteImport } from './routes/diagnostics.persistence'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
@@ -51,6 +52,11 @@ const IntelligenceRoute = IntelligenceRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ValidationRoute = ValidationRouteImport.update({
+  id: '/validation',
+  path: '/validation',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DiagnosticsIndexRoute = DiagnosticsIndexRouteImport.update({
@@ -197,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
+  '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/diagnostics/': typeof DiagnosticsIndexRoute
@@ -227,6 +234,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
+  '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/diagnostics': typeof DiagnosticsIndexRoute
   '/api/ai/chat': typeof ApiAiChatRoute
@@ -257,6 +265,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
   '/settings': typeof SettingsRoute
+  '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/diagnostics/': typeof DiagnosticsIndexRoute
@@ -289,6 +298,7 @@ export interface FileRouteTypes {
     | '/'
     | '/intelligence'
     | '/settings'
+    | '/validation'
     | '/diagnostics/persistence'
     | '/projects/$projectId'
     | '/diagnostics/'
@@ -319,6 +329,7 @@ export interface FileRouteTypes {
     | '/'
     | '/intelligence'
     | '/settings'
+    | '/validation'
     | '/diagnostics/persistence'
     | '/diagnostics'
     | '/api/ai/chat'
@@ -348,6 +359,7 @@ export interface FileRouteTypes {
     | '/'
     | '/intelligence'
     | '/settings'
+    | '/validation'
     | '/diagnostics/persistence'
     | '/projects/$projectId'
     | '/diagnostics/'
@@ -379,6 +391,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   IntelligenceRoute: typeof IntelligenceRoute
   SettingsRoute: typeof SettingsRoute
+  ValidationRoute: typeof ValidationRoute
   DiagnosticsPersistenceRoute: typeof DiagnosticsPersistenceRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
   DiagnosticsIndexRoute: typeof DiagnosticsIndexRoute
@@ -408,6 +421,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/validation': {
+      id: '/validation'
+      path: '/validation'
+      fullPath: '/validation'
+      preLoaderRoute: typeof ValidationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/diagnostics/': {
@@ -642,6 +662,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   IntelligenceRoute: IntelligenceRoute,
   SettingsRoute: SettingsRoute,
+  ValidationRoute: ValidationRoute,
   DiagnosticsPersistenceRoute: DiagnosticsPersistenceRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
   DiagnosticsIndexRoute: DiagnosticsIndexRoute,
