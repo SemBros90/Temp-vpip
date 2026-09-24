@@ -28,6 +28,7 @@ import {
 import { discussionToMarkdown, download, slug } from "@/lib/vpip/files";
 import { PROVIDER_LABEL, type Attachment } from "@/lib/vpip/types";
 import { useAiKeys } from "@/lib/vpip/keys";
+import { RepoScanButton } from "@/components/vpip/RepoScanButton";
 
 export const Route = createFileRoute("/projects/$projectId/discussions/$discussionId")({
   validateSearch: (search: Record<string, unknown>): { focus?: string } =>
@@ -298,6 +299,14 @@ function DiscussionPage() {
       actions={
         <>
           <EnginePicker compact />
+          <RepoScanButton
+            repositories={p.repositories}
+            buildSessions={p.buildSessions}
+            onScanned={(att, prompt) => {
+              setPending((prev) => [...prev, att]);
+              setInput((prev) => prev || prompt);
+            }}
+          />
           <Button variant="outline" size="sm" className="h-8" onClick={runSummary} disabled={!!working}>
             {working === "summary" ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
             Summarise
