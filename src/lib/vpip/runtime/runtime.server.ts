@@ -512,8 +512,8 @@ async function tunnelHealth(row: Row, h: SandboxHandle) {
   try {
     const headers = new Headers();
     if (h.trafficToken) headers.set("e2b-traffic-access-token", h.trafficToken);
-    const res = await fetch(urls.devServerUrl, {
-      method: "HEAD",
+    const res = await fetch(`${urls.devServerUrl}?vpip_health=${Date.now()}`, {
+      method: "GET",
       headers,
       redirect: "manual",
       signal: AbortSignal.timeout(4_000),
@@ -674,13 +674,15 @@ export async function resume(c: Caller, row: Row) {
         return patchRow(row.id, { status: "running", phase: "starting", phase_events_seen: 0, phase_events: [] as never, last_error: null, running_since: nowIso(), last_active_at: nowIso() });
       }
       if (!healthy) {
-        await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_start", status: "failed", error: "Dev server not running after resume and dependencies are missing; use Launch to reinstall." });
+        const error = "Dev server not running after resume and dependencies are missing; use Launch to reinstall.";
+        await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_start", status: "failed", error });
+        return patchRow(row.id, { status: "running", phase: "runtime_failed", last_error: error, running_since: nowIso(), last_active_at: nowIso() });
       }
     } catch (e) {
       await audit({ projectId: row.project_id, buildId: row.build_id, rowId: row.id, sandboxId: row.e2b_sandbox_id, userId: c.userId, email: c.email, action: "sandbox_start", status: "failed", error: `Resume health check failed: ${e instanceof Error ? e.message : String(e)}` });
     }
   }
-  return patchRow(row.id, { status: "running", phase: last, running_since: nowIso(), last_active_at: nowIso() });
+  return patchRow(row.id, { status: "running", phase: last === "preview_ready" ? "preview_ready" : last, last_error: null, running_since: nowIso(), last_active_at: nowIso() });
 }
 
 export async function resumeRuntime(c: Caller, rowId: string) {

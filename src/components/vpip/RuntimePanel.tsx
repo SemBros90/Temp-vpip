@@ -154,7 +154,7 @@ export function RuntimePanel({ projectId, buildId }: { projectId: string; buildI
             <Pause className="size-3.5" /> Pause
           </Button>
           <Button size="sm" variant="outline" className="h-7" disabled={!!busy || row?.status !== "paused"}
-            onClick={() => act("Resume", () => resume({ data: { rowId: row!.id } }))}>
+            onClick={() => act("Resume", () => { setPreviewPath(null); setFrameKey((k) => k + 1); return resume({ data: { rowId: row!.id } }); })}>
             <RotateCcw className="size-3.5" /> Resume
           </Button>
           <Button size="sm" variant="outline" className="h-7" title="Restart the app's server in this sandbox"
