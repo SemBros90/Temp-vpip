@@ -613,9 +613,9 @@ export async function resume(c: Caller, row: Row) {
       const probe = await runCommand(
         h,
         `source ${V}/env.sh 2>/dev/null; alive=no; if [ -f ${V}/dev.pid ] && kill -0 "$(cat ${V}/dev.pid)" 2>/dev/null; then alive=yes; fi; ` +
-          `code=000; for i in 1 2 3 4 5; do code=$(curl -s -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$BASE_PATH" || true); [ -n "$code" ] && [ "$code" != "000" ] && break; sleep 1; done; ` +
+          `code=$(curl -s -m 1 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$BASE_PATH" || true); code=\${code:-000}; ` +
           `mods=no; [ -d ${APP}/node_modules ] && mods=yes; echo "$alive $code $mods"`,
-        30_000,
+        8_000,
       );
       const [alive = "no", code = "000", mods = "no"] = probe.stdout.trim().split(/\s+/).slice(-3);
       const healthy = alive === "yes" && code !== "000" && Number(code) < 500;
