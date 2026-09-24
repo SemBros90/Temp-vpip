@@ -599,7 +599,7 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
     if (cache[path]) return cache[path].exports;
     var mod = { exports: {} };
     cache[path] = mod;
-    var fn = new Function('require','module','exports', sources[path] + '\n//# sourceURL=vpip-preview:///' + path);
+    var fn = new Function('require','module','exports', sources[path] + '\\n//# sourceURL=vpip-preview:///' + path);
     fn(function(s){ return req(path, s); }, mod, mod.exports);
     return mod.exports;
   }
