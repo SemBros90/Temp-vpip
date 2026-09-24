@@ -5,10 +5,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVpip, useVpipActions } from "@/lib/vpip/store";
-import { coderTrace } from "@/lib/vpip/coder";
 import { compileCheck } from "@/lib/vpip/coder-fs";
 import {
-  addMissingDependencies,
   analyzeRepository,
   importVerdict,
   repoDiagnosticsSummary,
