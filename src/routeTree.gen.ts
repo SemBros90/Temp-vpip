@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
+import { Route as RuntimeDashboardRouteImport } from './routes/runtime-dashboard'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as DiagnosticsIndexRouteImport } from './routes/diagnostics.index'
@@ -49,6 +50,11 @@ const IndexRoute = IndexRouteImport.update({
 const IntelligenceRoute = IntelligenceRouteImport.update({
   id: '/intelligence',
   path: '/intelligence',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RuntimeDashboardRoute = RuntimeDashboardRouteImport.update({
+  id: '/runtime-dashboard',
+  path: '/runtime-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -214,6 +220,7 @@ const ProjectsProjectIdDiscussionsDiscussionIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
+  '/runtime-dashboard': typeof RuntimeDashboardRoute
   '/settings': typeof SettingsRoute
   '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
@@ -247,6 +254,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
+  '/runtime-dashboard': typeof RuntimeDashboardRoute
   '/settings': typeof SettingsRoute
   '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
@@ -280,6 +288,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/intelligence': typeof IntelligenceRoute
+  '/runtime-dashboard': typeof RuntimeDashboardRoute
   '/settings': typeof SettingsRoute
   '/validation': typeof ValidationRoute
   '/diagnostics/persistence': typeof DiagnosticsPersistenceRoute
@@ -315,6 +324,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/intelligence'
+    | '/runtime-dashboard'
     | '/settings'
     | '/validation'
     | '/diagnostics/persistence'
@@ -348,6 +358,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/intelligence'
+    | '/runtime-dashboard'
     | '/settings'
     | '/validation'
     | '/diagnostics/persistence'
@@ -380,6 +391,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/intelligence'
+    | '/runtime-dashboard'
     | '/settings'
     | '/validation'
     | '/diagnostics/persistence'
@@ -414,6 +426,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   IntelligenceRoute: typeof IntelligenceRoute
+  RuntimeDashboardRoute: typeof RuntimeDashboardRoute
   SettingsRoute: typeof SettingsRoute
   ValidationRoute: typeof ValidationRoute
   DiagnosticsPersistenceRoute: typeof DiagnosticsPersistenceRoute
@@ -440,6 +453,13 @@ declare module '@tanstack/react-router' {
       path: '/intelligence'
       fullPath: '/intelligence'
       preLoaderRoute: typeof IntelligenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runtime-dashboard': {
+      id: '/runtime-dashboard'
+      path: '/runtime-dashboard'
+      fullPath: '/runtime-dashboard'
+      preLoaderRoute: typeof RuntimeDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -701,6 +721,7 @@ const ProjectsProjectIdRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   IntelligenceRoute: IntelligenceRoute,
+  RuntimeDashboardRoute: RuntimeDashboardRoute,
   SettingsRoute: SettingsRoute,
   ValidationRoute: ValidationRoute,
   DiagnosticsPersistenceRoute: DiagnosticsPersistenceRoute,

@@ -63,6 +63,8 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { RuntimePanel } from "@/components/vpip/RuntimePanel";
+import { Server } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Stethoscope } from "lucide-react";
 import { applyPreviewResult } from "@/lib/vpip/repo-analyzer";
@@ -1305,7 +1307,10 @@ function CoderPage() {
                 <div className="border-b border-border px-2 py-2">
                   <TabsList className="w-full">
                     <TabsTrigger value="preview" className="text-xs">
-                      <Monitor className="size-3.5" /> Preview
+                      <Monitor className="size-3.5" /> Browser Preview
+                    </TabsTrigger>
+                    <TabsTrigger value="runtime" className="text-xs">
+                      <Server className="size-3.5" /> Runtime Preview
                     </TabsTrigger>
                     <TabsTrigger value="database" className="text-xs">
                       <Database className="size-3.5" /> Database
@@ -1403,6 +1408,10 @@ function CoderPage() {
                       )}
                     </div>
                   ) : null}
+                </TabsContent>
+
+                <TabsContent value="runtime" className="flex min-h-0 flex-1 flex-col gap-0">
+                  <RuntimePanel projectId={projectId} buildId={session.id} />
                 </TabsContent>
 
                 <TabsContent value="diagnostics" className="min-h-0 flex-1 overflow-y-auto p-3">
