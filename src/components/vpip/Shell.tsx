@@ -22,6 +22,7 @@ import {
   Table2,
   Stethoscope,
   ShieldCheck,
+  Server,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useVpip } from "@/lib/vpip/store";
@@ -132,6 +133,7 @@ export function Shell({
           <NavItem to="/" icon={Library} label="Projects" exact />
           <NavItem to="/intelligence" icon={Network} label="Intelligence Register" />
           <NavItem to="/validation" icon={ShieldCheck} label="Repository Validation" />
+          <NavItem to="/runtime-dashboard" icon={Server} label="Runtime Dashboard" />
           <NavItem to="/settings" icon={SettingsIcon} label="Settings" />
 
           {project ? (
