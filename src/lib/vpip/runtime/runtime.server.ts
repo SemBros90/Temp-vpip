@@ -254,13 +254,18 @@ do_install(){
 ensure_swap(){
   # Small sandboxes (~512MB) OOM-kill esbuild during Vite dependency optimisation; add swap once.
   if [ "$(awk '/SwapTotal/{print $2}' /proc/meminfo)" = "0" ]; then
-    ( sudo fallocate -l 2G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none ) && \\
-      sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile && echo "swap enabled (2G)"
+    SUDO=""; [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && SUDO=sudo
+    ( $SUDO fallocate -l 1536M /tmp/vpip.swap 2>/dev/null || $SUDO dd if=/dev/zero of=/tmp/vpip.swap bs=1M count=1536 status=none ) && \
+      $SUDO chmod 600 /tmp/vpip.swap && $SUDO mkswap /tmp/vpip.swap >/dev/null && $SUDO swapon /tmp/vpip.swap && echo "swap enabled (1.5G)"
   fi
 }
 do_dev(){
   export PATH="$V/node/bin:$PATH"
-  export GOMEMLIMIT=256MiB GOGC=50
+  # Keep the JavaScript process below the sandbox ceiling and let esbuild's Go GC
+  # work normally. An artificially tiny GOMEMLIMIT can make esbuild terminate.
+  export NODE_OPTIONS="--max-old-space-size=256 [1m[0m${NODE_OPTIONS:-}"
+  export GOGC=50
+  unset GOMEMLIMIT
   ensure_swap >> "$V/run.log" 2>&1 || true
   ev starting
   if [ -f "$V/dev.pid" ]; then kill -- -"$(cat "$V/dev.pid")" 2>/dev/null; rm -f "$V/dev.pid"; fi
