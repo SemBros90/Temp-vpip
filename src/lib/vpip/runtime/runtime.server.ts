@@ -810,11 +810,11 @@ export async function readiness(c: Caller, buildId: string): Promise<{ projectId
     S("Pull", build.repositoryId ? "ready" : "warning", build.repositoryId ? "Build session linked to a repository." : "No linked repository — build session files are used as-is."),
     S("Sync", build.files.length ? "ready" : "blocked", `${build.files.length} file(s) in the VPIP master copy.`),
     S("Integrity Check", build.files.length ? "ready" : "blocked", "SHA-256 per file is compared after upload."),
-    S("Install", pkgOk ? (lock ? "ready" : "warning") : "blocked", pkgOk ? `${pm.manager} (${pm.reason ?? "detected"})${lock ? "" : " — no lockfile"}` : "package.json missing."),
+    S("Install", pkgOk ? (lock ? "ready" : "warning") : "blocked", pkgOk ? `${pm.manager} (${pm.source})${lock ? "" : " — no lockfile"}` : "package.json missing."),
     S("Run", dev.ok ? "ready" : "blocked", dev.ok ? `Node ${node.version} · ${dev.script}` : dev.error ?? "No dev script."),
     S("Environment", env.missing.length || env.invalid.length ? "warning" : "ready", env.missing.length ? `Missing: ${env.missing.join(", ")}` : env.invalid.length ? `Invalid: ${env.invalid.map((i) => i.key).join(", ")}` : `${env.configured.length} configured.`),
     S("Preview", providerOk && dev.ok ? "pending" : "blocked", "Served only through the VPIP relay."),
-    S("Pause", active ? "pending" : "pending", "Available once running."),
+    S("Pause", "pending", active ? "Runtime live — available from the Runtime panel." : "Available once running."),
     S("Resume", "pending", "Available once paused."),
     S("Destroy", "pending", "Available for any live runtime."),
   ];
