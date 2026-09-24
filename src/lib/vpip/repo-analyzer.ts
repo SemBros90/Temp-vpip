@@ -101,6 +101,13 @@ export function classify(files: AnalyzerFile[]): RepoClassification {
   if (d("@tauri-apps/api") || has(/(^|\/)src-tauri\//)) fw.push("Tauri");
   if (d("@nestjs/core")) fw.push("NestJS");
   if (d("express")) fw.push("Express");
+  if (d("fastify") || d("koa") || d("hono")) fw.push(d("fastify") ? "Fastify" : d("koa") ? "Koa" : "Hono");
+  if (!fw.includes("Remix") && has(/(^|\/)remix\.config\./)) fw.push("Remix");
+  const FRONT = ["Next.js", "Nuxt", "Remix", "Angular", "Astro", "Svelte", "Vue", "React"];
+  const BACK = ["Express", "NestJS", "Fastify", "Koa", "Hono"];
+  const hasServerDir = has(/^(server|backend|api)\/.+\.[cm]?[jt]s$/);
+  if (fw.some((f) => FRONT.includes(f)) && (fw.some((f) => BACK.includes(f)) || hasServerDir)) fw.push("Full-stack");
+  if (!fw.some((f) => FRONT.includes(f) || BACK.includes(f)) && rootPkg && has(/\.[cm]?[jt]s$/)) fw.push("Node");
 
   const isTurbo = has(/^turbo\.json$/);
   const isNx = has(/^nx\.json$/);
