@@ -97,7 +97,12 @@ async function relay(request: Request, splat: string) {
   const type = res.headers.get("content-type") ?? "";
   if (isDocument && type.includes("text/html")) {
     const html = await res.text();
-    const injected = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => `${m}${STORAGE_SHIM}`) : `${STORAGE_SHIM}${html}`;
+    // The app's router must see its own root ("/"), not the private relay prefix.
+    // Assets keep working because Vite serves them with the prefixed base.
+    const prefix = `/runtime/${first}`;
+    const rootShim = `<script>(function(){try{var p=${JSON.stringify(prefix)};var l=location.pathname;if(l.indexOf(p)===0){var r=l.slice(p.length)||"/";if(r.charAt(0)!=="/")r="/"+r;history.replaceState(history.state,"",r+location.search+location.hash);}}catch(e){}})();</script>`;
+    const shims = `${STORAGE_SHIM}${rootShim}`;
+    const injected = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => `${m}${shims}`) : `${shims}${html}`;
     return new Response(injected, { status: res.status, headers: out });
   }
   return new Response(request.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
