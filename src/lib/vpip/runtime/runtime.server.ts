@@ -251,8 +251,17 @@ do_install(){
   if [ $code -eq 0 ]; then ev installed 0; else ev install_failed $code; fi
   return $code
 }
+ensure_swap(){
+  # Small sandboxes (~512MB) OOM-kill esbuild during Vite dependency optimisation; add swap once.
+  if [ "$(awk '/SwapTotal/{print $2}' /proc/meminfo)" = "0" ]; then
+    ( sudo fallocate -l 2G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none ) && \\
+      sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile && echo "swap enabled (2G)"
+  fi
+}
 do_dev(){
   export PATH="$V/node/bin:$PATH"
+  export GOMEMLIMIT=256MiB GOGC=50
+  ensure_swap >> "$V/run.log" 2>&1 || true
   ev starting
   if [ -f "$V/dev.pid" ]; then kill -- -"$(cat "$V/dev.pid")" 2>/dev/null; rm -f "$V/dev.pid"; fi
   cd "$APP" || { ev runtime_failed 1; return 1; }
