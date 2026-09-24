@@ -68,18 +68,20 @@ async function selectAll(
   table: string,
   orderCol: string,
   ascending = false,
+  pageSize = PAGE,
 ): Promise<{ data: Row[] }> {
   const out: Row[] = [];
-  for (let from = 0; ; from += PAGE) {
+  for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
       .from(table as never)
       .select("*")
       .order(orderCol, { ascending })
-      .range(from, from + PAGE - 1);
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
     if (error) throw new Error(`Failed to read ${table}: ${error.message}`);
     const page = (data ?? []) as Row[];
     out.push(...page);
-    if (page.length < PAGE) break;
+    if (page.length < pageSize) break;
   }
   return { data: out };
 }
@@ -123,7 +125,8 @@ export async function vaultRead<T>(): Promise<T | null> {
     selectAll("vpip_documents", "created_at"),
     selectAll("vpip_prompts", "created_at"),
     selectAll("vpip_snapshots", "created_at"),
-    selectAll("vpip_build_sessions", "created_at"),
+    // Build sessions carry whole repositories; small pages keep each read fast.
+    selectAll("vpip_build_sessions", "created_at", false, 2),
     selectAll("vpip_repositories", "created_at"),
     selectAll("vpip_repo_branches", "created_at"),
     selectAll("vpip_repo_commits", "created_at"),
