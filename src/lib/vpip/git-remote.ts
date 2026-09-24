@@ -116,7 +116,7 @@ export function bytesToBase64(bytes: Uint8Array) {
 
 /** Decodes a stored file back to bytes for commits (data URLs → binary). Returns null for placeholders. */
 export function fileBytes(content: string): Uint8Array | string | null {
-  if (content.startsWith("vpip-skipped:")) return null;
+  if (/^vpip-(skipped|symlink|submodule):/.test(content)) return null;
   const m = /^data:[\w/+.-]+;base64,(.*)$/s.exec(content);
   if (m) return Uint8Array.from(atob(m[1]!), (c) => c.charCodeAt(0));
   return content;
