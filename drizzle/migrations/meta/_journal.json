@@ -120,6 +120,13 @@
       "when": 1790352849236,
       "tag": "0016_ai2_auditor",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790355432377,
+      "tag": "0017_ai1_reports_ai2_chat",
+      "breakpoints": true
     }
   ]
 }

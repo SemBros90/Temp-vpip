@@ -13,7 +13,9 @@ import {
   MODE_LABEL,
   PROMPT_LABEL,
   auditUserPrompt,
+  auditorChatSystemPrompt,
   auditorSystemPrompt,
+  chatContext,
   crawlPreview,
   runStaticAudit,
   scoreFrom,
@@ -43,6 +45,13 @@ interface AuditRow {
   created_at: string;
 }
 
+interface ChatRow {
+  id: string;
+  role: "user" | "assistant" | "report";
+  content: string;
+  created_at: string;
+}
+
 export function AuditorPanel(props: {
   projectId: string;
   buildId: string;
@@ -54,6 +63,7 @@ export function AuditorPanel(props: {
   coderBusy: boolean;
   provider: ProviderId;
   cfg: ProviderConfig;
+  inboxReport?: { id: string; report: string } | null;
   onUsePrompt: (text: string) => void;
 }) {
   const info = useServerFn(runtimeInfo);
@@ -73,6 +83,80 @@ export function AuditorPanel(props: {
   const abortRef = useRef<AbortController | null>(null);
 
   const audit = useMemo(() => runStaticAudit(props.files), [props.files]);
+  const [tab, setTab] = useState<"chat" | "audits">("chat");
+  const [chat, setChat] = useState<ChatRow[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatStream, setChatStream] = useState<string | null>(null);
+  const chatAbort = useRef<AbortController | null>(null);
+  const lastReport = useRef<string | undefined>(undefined);
+
+  function resolveEngine(): { provider: ProviderId; cfg: ProviderConfig } {
+    if (engine === "lovable") return { provider: "lovable" as ProviderId, cfg: { ...props.cfg, model: LOVABLE_MODEL, apiKey: "" } };
+    return { provider: engine, cfg: ws.settings.providers[engine] ?? props.cfg };
+  }
+
+  useEffect(() => {
+    setChat([]);
+    lastReport.current = undefined;
+    db.from("vpip_ai2_messages").select("id,role,content,created_at").eq("build_session_id", props.buildId).order("created_at", { ascending: true }).limit(200)
+      .then(({ data, error }: { data: ChatRow[] | null; error: { message: string } | null }) => {
+        if (error) toast.error(`AI 2 chat history: ${error.message}`);
+        const rows = data ?? [];
+        setChat(rows);
+        lastReport.current = [...rows].reverse().find((r) => r.role === "report")?.content;
+      });
+  }, [props.buildId]);
+
+  async function addMsg(role: ChatRow["role"], content: string, meta?: { engine: string; model: string }) {
+    const { data, error } = await db.from("vpip_ai2_messages")
+      .insert({ project_id: props.projectId, build_session_id: props.buildId, role, content, engine: meta?.engine ?? null, model: meta?.model ?? null })
+      .select("id,role,content,created_at").single();
+    if (error) toast.error(`AI 2 message not saved: ${error.message}`);
+    const row: ChatRow = data ?? { id: `${Date.now()}-${Math.random()}`, role, content, created_at: new Date().toISOString() };
+    setChat((c) => [...c, row]);
+    return row;
+  }
+
+  // AI 1 report handed over via "Send report to AI 2".
+  const seenInbox = useRef<string | null>(null);
+  useEffect(() => {
+    const r = props.inboxReport;
+    if (!r || seenInbox.current === r.id) return;
+    seenInbox.current = r.id;
+    lastReport.current = r.report;
+    setTab("chat");
+    void addMsg("report", r.report);
+    toast.success("AI 1 report is now available to AI 2.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.inboxReport]);
+
+  async function sendChat() {
+    const text = chatInput.trim();
+    if (!text || chatStream !== null) return;
+    setChatInput("");
+    const prior = chat;
+    await addMsg("user", text);
+    const { provider, cfg } = resolveEngine();
+    const ctrl = new AbortController();
+    chatAbort.current = ctrl;
+    setChatStream("");
+    try {
+      const ctx = chatContext({ buildCode: props.buildCode, files: props.files, audit, buildLogs: props.buildLogs, requirements: props.requirements, originalPrompt: props.originalPrompt });
+      const history = prior.slice(-20).map((m) =>
+        m.role === "report"
+          ? { role: "user" as const, content: `AI 1 BUILD COMPLETION REPORT (claims to verify):\n${m.content}` }
+          : { role: m.role as "user" | "assistant", content: m.content },
+      );
+      const full = await streamChat(provider, cfg, [{ role: "system", content: auditorChatSystemPrompt(ctx) }, ...history, { role: "user", content: text }], (d) => setChatStream((s) => (s ?? "") + d), ctrl.signal);
+      if (!full.trim()) throw new Error("The AI returned an empty answer.");
+      await addMsg("assistant", full, { engine: engine === "lovable" ? "Lovable AI" : provider, model: cfg.model });
+    } catch (e) {
+      if ((e as Error)?.name !== "AbortError") toast.error(`AI 2 failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setChatStream(null);
+      chatAbort.current = null;
+    }
+  }
 
   const loadHistory = useCallback(async () => {
     const { data, error } = await db
@@ -132,10 +216,7 @@ export function AuditorPanel(props: {
           setCrawl(c);
         }
         const useLovable = engine === "lovable";
-        const provider = (useLovable ? "lovable" : engine) as ProviderId;
-        const cfg: ProviderConfig = useLovable
-          ? { ...props.cfg, model: LOVABLE_MODEL, apiKey: "" }
-          : (ws.settings.providers[engine as ProviderId] ?? props.cfg);
+        const { provider, cfg } = resolveEngine();
         const user = auditUserPrompt({
           kind,
           mode,
@@ -147,6 +228,7 @@ export function AuditorPanel(props: {
           audit,
           buildLogs: props.buildLogs,
           crawl: c,
+          ai1Report: lastReport.current,
         });
         const full = await streamChat(
           provider,
@@ -204,6 +286,53 @@ export function AuditorPanel(props: {
 
   return (
     <div className="flex size-full min-h-0 flex-col bg-surface">
+      <div className="flex border-b border-border text-xs">
+        {(["chat", "audits"] as const).map((t) => (
+          <button key={t} className={`flex-1 px-3 py-1.5 ${tab === t ? "border-b-2 border-primary font-semibold text-primary" : "text-muted-foreground"}`} onClick={() => setTab(t)}>
+            {t === "chat" ? "AI 2 Chat" : "Audits"}
+          </button>
+        ))}
+      </div>
+      {tab === "chat" ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-xs">
+            <select className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-1" value={engine} onChange={(e) => setEngine(e.target.value as "lovable" | ProviderId)}>
+              <option value="lovable">Lovable AI · {LOVABLE_MODEL}</option>
+              {(Object.keys(ws.settings.providers) as ProviderId[]).map((id) => (
+                <option key={id} value={id}>{PROVIDER_LABEL[id] ?? id} · {ws.settings.providers[id]?.model}</option>
+              ))}
+            </select>
+            <span className="label-mono">read-only</span>
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 text-sm">
+            {chat.length === 0 && !chatStream ? (
+              <p className="text-xs text-muted-foreground">Ask AI 2 anything: audit the repository, audit the preview or build logs, compare the repository with the prompt, explain missing files, or generate a repair or completion prompt. AI 2 never changes files.</p>
+            ) : null}
+            {chat.map((m) => (
+              <div key={m.id} className={m.role === "user" ? "ml-8 rounded-lg bg-primary px-3 py-2 text-primary-foreground" : m.role === "report" ? "panel border-primary/40 p-2" : ""}>
+                {m.role === "report" ? <div className="label-mono mb-1">AI 1 report received</div> : null}
+                {m.role === "user" ? <div className="whitespace-pre-wrap">{m.content}</div> : <Markdown source={m.content} />}
+                {m.role === "assistant" && splitReport(m.content).prompt ? (
+                  <div className="mt-1 flex gap-1">
+                    <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" onClick={() => { void navigator.clipboard.writeText(splitReport(m.content).prompt); toast.success("Copied"); }}><Copy className="size-3" /> Copy prompt</Button>
+                    <Button size="sm" className="h-6 px-1.5 text-[11px]" onClick={() => props.onUsePrompt(splitReport(m.content).prompt)}><Send className="size-3" /> Send to AI 1</Button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {chatStream !== null ? <div>{chatStream ? <Markdown source={chatStream} /> : <p className="text-xs text-muted-foreground">AI 2 is thinking…</p>}</div> : null}
+          </div>
+          <form className="flex gap-1.5 border-t border-border p-2" onSubmit={(e) => { e.preventDefault(); void sendChat(); }}>
+            <textarea className="min-h-16 flex-1 resize-none rounded border border-border bg-background px-2 py-1 text-sm" placeholder="Ask AI 2…" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendChat(); } }} />
+            {chatStream !== null ? (
+              <Button type="button" size="icon" variant="destructive" onClick={() => chatAbort.current?.abort()}><Square className="size-4" /></Button>
+            ) : (
+              <Button type="submit" size="icon" disabled={!chatInput.trim()}><Send className="size-4" /></Button>
+            )}
+          </form>
+        </div>
+      ) : (
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <ClipboardCheck className="size-4 text-primary" />
@@ -313,6 +442,8 @@ export function AuditorPanel(props: {
           </div>
         )}
       </div>
+    </div>
+      )}
     </div>
   );
 }
