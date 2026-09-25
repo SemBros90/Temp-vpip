@@ -268,11 +268,56 @@ export async function crawlPreview(previewPath: string, routes: string[], signal
 
 /* ------------------------------------------------------------ prompts */
 
+const GOLDEN_RULE = `AI 2 GOLDEN RULE: AI 2 never decides. AI 2 never modifies code. AI 2 never deploys. AI 2 never commits. AI 2 reports facts. AI 2 generates prompts. The user decides the next action.`;
+
+const FEASIBILITY_RULE = `FEASIBILITY REPORT: Add a section headed exactly "## Feasibility Report" ONLY IF you detect an impossible requirement, missing infrastructure, missing credentials, a missing service, a platform limitation or an architecture conflict. If none exists, do NOT include this section at all. For each issue use:
+**Issue:** …
+**Reason:** …
+**Impact:** …
+**Possible Solutions:** numbered list
+**User Decision Required:** …`;
+
 export function auditorSystemPrompt() {
   return `You are AI 2 — Auditor & Prompt Engineer inside VPIP.
 You NEVER write production code, edit files, commit, push or deploy. You only audit the work of AI 1 (the Coder) and produce corrective instructions for AI 1.
-Base every finding on the evidence provided (file tree, file excerpts, static findings, build logs, crawl results, requirements). If evidence is missing, say so; never invent.
-Cite file paths and requirement codes (R-xxx) and decision codes (D-xxx) where relevant.`;
+Base every finding on the evidence provided (file tree, file excerpts, static findings, build logs, crawl results, requirements, AI 1 build completion reports). If evidence is missing, say so; never invent.
+Treat an AI 1 Build Completion Report as a claim to verify against the repository evidence, not as fact.
+Cite file paths and requirement codes (R-xxx) and decision codes (D-xxx) where relevant.
+${GOLDEN_RULE}
+${FEASIBILITY_RULE}`;
+}
+
+export function auditorChatSystemPrompt(context: string) {
+  return `${auditorSystemPrompt()}
+
+You are in CHAT MODE: the user talks to you directly, like they talk to AI 1. Answer their question from the evidence below.
+When the user asks for an audit, structure the answer as "## Audit Report", "## Root Cause Analysis" and, when a fix is needed, "## Corrective Prompt" (a ready-to-paste instruction for AI 1).
+When asked for a repair or completion prompt, put it under "## Corrective Prompt".
+
+=== CURRENT BUILD EVIDENCE ===
+${context}`;
+}
+
+export function chatContext(opts: { buildCode: string; files: CoderFile[]; audit: StaticAudit; buildLogs: string; requirements: KnowledgeItem[]; originalPrompt: string }) {
+  const fs = real(opts.files);
+  const a = opts.audit;
+  let budget = 40000;
+  const ex: string[] = [];
+  for (const f of [...fs].sort((x, y) => score(y.path) - score(x.path))) {
+    if (budget <= 0) break;
+    const body = f.content.slice(0, Math.min(3000, budget));
+    budget -= body.length;
+    ex.push(`--- ${f.path}\n${body}`);
+  }
+  return `Build ${opts.buildCode}. Static score ${a.score}/100. Routes: ${a.routes.join(", ") || "none"}. Dead links: ${a.deadLinks.map((d) => d.link).join(", ") || "none"}. Orphans: ${a.orphanRoutes.join(", ") || "none"}. Placeholders: ${a.placeholders.join(", ") || "none"}. Broken imports: ${a.brokenImports.map((b) => `${b.file}→${b.spec}`).join(", ") || "none"}. Undeclared packages: ${a.missingPackages.join(", ") || "none"}.
+Requirements: ${opts.requirements.map((r) => `${r.code} ${r.status} ${r.title}`).join("; ") || "none"}
+Original prompt: ${opts.originalPrompt.slice(0, 6000) || "none"}
+Build logs:
+${opts.buildLogs.slice(-4000) || "none"}
+File tree:
+${fs.map((f) => `- ${f.path}`).join("\n") || "empty"}
+File excerpts:
+${ex.join("\n\n")}`;
 }
 
 const MODULES: Record<AuditKind, string> = {
@@ -305,6 +350,7 @@ export function auditUserPrompt(opts: {
   audit: StaticAudit;
   buildLogs: string;
   crawl: CrawlResult[] | null;
+  ai1Report?: string;
 }) {
   const fs = real(opts.files);
   const tree = fs.map((f) => `- ${f.path} (${f.content.split("\n").length} lines)`).join("\n");
@@ -355,7 +401,10 @@ ${opts.buildCode}
 ${MODULES[opts.kind]}
 
 Write "## Audit Report" first: a score line "Score: NN/100", then findings as a markdown table (severity | module | file | finding | root cause).
+Then write "## Root Cause Analysis": the underlying causes behind the findings, grouped.
 ${promptSection}${completeness}
+Add "## Feasibility Report" only under the conditions in your rules; otherwise omit it.
+${opts.ai1Report ? `\n=== AI 1 BUILD COMPLETION REPORT (claims to verify) ===\n${opts.ai1Report.slice(0, 8000)}\n` : ""}
 
 === ORIGINAL PROMPT / CONTEXT ===
 ${opts.originalPrompt.slice(0, 12000) || "_none_"}
