@@ -1400,6 +1400,7 @@ function CoderPage() {
                     problems.join("\n"),
                   ].filter(Boolean).join("\n")}
                   coderBusy={busy}
+                  inboxReport={ai2Inbox}
                   provider={provider}
                   cfg={cfg}
                   onUsePrompt={(text) => {
