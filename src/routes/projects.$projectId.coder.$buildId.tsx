@@ -44,6 +44,7 @@ import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { EmptyState, EnginePicker, Tag, relTime, useEngine } from "@/components/vpip/common";
 import { AgentPanel } from "@/components/vpip/AgentPanel";
+import { AuditorPanel } from "@/components/vpip/AuditorPanel";
 import { Markdown } from "@/lib/vpip/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -160,6 +161,7 @@ function CoderPage() {
 
   const [leftTab, setLeftTab] = useState("explorer");
   const [centerTab, setCenterTab] = useState("chat");
+  const [auditorOpen, setAuditorOpen] = useState(true);
   const [rightTab, setRightTab] = useState("preview");
   const [bottomTab, setBottomTab] = useState("terminal");
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -789,7 +791,7 @@ function CoderPage() {
           groupRef={workspaceRef}
           id="vpip-coder-workspace"
           orientation="horizontal"
-          defaultLayout={{ files: 0, chat: 20, preview: 80 }}
+          defaultLayout={{ files: 0, chat: 40, preview: 60 }}
           onLayoutChanged={(layout) =>
             window.localStorage.setItem("vpip-coder-layout", JSON.stringify(layout))
           }
@@ -1036,13 +1038,22 @@ function CoderPage() {
             collapsible
             onResize={(size) => setChatOpen(size.asPercentage > 0)}
           >
-            <section className="flex size-full min-h-0 flex-col bg-background">
+            <div className="flex size-full min-h-0">
+            <section className="flex size-full min-h-0 min-w-0 flex-1 flex-col bg-background">
               <Tabs
                 value={centerTab}
                 onValueChange={setCenterTab}
                 className="flex min-h-0 flex-1 flex-col gap-0"
               >
                 <div className="flex min-w-0 items-center gap-2 overflow-x-auto border-b border-border px-2 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setAuditorOpen((v) => !v)}
+                    className={`shrink-0 rounded border px-2 py-1 text-xs ${auditorOpen ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
+                    title="Show AI 2 — Auditor beside the Coder"
+                  >
+                    AI 2
+                  </button>
                   <TabsList className="h-8 w-max shrink-0">
                     <TabsTrigger value="chat" className="text-xs">
                       Coding chat
@@ -1317,6 +1328,31 @@ function CoderPage() {
                 </TabsContent>
               </Tabs>
             </section>
+            {auditorOpen ? (
+              <div className="min-h-0 w-1/2 min-w-[280px] border-l border-border">
+                <AuditorPanel
+                  projectId={projectId}
+                  buildId={session.id}
+                  buildCode={session.code}
+                  originalPrompt={session.contextPackage ?? ""}
+                  requirements={linked.requirements}
+                  files={files}
+                  buildLogs={[
+                    logs.slice(-60).map((l) => `[${l.stream}] ${l.output}`).join("\n"),
+                    problems.join("\n"),
+                  ].filter(Boolean).join("\n")}
+                  coderBusy={busy}
+                  provider={provider}
+                  cfg={cfg}
+                  onUsePrompt={(text) => {
+                    setInput(text);
+                    setCenterTab("chat");
+                    toast.success("Corrective prompt placed in the Coder — review it, then send.");
+                  }}
+                />
+              </div>
+            ) : null}
+            </div>
           </Panel>
           <ResizeSeparator className="group relative w-px bg-border outline-none transition-colors hover:bg-primary focus-visible:bg-primary data-[separator=active]:bg-primary">
             <span className="absolute inset-y-0 -left-1.5 w-3" />
