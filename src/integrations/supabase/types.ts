@@ -64,6 +64,39 @@ export type Database = {
           },
         ]
       }
+      vpip_ai1_reports: {
+        Row: {
+          build_session_id: string
+          created_at: string
+          files_created: Json
+          files_modified: Json
+          id: string
+          project_id: string
+          report: string
+          sent_to_ai2: boolean
+        }
+        Insert: {
+          build_session_id: string
+          created_at?: string
+          files_created?: Json
+          files_modified?: Json
+          id?: string
+          project_id: string
+          report: string
+          sent_to_ai2?: boolean
+        }
+        Update: {
+          build_session_id?: string
+          created_at?: string
+          files_created?: Json
+          files_modified?: Json
+          id?: string
+          project_id?: string
+          report?: string
+          sent_to_ai2?: boolean
+        }
+        Relationships: []
+      }
       vpip_ai2_audits: {
         Row: {
           build_session_id: string
@@ -109,6 +142,39 @@ export type Database = {
           report?: string
           score?: number | null
           snapshot?: Json
+        }
+        Relationships: []
+      }
+      vpip_ai2_messages: {
+        Row: {
+          build_session_id: string
+          content: string
+          created_at: string
+          engine: string | null
+          id: string
+          model: string | null
+          project_id: string
+          role: string
+        }
+        Insert: {
+          build_session_id: string
+          content: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          model?: string | null
+          project_id: string
+          role: string
+        }
+        Update: {
+          build_session_id?: string
+          content?: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          model?: string | null
+          project_id?: string
+          role?: string
         }
         Relationships: []
       }
