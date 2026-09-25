@@ -251,11 +251,41 @@ export function checkCompleteness(files: AssuranceFile[], plannedFiles: string[]
   return { planned, created, missing, extra, complete: missing.length === 0 };
 }
 
+export interface FrameworkFileRow { required: string; expected: string; exists: boolean; found?: string | undefined }
+export interface FrameworkFileAudit { framework: string | null; source: "files" | "plan" | "source-inference" | "none"; rows: FrameworkFileRow[]; complete: boolean }
+
+/**
+ * Framework Required File Audit — independent of Planned Files and Import Validation.
+ * Scans the whole project root. If the framework cannot be detected from the files themselves
+ * (e.g. package.json / vite.config are the missing files), it is inferred from the build plan,
+ * then from source extensions, so missing root files cannot hide the framework.
+ */
+export function auditFrameworkFiles(files: AssuranceFile[], plannedFiles: string[] = []): FrameworkFileAudit {
+  const set = new Set(files.filter((f) => f.content.trim().length > 0).map((f) => norm(f.path)));
+  let fw = detectFramework(files.filter((f) => f.content.trim().length > 0));
+  let source: FrameworkFileAudit["source"] = fw ? "files" : "none";
+  if (!fw && plannedFiles.length) { fw = detectFramework(plannedFiles.map((p) => ({ path: p, content: "" }))); if (fw) source = "plan"; }
+  if (!fw || fw.id === "static") {
+    const all = [...set, ...plannedFiles.map(norm)];
+    if (all.some((p) => /^src\/.*\.(t|j)sx$/.test(p))) { fw = FRAMEWORK_REGISTRY.find((f) => f.id === "react-vite")!; source = "source-inference"; }
+  }
+  if (!fw) return { framework: null, source: "none", rows: [], complete: false };
+  const rows: FrameworkFileRow[] = [];
+  for (const m of fw.mandatoryFiles) rows.push({ required: m, expected: `/${m} (project root)`.replace("/./", "/"), exists: hasFile(set, m) });
+  for (const g of fw.anyOfFiles ?? []) {
+    const found = g.find((x) => hasFile(set, x));
+    rows.push({ required: g[0]!, expected: g.map((x) => "/" + x).join(" | "), exists: !!found, found });
+  }
+  for (const d of fw.requiredDirs ?? []) rows.push({ required: d + "/", expected: `/${d}/ (non-empty)`, exists: [...set].some((p) => p.startsWith(d + "/")) });
+  return { framework: fw.id, source, rows, complete: rows.every((r) => r.exists) };
+}
+
 export interface AssuranceReport {
   at: string;
   framework: string | null;
   stages: StageReport[];
   completeness?: CompletenessResult | undefined;
+  frameworkFiles?: FrameworkFileAudit | undefined;
   compileAllowed: boolean;
   score: number;
   verified: boolean;
@@ -288,28 +318,30 @@ export function runAssurance(input: AssuranceInput): AssuranceReport {
     stages.push({ id, label, result: errors.length ? "FAIL" : "PASS", errors, ...(note ? { note } : {}) });
   const blocked = (id: string, label: string, why: string) => stages.push({ id, label, result: "PENDING", errors: [], note: why });
 
+  const LATER = [["framework", "Framework Validation"], ["structure", "File Validation"], ["routes", "Route Validation"], ["imports", "Import Validation"], ["exports", "Export Validation"], ["packages", "Dependency Validation"], ["features", "Feature Completeness"], ["host", "Host Profile Validation"], ["compile", "Compile Validation"], ["runtime", "Runtime Validation"], ["preview", "Preview Validation"]] as const;
+
+  // Pre-gate — Framework Required File Audit (independent of plan and imports; fails immediately)
+  const frameworkFiles = auditFrameworkFiles(files, input.plannedFiles);
+  push("framework-files", "Framework Required File Audit",
+    frameworkFiles.framework ? frameworkFiles.rows.filter((r) => !r.exists).map((r) => `Framework critical file missing: ${r.expected}`) : ["Framework could not be determined from files, plan or sources."],
+    frameworkFiles.framework ? `${frameworkFiles.framework} (detected from ${frameworkFiles.source})` : undefined);
+
   // Phase 0 — Generation Completeness Gate
   const completeness = checkCompleteness(files, input.plannedFiles);
   push("completeness", "Generation Completeness", completeness.missing.map((m) => `Planned but not generated: ${m}`),
     input.plannedFiles.length ? `${completeness.created.length} created / ${completeness.planned.length} planned` : "No build plan — nothing planned to compare");
-  const GATE = "Blocked by Generation Completeness Gate";
-  if (!completeness.complete) {
-    for (const [id, label] of [["framework", "Framework Validation"], ["structure", "File Validation"], ["routes", "Route Validation"], ["imports", "Import Validation"], ["exports", "Export Validation"], ["packages", "Dependency Validation"], ["features", "Feature Completeness"], ["host", "Host Profile Validation"], ["compile", "Compile Validation"], ["runtime", "Runtime Validation"], ["preview", "Preview Validation"]] as const)
-      blocked(id, label, GATE);
-    return { at: new Date().toISOString(), framework: null, stages, completeness, compileAllowed: false, score: 0, verified: false };
+  if (!frameworkFiles.complete || !completeness.complete) {
+    const why = !frameworkFiles.complete ? "Blocked — framework-critical file missing" : "Blocked by Generation Completeness Gate";
+    for (const [id, label] of LATER) blocked(id, label, why);
+    return { at: new Date().toISOString(), framework: frameworkFiles.framework, stages, completeness, frameworkFiles, compileAllowed: false, score: 0, verified: false };
   }
 
   // Phase 1 — framework
   const fw = detectFramework(files);
   push("framework", "Framework Validation", fw ? [] : ["No registered framework matched the project files."], fw?.label);
 
-  // Phase 2 — framework required files
+  // Phase 2 — framework required files (already enforced by the audit above)
   const structErr: string[] = [];
-  if (fw) {
-    for (const m of fw.mandatoryFiles) if (!hasFile(set, m)) structErr.push(`Framework critical file missing: ${m}`);
-    for (const group of fw.anyOfFiles ?? []) if (!group.some((g) => hasFile(set, g))) structErr.push(`Framework critical file missing: one of ${group.join(" | ")}`);
-    for (const d of fw.requiredDirs ?? []) if (![...set].some((p) => p.startsWith(d + "/"))) structErr.push(`Framework critical folder missing: ${d}/`);
-  }
   push("structure", "File Validation", structErr);
 
   // routes
