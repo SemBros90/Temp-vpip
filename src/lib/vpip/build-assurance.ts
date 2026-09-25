@@ -304,7 +304,18 @@ export function computeMissingFiles(files: AssuranceFile[], plannedFiles: string
 
 export type IntegrityStatus = "VALID" | "INVALID" | "MISSING";
 export interface FrameworkFileRow { required: string; expected: string; exists: boolean; found?: string | undefined; valid?: boolean | undefined; status?: IntegrityStatus | undefined; problems?: string[] | undefined }
-export interface FrameworkFileAudit { framework: string | null; source: "files" | "plan" | "source-inference" | "none"; rows: FrameworkFileRow[]; complete: boolean }
+export interface FrameworkFileAudit { framework: string | null; source: "files" | "plan" | "source-inference" | "none"; method?: string | undefined; rows: FrameworkFileRow[]; complete: boolean }
+
+/** Build Manager bridge — framework-critical failures as blocking validation errors (same audit as the certificate). */
+export function frameworkAuditIssues(a: FrameworkFileAudit): { path?: string; message: string }[] {
+  if (!a.framework) return [{ message: "Framework Required File Audit: no framework could be detected — nothing to install or run." }];
+  return a.rows.filter((r) => r.status !== "VALID").map((r) => ({
+    path: r.found ?? r.required,
+    message: r.status === "INVALID"
+      ? `Framework critical file invalid (${a.framework}): ${(r.problems ?? []).join("; ")}`
+      : `Framework critical file missing (${a.framework}): ${r.expected}`,
+  }));
+}
 
 function parseJsonc(src: string): unknown {
   const stripped = src
@@ -362,12 +373,21 @@ export function auditFrameworkFiles(files: AssuranceFile[], plannedFiles: string
   const byPath = new Map(present.map((f) => [norm(f.path), f.content]));
   let fw = detectFramework(present);
   let source: FrameworkFileAudit["source"] = fw ? "files" : "none";
-  if (!fw && plannedFiles.length) { fw = detectFramework(plannedFiles.map((p) => ({ path: p, content: "" }))); if (fw) source = "plan"; }
+  let method = fw ? `manifest/config (${set.has("package.json") ? "package.json dependencies" : "framework config file"})` : "";
+  if (!fw && plannedFiles.length) { fw = detectFramework(plannedFiles.map((p) => ({ path: p, content: "" }))); if (fw) { source = "plan"; method = "build plan file list"; } }
   if (!fw || fw.id === "static") {
+    // Fallback detection — never depends on package.json or vite.config alone.
     const all = [...set, ...plannedFiles.map(norm)];
-    if (all.some((p) => /^src\/.*\.(t|j)sx$/.test(p))) { fw = FRAMEWORK_REGISTRY.find((f) => f.id === "react-vite")!; source = "source-inference"; }
+    const signals: string[] = [];
+    if (all.some((p) => /^src\/.*\.(t|j)sx$/.test(p))) signals.push("src/*.tsx|jsx present");
+    if (present.some((f) => CODE_EXT.test(f.path) && /from\s+["']react(-dom)?(\/client)?["']/.test(f.content))) signals.push("React imports");
+    if (all.some((p) => /(^|\/)(App|main)\.(t|j)sx$/.test(p))) signals.push("App/main entry");
+    if (signals.length && set.has("index.html")) signals.push("index.html present");
+    if (signals.some((s) => s !== "index.html present")) {
+      fw = FRAMEWORK_REGISTRY.find((f) => f.id === "react-vite")!; source = "source-inference"; method = `fallback: ${signals.join(", ")}`;
+    }
   }
-  if (!fw) return { framework: null, source: "none", rows: [], complete: false };
+  if (!fw) return { framework: null, source: "none", method: "no framework signals", rows: [], complete: false };
   const resolvePath = (name: string) => (name.startsWith(".") ? [...set].find((p) => p.endsWith(name)) : set.has(name) ? name : undefined);
   const finish = (row: Omit<FrameworkFileRow, "valid" | "status" | "problems">, path: string | undefined): FrameworkFileRow => {
     if (!row.exists || !path) return { ...row, valid: false, status: "MISSING", problems: [] };
@@ -384,7 +404,7 @@ export function auditFrameworkFiles(files: AssuranceFile[], plannedFiles: string
     const ok = [...set].some((p) => p.startsWith(d + "/"));
     rows.push({ required: d + "/", expected: `/${d}/ (non-empty)`, exists: ok, valid: ok, status: ok ? "VALID" : "MISSING", problems: [] });
   }
-  return { framework: fw.id, source, rows, complete: rows.every((r) => r.status === "VALID") };
+  return { framework: fw.id, source, method, rows, complete: rows.every((r) => r.status === "VALID") };
 }
 
 export interface AssuranceReport {
