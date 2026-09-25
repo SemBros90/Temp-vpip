@@ -43,6 +43,9 @@ import { Route as ProjectsProjectIdRegisterRouteImport } from './routes/projects
 import { Route as ProjectsProjectIdRepositoriesRouteImport } from './routes/projects.$projectId.repositories'
 import { Route as ProjectsProjectIdSnapshotsRouteImport } from './routes/projects.$projectId.snapshots'
 import { Route as ProjectsProjectIdCoderBuildIdRouteImport } from './routes/projects.$projectId.coder.$buildId'
+import { Route as ProjectsProjectIdDiscoveryIndexRouteImport } from './routes/projects.$projectId.discovery.index'
+import { Route as ProjectsProjectIdDiscoverySessionIdRouteImport } from './routes/projects.$projectId.discovery.$sessionId'
+import { Route as ProjectsProjectIdDiscoveryAuditRouteImport } from './routes/projects.$projectId.discovery.audit'
 import { Route as ProjectsProjectIdDiscussionsIndexRouteImport } from './routes/projects.$projectId.discussions.index'
 import { Route as ProjectsProjectIdDiscussionsDiscussionIdRouteImport } from './routes/projects.$projectId.discussions.$discussionId'
 
@@ -228,6 +231,24 @@ const ProjectsProjectIdCoderBuildIdRoute =
     path: '/coder/$buildId',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdDiscoveryIndexRoute =
+  ProjectsProjectIdDiscoveryIndexRouteImport.update({
+    id: '/discovery/',
+    path: '/discovery/',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdDiscoverySessionIdRoute =
+  ProjectsProjectIdDiscoverySessionIdRouteImport.update({
+    id: '/discovery/$sessionId',
+    path: '/discovery/$sessionId',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdDiscoveryAuditRoute =
+  ProjectsProjectIdDiscoveryAuditRouteImport.update({
+    id: '/discovery/audit',
+    path: '/discovery/audit',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdDiscussionsIndexRoute =
   ProjectsProjectIdDiscussionsIndexRouteImport.update({
     id: '/discussions/',
@@ -276,7 +297,10 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/coder/$buildId': typeof ProjectsProjectIdCoderBuildIdRoute
+  '/projects/$projectId/discovery/$sessionId': typeof ProjectsProjectIdDiscoverySessionIdRoute
+  '/projects/$projectId/discovery/audit': typeof ProjectsProjectIdDiscoveryAuditRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
+  '/projects/$projectId/discovery/': typeof ProjectsProjectIdDiscoveryIndexRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -313,7 +337,10 @@ export interface FileRoutesByTo {
   '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/coder/$buildId': typeof ProjectsProjectIdCoderBuildIdRoute
+  '/projects/$projectId/discovery/$sessionId': typeof ProjectsProjectIdDiscoverySessionIdRoute
+  '/projects/$projectId/discovery/audit': typeof ProjectsProjectIdDiscoveryAuditRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
+  '/projects/$projectId/discovery': typeof ProjectsProjectIdDiscoveryIndexRoute
   '/projects/$projectId/discussions': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 export interface FileRoutesById {
@@ -352,7 +379,10 @@ export interface FileRoutesById {
   '/projects/$projectId/snapshots': typeof ProjectsProjectIdSnapshotsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/coder/$buildId': typeof ProjectsProjectIdCoderBuildIdRoute
+  '/projects/$projectId/discovery/$sessionId': typeof ProjectsProjectIdDiscoverySessionIdRoute
+  '/projects/$projectId/discovery/audit': typeof ProjectsProjectIdDiscoveryAuditRoute
   '/projects/$projectId/discussions/$discussionId': typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
+  '/projects/$projectId/discovery/': typeof ProjectsProjectIdDiscoveryIndexRoute
   '/projects/$projectId/discussions/': typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 export interface FileRouteTypes {
@@ -392,7 +422,10 @@ export interface FileRouteTypes {
     | '/projects/$projectId/snapshots'
     | '/projects/$projectId/'
     | '/projects/$projectId/coder/$buildId'
+    | '/projects/$projectId/discovery/$sessionId'
+    | '/projects/$projectId/discovery/audit'
     | '/projects/$projectId/discussions/$discussionId'
+    | '/projects/$projectId/discovery/'
     | '/projects/$projectId/discussions/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -429,7 +462,10 @@ export interface FileRouteTypes {
     | '/projects/$projectId/snapshots'
     | '/projects/$projectId'
     | '/projects/$projectId/coder/$buildId'
+    | '/projects/$projectId/discovery/$sessionId'
+    | '/projects/$projectId/discovery/audit'
     | '/projects/$projectId/discussions/$discussionId'
+    | '/projects/$projectId/discovery'
     | '/projects/$projectId/discussions'
   id:
     | '__root__'
@@ -467,7 +503,10 @@ export interface FileRouteTypes {
     | '/projects/$projectId/snapshots'
     | '/projects/$projectId/'
     | '/projects/$projectId/coder/$buildId'
+    | '/projects/$projectId/discovery/$sessionId'
+    | '/projects/$projectId/discovery/audit'
     | '/projects/$projectId/discussions/$discussionId'
+    | '/projects/$projectId/discovery/'
     | '/projects/$projectId/discussions/'
   fileRoutesById: FileRoutesById
 }
@@ -731,6 +770,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdCoderBuildIdRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/discovery/': {
+      id: '/projects/$projectId/discovery/'
+      path: '/discovery'
+      fullPath: '/projects/$projectId/discovery/'
+      preLoaderRoute: typeof ProjectsProjectIdDiscoveryIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/discovery/$sessionId': {
+      id: '/projects/$projectId/discovery/$sessionId'
+      path: '/discovery/$sessionId'
+      fullPath: '/projects/$projectId/discovery/$sessionId'
+      preLoaderRoute: typeof ProjectsProjectIdDiscoverySessionIdRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/discovery/audit': {
+      id: '/projects/$projectId/discovery/audit'
+      path: '/discovery/audit'
+      fullPath: '/projects/$projectId/discovery/audit'
+      preLoaderRoute: typeof ProjectsProjectIdDiscoveryAuditRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/discussions/': {
       id: '/projects/$projectId/discussions/'
       path: '/discussions'
@@ -766,7 +826,10 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdSnapshotsRoute: typeof ProjectsProjectIdSnapshotsRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
   ProjectsProjectIdCoderBuildIdRoute: typeof ProjectsProjectIdCoderBuildIdRoute
+  ProjectsProjectIdDiscoverySessionIdRoute: typeof ProjectsProjectIdDiscoverySessionIdRoute
+  ProjectsProjectIdDiscoveryAuditRoute: typeof ProjectsProjectIdDiscoveryAuditRoute
   ProjectsProjectIdDiscussionsDiscussionIdRoute: typeof ProjectsProjectIdDiscussionsDiscussionIdRoute
+  ProjectsProjectIdDiscoveryIndexRoute: typeof ProjectsProjectIdDiscoveryIndexRoute
   ProjectsProjectIdDiscussionsIndexRoute: typeof ProjectsProjectIdDiscussionsIndexRoute
 }
 
@@ -789,8 +852,12 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdSnapshotsRoute: ProjectsProjectIdSnapshotsRoute,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
   ProjectsProjectIdCoderBuildIdRoute: ProjectsProjectIdCoderBuildIdRoute,
+  ProjectsProjectIdDiscoverySessionIdRoute:
+    ProjectsProjectIdDiscoverySessionIdRoute,
+  ProjectsProjectIdDiscoveryAuditRoute: ProjectsProjectIdDiscoveryAuditRoute,
   ProjectsProjectIdDiscussionsDiscussionIdRoute:
     ProjectsProjectIdDiscussionsDiscussionIdRoute,
+  ProjectsProjectIdDiscoveryIndexRoute: ProjectsProjectIdDiscoveryIndexRoute,
   ProjectsProjectIdDiscussionsIndexRoute:
     ProjectsProjectIdDiscussionsIndexRoute,
 }

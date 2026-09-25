@@ -506,6 +506,272 @@ export type Database = {
           },
         ]
       }
+      vpip_discovery_answers: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          other: string | null
+          question_id: string
+          session_id: string
+          superseded_by: string | null
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          is_active?: boolean
+          kind: string
+          other?: string | null
+          question_id: string
+          session_id: string
+          superseded_by?: string | null
+          value?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          other?: string | null
+          question_id?: string
+          session_id?: string
+          superseded_by?: string | null
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_discovery_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_discovery_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vpip_discovery_answers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_discovery_audit: {
+        Row: {
+          actor: string
+          created_at: string
+          detail: Json
+          event: string
+          id: string
+          project_id: string
+          session_id: string | null
+        }
+        Insert: {
+          actor?: string
+          created_at?: string
+          detail?: Json
+          event: string
+          id: string
+          project_id: string
+          session_id?: string | null
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          detail?: Json
+          event?: string
+          id?: string
+          project_id?: string
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_discovery_audit_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vpip_discovery_audit_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_discovery_knowledge: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          session_id: string
+          source: string
+          statement: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id: string
+          session_id: string
+          source?: string
+          statement: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          session_id?: string
+          source?: string
+          statement?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_discovery_knowledge_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_discovery_outputs: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          markdown: string
+          session_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          kind: string
+          markdown: string
+          session_id: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          markdown?: string
+          session_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_discovery_outputs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_discovery_questions: {
+        Row: {
+          category: string
+          choices: Json
+          created_at: string
+          id: string
+          priority: number
+          qtype: string
+          round: number
+          session_id: string
+          status: string
+          text: string
+        }
+        Insert: {
+          category: string
+          choices?: Json
+          created_at?: string
+          id: string
+          priority?: number
+          qtype: string
+          round: number
+          session_id: string
+          status?: string
+          text: string
+        }
+        Update: {
+          category?: string
+          choices?: Json
+          created_at?: string
+          id?: string
+          priority?: number
+          qtype?: string
+          round?: number
+          session_id?: string
+          status?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_discovery_questions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_discovery_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          idea: string
+          maturity: number
+          project_id: string
+          readiness: Json
+          recommendation: string
+          round: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          idea: string
+          maturity?: number
+          project_id: string
+          readiness?: Json
+          recommendation?: string
+          round?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          idea?: string
+          maturity?: number
+          project_id?: string
+          readiness?: Json
+          recommendation?: string
+          round?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_discovery_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vpip_discussions: {
         Row: {
           attachments: Json
