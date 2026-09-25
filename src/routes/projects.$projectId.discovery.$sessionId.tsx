@@ -278,7 +278,7 @@ function Interview() {
                 ))}
               </div>
               <div className="p-4 prose prose-sm max-w-none dark:prose-invert">
-                <Markdown>{outputs.find((o) => o.kind === (tab ?? outputs[0]?.kind))?.markdown ?? ""}</Markdown>
+                <Markdown source={outputs.find((o) => o.kind === (tab ?? outputs[0]?.kind))?.markdown ?? ""} />
               </div>
             </div>
           )}

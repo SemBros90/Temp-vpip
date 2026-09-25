@@ -58,9 +58,9 @@ function AuditPage() {
   const exportCsv = () => {
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const lines = ["timestamp,user,session,event,detail", ...filtered.map((r) => [r.created_at, r.actor, idea(r.session_id), r.event, JSON.stringify(r.detail)].map(esc).join(","))];
-    download("discovery-audit.csv", lines.join("\n"), "text/csv");
+    download(new Blob([lines.join("\n")], { type: "text/csv" }), "discovery-audit.csv");
   };
-  const exportJson = () => download("discovery-audit.json", JSON.stringify(filtered, null, 2), "application/json");
+  const exportJson = () => download(new Blob([JSON.stringify(filtered, null, 2)], { type: "application/json" }), "discovery-audit.json");
 
   return (
     <Shell
