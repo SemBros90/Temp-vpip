@@ -229,6 +229,19 @@ function AssurancePage() {
                 {!row.last_report ? <p className="text-sm text-muted-foreground">Run Build Assurance to produce the certificate.</p> : (
                   <div className="panel space-y-2 px-4 py-3">
                     <div className="flex items-center gap-2 text-sm font-medium"><ShieldCheck className="size-4" />Build Success Certificate · {relTime(row.last_report.at)}</div>
+                    <div className="label-mono">Framework Required File Audit{row.last_report.frameworkFiles?.framework ? ` · ${row.last_report.frameworkFiles.framework} (from ${row.last_report.frameworkFiles.source})` : ""}</div>
+                    {!row.last_report.frameworkFiles ? <p className="text-xs text-muted-foreground">Run Build Assurance again to produce this audit.</p> : (
+                      <table className="w-full text-xs">
+                        <thead><tr className="text-left text-muted-foreground"><th className="py-1 pr-2">Required File</th><th className="py-1 pr-2">Expected Location</th><th className="py-1">Exists</th></tr></thead>
+                        <tbody>{row.last_report.frameworkFiles.rows.map((r) => (
+                          <tr key={r.expected} className="border-t border-border">
+                            <td className="py-1 pr-2 font-mono">{r.found ?? r.required}</td>
+                            <td className="py-1 pr-2 font-mono text-muted-foreground">{r.expected}</td>
+                            <td className={cn("py-1 font-mono font-semibold", r.exists ? "text-success" : "text-destructive")}>{r.exists ? "Yes" : "No"}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    )}
                     <table className="w-full text-xs"><tbody>
                       {row.last_report.stages.map((s) => (
                         <tr key={s.id} className="border-t border-border align-top">
