@@ -214,14 +214,16 @@ export const Route = createFileRoute("/api/ai/chat")({
 
         if (!upstream.ok || !upstream.body) {
           let detail = "";
+          const rawText = await upstream.text().catch(() => "");
           try {
-            const errBody = (await upstream.json()) as {
+            const parsed = JSON.parse(rawText) as unknown;
+            const errBody = (Array.isArray(parsed) ? parsed[0] : parsed) as {
               error?: { message?: string };
               message?: string;
             };
             detail = errBody?.error?.message ?? errBody?.message ?? "";
           } catch {
-            detail = await upstream.text().catch(() => "");
+            detail = rawText.slice(0, 300);
           }
           const message =
             upstream.status === 401
@@ -230,10 +232,13 @@ export const Route = createFileRoute("/api/ai/chat")({
                 ? `${conf.label} refused the request${detail ? ` — ${detail}` : " (key rejected or no access to this model)."}`
               : upstream.status === 404
                 ? `${conf.label} does not know the model "${body.model}".`
-                : upstream.status === 429
-                  ? `Rate limited or out of credit with ${conf.label}.`
+                : upstream.status === 402 || upstream.status === 429
+                  ? `Rate limited or out of credit with ${conf.label}${detail ? ` — ${detail}` : "."}`
                   : `${upstream.status} ${upstream.statusText}${detail ? ` — ${detail}` : ""}`;
-          return json({ error: message }, upstream.status === 401 ? 401 : 502);
+          // Keep the provider's client-side status (4xx) so it isn't reported as a server crash.
+          const status =
+            upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502;
+          return json({ error: message }, status);
         }
 
         if (!stream) {
