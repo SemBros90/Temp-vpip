@@ -118,7 +118,7 @@ export interface StageReport {
   label: string;
   result: StageResult;
   errors: string[];
-  note?: string;
+  note?: string | undefined;
 }
 
 export interface AssuranceFile {

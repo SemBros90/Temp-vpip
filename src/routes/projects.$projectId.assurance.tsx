@@ -92,7 +92,7 @@ function AssurancePage() {
         ) : (
           <>
             <div className="flex items-center gap-2">
-              <Select value={buildId} onValueChange={setBuildId}>
+              <Select value={buildId ?? ""} onValueChange={setBuildId}>
                 <SelectTrigger className="w-[360px]"><SelectValue placeholder="Pick a build" /></SelectTrigger>
                 <SelectContent>
                   {generated.map((b) => <SelectItem key={b.id} value={b.id}>{b.code} · {b.promptTitle}</SelectItem>)}
