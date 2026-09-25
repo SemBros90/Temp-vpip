@@ -440,7 +440,7 @@ export function splitReport(md: string) {
   const i = md.search(/^#{1,3}\s*Corrective Prompt\s*$/im);
   if (i === -1) return { report: md.trim(), prompt: "" };
   const rest = md.slice(i).replace(/^#{1,3}\s*Corrective Prompt\s*$/im, "");
-  const next = rest.search(/^##\s+(Completeness Report)/im);
+  const next = rest.search(/^##\s+(Completeness Report|Feasibility Report)/im);
   const prompt = (next === -1 ? rest : rest.slice(0, next)).trim();
   const report = (md.slice(0, i) + (next === -1 ? "" : `\n${rest.slice(next)}`)).trim();
   return { report, prompt };
