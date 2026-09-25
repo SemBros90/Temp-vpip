@@ -251,6 +251,57 @@ export function checkCompleteness(files: AssuranceFile[], plannedFiles: string[]
   return { planned, created, missing, extra, complete: missing.length === 0 };
 }
 
+export type MissingSource = "framework" | "planned" | "import" | "route";
+export interface ExpectedFile { path: string; sources: MissingSource[]; referencedBy: string[] }
+export interface MissingFilesResult { expected: ExpectedFile[]; missing: ExpectedFile[] }
+
+/**
+ * Missing File Elimination — Expected Files = Framework Registry ∪ Planned Files ∪ Import Targets ∪ Route Targets.
+ * Route targets are routed components whose import points to a file that does not exist.
+ */
+export function computeMissingFiles(files: AssuranceFile[], plannedFiles: string[]): MissingFilesResult {
+  const present = files.filter((f) => f.content.trim().length > 0);
+  const set = new Set(present.map((f) => norm(f.path)));
+  const map = new Map<string, ExpectedFile>();
+  const add = (path: string, src: MissingSource, by?: string) => {
+    const p = norm(path);
+    const e = map.get(p) ?? { path: p, sources: [], referencedBy: [] };
+    if (!e.sources.includes(src)) e.sources.push(src);
+    if (by && !e.referencedBy.includes(by)) e.referencedBy.push(by);
+    map.set(p, e);
+  };
+  const fa = auditFrameworkFiles(files, plannedFiles);
+  for (const r of fa.rows) {
+    if (r.required.endsWith("/")) continue;
+    if (r.exists) add(r.found ?? r.required, "framework");
+    else if (!r.required.startsWith(".")) add(r.required, "framework");
+  }
+  for (const p of plannedFiles) add(p, "planned");
+  for (const f of present) {
+    const p = norm(f.path);
+    if (!CODE_EXT.test(p) || p.startsWith("node_modules/")) continue;
+    const routed = new Set([
+      ...[...f.content.matchAll(/element=\{\s*<([A-Z][\w$]*)/g)].map((m) => m[1]!),
+      ...[...f.content.matchAll(/component[=:]\s*\{?\s*([A-Z][\w$]*)/g)].map((m) => m[1]!),
+    ]);
+    for (const ref of parseImports(p, f.content)) {
+      if (!isLocal(ref.spec) || ref.spec.startsWith("/")) continue;
+      const hit = resolveLocal(p, ref.spec, set);
+      let target = hit;
+      if (!target) {
+        const base = ref.spec.startsWith("@/") || ref.spec.startsWith("~/") ? "src/" + ref.spec.slice(2)
+          : (() => { const parts = p.split("/"); parts.pop(); for (const s of ref.spec.split("/")) { if (s === "." || !s) continue; if (s === "..") parts.pop(); else parts.push(s); } return parts.join("/"); })();
+        const hasExt = /\.[a-z0-9]+$/i.test(base.split("/").pop() ?? "");
+        target = hasExt ? base : base + (/\.(t|j)sx$/.test(p) ? (p.endsWith("x") && /\.tsx$/.test(p) ? ".tsx" : ".jsx") : /\.js$|\.mjs$/.test(p) ? ".js" : ".ts");
+      }
+      const isRoute = ref.names.includes("default") && [...routed].some((n) => new RegExp(`import\\s+${n}\\b[^;]*["']${ref.spec.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`).test(f.content));
+      add(target, isRoute ? "route" : "import", p);
+    }
+  }
+  const expected = [...map.values()].sort((a, b) => a.path.localeCompare(b.path));
+  return { expected, missing: expected.filter((e) => !set.has(e.path)) };
+}
+
 export type IntegrityStatus = "VALID" | "INVALID" | "MISSING";
 export interface FrameworkFileRow { required: string; expected: string; exists: boolean; found?: string | undefined; valid?: boolean | undefined; status?: IntegrityStatus | undefined; problems?: string[] | undefined }
 export interface FrameworkFileAudit { framework: string | null; source: "files" | "plan" | "source-inference" | "none"; rows: FrameworkFileRow[]; complete: boolean }
@@ -386,10 +437,14 @@ export function runAssurance(input: AssuranceInput): AssuranceReport {
   const completeness = checkCompleteness(files, input.plannedFiles);
   push("completeness", "Generation Completeness", completeness.missing.map((m) => `Planned but not generated: ${m}`),
     input.plannedFiles.length ? `${completeness.created.length} created / ${completeness.planned.length} planned` : "No build plan — nothing planned to compare");
-  if (!frameworkFiles.complete || !completeness.complete) {
-    const why = !frameworkFiles.complete ? "Blocked — framework-critical file missing or invalid" : "Blocked by Generation Completeness Gate";
+  // Phase 0b — Missing File Elimination (framework + planned + import targets + route targets)
+  const missingFiles = computeMissingFiles(files, input.plannedFiles);
+  push("missing-files", "Missing File Count", missingFiles.missing.map((m) => `Missing: ${m.path} (${m.sources.join(", ")})`),
+    `${missingFiles.missing.length} missing of ${missingFiles.expected.length} expected`);
+  if (!frameworkFiles.complete || !completeness.complete || missingFiles.missing.length) {
+    const why = !frameworkFiles.complete ? "Blocked — framework-critical file missing or invalid" : missingFiles.missing.length ? "Blocked — Missing File Count must be 0" : "Blocked by Generation Completeness Gate";
     for (const [id, label] of LATER) blocked(id, label, why);
-    return { at: new Date().toISOString(), framework: frameworkFiles.framework, stages, completeness, frameworkFiles, compileAllowed: false, score: 0, verified: false };
+    return { at: new Date().toISOString(), framework: frameworkFiles.framework, stages, completeness, frameworkFiles, missingFiles, compileAllowed: false, score: 0, verified: false };
   }
 
   // Phase 1 — framework
