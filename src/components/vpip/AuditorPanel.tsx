@@ -23,6 +23,9 @@ import {
   type CrawlResult,
   type PromptKind,
 } from "@/lib/vpip/auditor";
+import { useVpip } from "@/lib/vpip/store";
+import { useAiKeys } from "@/lib/vpip/keys";
+import { PROVIDER_LABEL } from "@/lib/vpip/types";
 import type { CoderFile, KnowledgeItem, ProviderConfig, ProviderId } from "@/lib/vpip/types";
 
 const db = supabase as unknown as { from: (t: string) => any };
@@ -55,7 +58,9 @@ export function AuditorPanel(props: {
 }) {
   const info = useServerFn(runtimeInfo);
   const access = useServerFn(runtimePreviewAccess);
-  const [engine, setEngine] = useState<"lovable" | "settings">("lovable");
+  const { ws } = useVpip();
+  const { keys } = useAiKeys();
+  const [engine, setEngine] = useState<"lovable" | ProviderId>("lovable");
   const [mode, setMode] = useState<AuditMode>("audit_prompt");
   const [promptKind, setPromptKind] = useState<PromptKind>("corrective");
   const [liveCrawl, setLiveCrawl] = useState(true);
@@ -127,8 +132,10 @@ export function AuditorPanel(props: {
           setCrawl(c);
         }
         const useLovable = engine === "lovable";
-        const provider = (useLovable ? "lovable" : props.provider) as ProviderId;
-        const cfg: ProviderConfig = useLovable ? { ...props.cfg, model: LOVABLE_MODEL, apiKey: "" } : props.cfg;
+        const provider = (useLovable ? "lovable" : engine) as ProviderId;
+        const cfg: ProviderConfig = useLovable
+          ? { ...props.cfg, model: LOVABLE_MODEL, apiKey: "" }
+          : (ws.settings.providers[engine as ProviderId] ?? props.cfg);
         const user = auditUserPrompt({
           kind,
           mode,
@@ -204,9 +211,17 @@ export function AuditorPanel(props: {
           <span className="label-mono ml-auto">read-only</span>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs">
-          <select className="rounded border border-border bg-background px-1.5 py-1" value={engine} onChange={(e) => setEngine(e.target.value as "lovable" | "settings")}>
+          <select className="rounded border border-border bg-background px-1.5 py-1" value={engine} onChange={(e) => setEngine(e.target.value as "lovable" | ProviderId)}>
             <option value="lovable">Lovable AI · {LOVABLE_MODEL}</option>
-            <option value="settings">Settings engine · {props.cfg.model}</option>
+            {(Object.keys(ws.settings.providers) as ProviderId[]).map((id) => {
+              const c = ws.settings.providers[id];
+              const ok = Boolean((keys as Record<string, unknown>)[id] || c?.apiKey?.trim());
+              return (
+                <option key={id} value={id}>
+                  {PROVIDER_LABEL[id] ?? id} · {c?.model}{ok ? "" : " (no key)"}
+                </option>
+              );
+            })}
           </select>
           <select className="rounded border border-border bg-background px-1.5 py-1" value={mode} onChange={(e) => { const m = e.target.value as AuditMode; setMode(m); void saveSettings({ mode: m }); }}>
             {Object.entries(MODE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
