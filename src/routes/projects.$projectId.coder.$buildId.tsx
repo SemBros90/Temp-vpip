@@ -96,6 +96,7 @@ import {
 } from "@/lib/vpip/coder-fs";
 import { BuildManager } from "@/components/vpip/BuildManager";
 import { useUnifiedVerdict } from "@/lib/vpip/use-unified-validation";
+import { checkCompleteness } from "@/lib/vpip/build-assurance";
 import { unifyValidation } from "@/lib/vpip/validation-calibration";
 import {
   REPAIR_MODES,
@@ -353,6 +354,18 @@ function CoderPage() {
   const report = unifyValidation(legacyReport, cal, Boolean(session?.repositoryId));
   const health = computeHealth(requirements, session.buildPlan, files, report);
   const gate = buildGate(report);
+  const genGate = !session.repositoryId && session.buildPlan?.files.length
+    ? checkCompleteness(files.map((f) => ({ path: f.path, content: f.content })), session.buildPlan.files.map((f) => f.path))
+    : null;
+  const genBlocked = genGate ? !genGate.complete : false;
+  const genBlockedView = genGate && genBlocked ? (
+    <div className="space-y-2 p-4 text-sm">
+      <div className="font-mono font-semibold text-destructive">GENERATION INCOMPLETE · BUILD BLOCKED</div>
+      <div className="font-mono text-xs">Planned {genGate.planned.length} · Created {genGate.created.length} · Missing {genGate.missing.length}</div>
+      <ul className="max-h-60 overflow-y-auto font-mono text-xs text-destructive">{genGate.missing.map((m) => <li key={m}>- {m}</li>)}</ul>
+      <p className="text-xs text-muted-foreground">Preview and Runtime stay blocked until every planned file exists. Use Auto Recovery on the Build Assurance page, or ask the coder to create the missing files.</p>
+    </div>
+  ) : null;
   const hasKey = Boolean(keys[provider] || cfg.apiKey?.trim());
 
   const runExtractRequirements = async () => {
@@ -1379,7 +1392,7 @@ function CoderPage() {
                     </Button>
                   </div>
                   <div className="relative min-h-0 flex-1 bg-white">
-                    {previewDoc ? (
+                    {genBlockedView ? genBlockedView : previewDoc ? (
                       <>
                         <iframe
                           key={previewKey}
@@ -1417,7 +1430,7 @@ function CoderPage() {
                 </TabsContent>
 
                 <TabsContent value="runtime" className="flex min-h-0 flex-1 flex-col gap-0">
-                  <RuntimePanel projectId={projectId} buildId={session.id} />
+                  {genBlockedView ?? <RuntimePanel projectId={projectId} buildId={session.id} />}
                 </TabsContent>
 
                 <TabsContent value="diagnostics" className="min-h-0 flex-1 overflow-y-auto p-3">
