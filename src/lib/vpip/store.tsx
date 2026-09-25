@@ -92,7 +92,10 @@ interface Ctx {
   confirmSaved: (label: string) => void;
 }
 
-const VpipContext = createContext<Ctx | null>(null);
+// Keep one context identity across hot reloads so an already-mounted provider
+// still matches consumers from a freshly re-evaluated module.
+const g = globalThis as unknown as { __vpipCtx?: React.Context<Ctx | null> };
+const VpipContext = (g.__vpipCtx ??= createContext<Ctx | null>(null));
 
 const TAB_ID = uid().slice(-6).toUpperCase();
 
