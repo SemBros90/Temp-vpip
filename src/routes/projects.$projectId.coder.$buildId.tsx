@@ -81,6 +81,8 @@ import {
 import { useProject, useVpipActions } from "@/lib/vpip/store";
 import { useAiKeys } from "@/lib/vpip/keys";
 import { coderModePrompt, coderSystemPrompt, coderTrace, runCoderTurn } from "@/lib/vpip/coder";
+import { AI1_REPORT_INSTRUCTION, composeAi1Report, extractSelfReport } from "@/lib/vpip/ai1-report";
+import { supabase } from "@/integrations/supabase/client";
 import {
   FOLDER_KEEP,
   buildPreviewDoc,
@@ -172,6 +174,8 @@ function CoderPage() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ai1Report, setAi1Report] = useState<{ id: string; report: string; sent_to_ai2: boolean; created_at: string } | null>(null);
+  const [ai2Inbox, setAi2Inbox] = useState<{ id: string; report: string } | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
   const [previewLogs, setPreviewLogs] = useState<{ kind: string; text: string }[]>([]);
   const [previewStatus, setPreviewStatus] = useState<{ rendered: boolean; compileErrors?: string[]; at: number } | null>(null);
@@ -1121,6 +1125,34 @@ function CoderPage() {
                             )}
                           </MessageContent>
                         </Message>
+                      ) : null}
+                      {ai1Report && !busy ? (
+                        <div className="panel border-primary/40 p-3 text-sm">
+                          <details>
+                            <summary className="cursor-pointer text-xs font-semibold">
+                              AI 1 Build Completion Report · {new Date(ai1Report.created_at).toLocaleTimeString()}
+                            </summary>
+                            <div className="mt-2"><MessageResponse>{ai1Report.report}</MessageResponse></div>
+                          </details>
+                          <div className="mt-2 flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={ai1Report.sent_to_ai2}
+                              onClick={async () => {
+                                setAi2Inbox({ id: ai1Report.id || String(Date.now()), report: ai1Report.report });
+                                setAuditorOpen(true);
+                                if (ai1Report.id)
+                                  await (supabase as unknown as { from: (t: string) => any })
+                                    .from("vpip_ai1_reports").update({ sent_to_ai2: true }).eq("id", ai1Report.id);
+                                setAi1Report({ ...ai1Report, sent_to_ai2: true });
+                              }}
+                            >
+                              {ai1Report.sent_to_ai2 ? "Sent to AI 2" : "Send report to AI 2"}
+                            </Button>
+                            <span className="text-[11px] text-muted-foreground">Builder self-report — not an audit.</span>
+                          </div>
+                        </div>
                       ) : null}
                       <div ref={bottomRef} />
                     </ConversationContent>
