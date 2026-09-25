@@ -96,7 +96,7 @@ import {
 } from "@/lib/vpip/coder-fs";
 import { BuildManager } from "@/components/vpip/BuildManager";
 import { useUnifiedVerdict } from "@/lib/vpip/use-unified-validation";
-import { checkCompleteness } from "@/lib/vpip/build-assurance";
+import { checkCompleteness, auditFrameworkFiles, frameworkAuditIssues } from "@/lib/vpip/build-assurance";
 import { unifyValidation } from "@/lib/vpip/validation-calibration";
 import {
   REPAIR_MODES,
@@ -351,7 +351,14 @@ function CoderPage() {
   /* ------------------------------- Module 16 — build orchestration */
 
   const requirements = session.requirements ?? [];
-  const report = unifyValidation(legacyReport, cal, Boolean(session?.repositoryId));
+  const unified = unifyValidation(legacyReport, cal, Boolean(session?.repositoryId));
+  // Generated builds: the Build Assurance framework audit always runs (no plan/requirements needed)
+  // and its failures block exactly like the certificate and the Runtime "no package.json" message.
+  const fwAudit = !session.repositoryId ? auditFrameworkFiles(files.map((f) => ({ path: f.path, content: f.content })), session.buildPlan?.files.map((f) => f.path) ?? []) : null;
+  const fwIssues = fwAudit && !fwAudit.complete ? frameworkAuditIssues(fwAudit) : [];
+  const report = fwIssues.length
+    ? { ...unified, startupStatus: "Fail" as const, issues: [...fwIssues.map((i) => ({ kind: "Startup" as const, severity: "error" as const, ...i })), ...unified.issues] }
+    : unified;
   const health = computeHealth(requirements, session.buildPlan, files, report);
   const gate = buildGate(report);
   const genGate = !session.repositoryId && session.buildPlan?.files.length
