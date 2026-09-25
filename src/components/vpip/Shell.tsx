@@ -1,6 +1,7 @@
 import { Link, useParams } from "@tanstack/react-router";
 import {
   Boxes,
+  Compass,
   BrainCircuit,
   Brain,
   GraduationCap,
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils";
 const projectNav = [
   { to: "/projects/$projectId", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/projects/$projectId/memory", label: "Project Memory", icon: Brain },
+  { to: "/projects/$projectId/discovery", label: "Discovery", icon: Compass },
   { to: "/projects/$projectId/discussions", label: "Discussions", icon: MessagesSquare },
   { to: "/projects/$projectId/inbox", label: "Knowledge Inbox", icon: Inbox },
   { to: "/projects/$projectId/register", label: "Master Register", icon: Table2 },
