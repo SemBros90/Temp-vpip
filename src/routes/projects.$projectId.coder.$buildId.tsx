@@ -573,7 +573,7 @@ function CoderPage() {
           openFile: selected ?? undefined,
           logs: errorText || undefined,
           connections: (session.dbConnections ?? []).map((c) => `${c.engine} (${c.label})`),
-        });
+        }) + AI1_REPORT_INSTRUCTION;
       const answer = await runCoderTurn(
         provider,
         cfg,
@@ -614,6 +614,19 @@ function CoderPage() {
         text.slice(0, 160),
         generated.map((file) => file.path),
       );
+      {
+        const before = new Set(realFiles.map((f) => f.path));
+        const created = generated.map((g) => g.path).filter((p) => !before.has(p));
+        const modified = generated.map((g) => g.path).filter((p) => before.has(p));
+        const reportMd = composeAi1Report({ buildCode: session.code, created, modified, deleted: [], selfReport: extractSelfReport(answer) });
+        const { data: rep, error: repErr } = await (supabase as unknown as { from: (t: string) => any })
+          .from("vpip_ai1_reports")
+          .insert({ project_id: projectId, build_session_id: session.id, report: reportMd, files_created: created, files_modified: modified })
+          .select("id,report,sent_to_ai2,created_at")
+          .single();
+        if (repErr) toast.error(`AI 1 report not saved: ${repErr.message}`);
+        setAi1Report(rep ?? { id: "", report: reportMd, sent_to_ai2: false, created_at: new Date().toISOString() });
+      }
       if (generated.length) {
         setSelectedPath(generated[0]?.path ?? null);
         setRightTab("preview");
