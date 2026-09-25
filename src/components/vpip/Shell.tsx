@@ -43,6 +43,7 @@ const projectNav = [
   { to: "/projects/$projectId/prompts", label: "Prompts", icon: Sparkles },
   { to: "/projects/$projectId/context", label: "Context Packages", icon: Layers },
   { to: "/projects/$projectId/builds", label: "Build Sessions", icon: HardDriveDownload },
+  { to: "/projects/$projectId/assurance", label: "Build Assurance", icon: ShieldCheck },
   { to: "/projects/$projectId/repositories", label: "Repositories", icon: GitBranch },
   { to: "/projects/$projectId/import-diagnostics", label: "Import Diagnostics", icon: Stethoscope },
   { to: "/projects/$projectId/artifacts", label: "Artifacts & Builds", icon: Package },
