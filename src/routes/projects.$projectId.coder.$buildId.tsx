@@ -341,7 +341,7 @@ function CoderPage() {
 
   /** Open the live preview as a standalone page in a new browser tab. */
   const openPreviewInTab = useCallback(() => {
-    if (!previewDoc) return;
+    if (!previewDoc || genBlockedRef.current) return;
     const url = URL.createObjectURL(new Blob([previewDoc], { type: "text/html" }));
     window.open(url, "_blank", "noopener");
     // Reclaim the blob once the new tab has had time to load it.
@@ -1512,7 +1512,7 @@ function CoderPage() {
             </div>
           </section>
           <section className="min-h-0 bg-surface">
-            {previewDoc ? (
+            {genBlockedView ? genBlockedView : previewDoc ? (
               <>
                 <div className="flex items-center justify-end gap-2 border-b border-border px-2 py-1.5">
                   <Button
