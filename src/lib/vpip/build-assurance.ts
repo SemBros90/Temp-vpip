@@ -393,6 +393,7 @@ export interface AssuranceReport {
   stages: StageReport[];
   completeness?: CompletenessResult | undefined;
   frameworkFiles?: FrameworkFileAudit | undefined;
+  missingFiles?: MissingFilesResult | undefined;
   compileAllowed: boolean;
   score: number;
   verified: boolean;
