@@ -62,7 +62,8 @@ export type KnowledgeSourceKind =
   | "Prompt"
   | "Build Session"
   | "Repository"
-  | "Artifact";
+  | "Artifact"
+  | "Discovery";
 
 export const KNOWLEDGE_SOURCE_KINDS: KnowledgeSourceKind[] = [
   "Discussion",

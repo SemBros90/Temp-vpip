@@ -6,6 +6,7 @@ import { EnginePicker, Tag, useEngine } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Markdown } from "@/lib/vpip/markdown";
+import { DiscoveryExtraction } from "@/components/vpip/DiscoveryExtraction";
 import { useAiKeys } from "@/lib/vpip/keys";
 import { PROVIDER_LABEL } from "@/lib/vpip/types";
 import { audit, deleteWhere, did, insertRows, loadSession, updateRow } from "@/lib/vpip/discovery-db";
@@ -276,10 +277,17 @@ function Interview() {
                     {o.kind}
                   </Button>
                 ))}
+                <Button size="sm" variant={tab === "__extract" ? "default" : "ghost"} onClick={() => setTab("__extract")}>
+                  Knowledge Extraction
+                </Button>
               </div>
-              <div className="p-4 prose prose-sm max-w-none dark:prose-invert">
-                <Markdown source={outputs.find((o) => o.kind === (tab ?? outputs[0]?.kind))?.markdown ?? ""} />
-              </div>
+              {tab === "__extract" ? (
+                <DiscoveryExtraction projectId={projectId} sessionId={s.id} outputs={outputs} />
+              ) : (
+                <div className="p-4 prose prose-sm max-w-none dark:prose-invert">
+                  <Markdown source={outputs.find((o) => o.kind === (tab ?? outputs[0]?.kind))?.markdown ?? ""} />
+                </div>
+              )}
             </div>
           )}
 
