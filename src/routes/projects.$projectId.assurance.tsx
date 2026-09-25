@@ -104,7 +104,11 @@ function AssurancePage() {
       requirements: (build.requirements ?? []).map((r) => ({ code: r.code, title: r.title, status: r.status, files: r.files })),
       runtime: await runtimeEvidence(),
     });
+    const fa = report.frameworkFiles;
+    const faRows = fa?.rows ?? [];
     const entries: AuditEntry[] = [
+      { at: report.at, stage: "Framework Required File Audit", result: fa?.complete ? "PASS" : "FAIL", errors: faRows.filter((r) => r.status !== "VALID").length + (fa?.framework ? 0 : 1),
+        repairs: `Framework: ${fa?.framework ?? "none"} · Method: ${fa?.method ?? fa?.source ?? "—"} · Expected: ${faRows.map((r) => r.required).join(", ") || "—"} · Found: ${faRows.filter((r) => r.exists).map((r) => r.found ?? r.required).join(", ") || "none"} · Missing: ${faRows.filter((r) => !r.exists).map((r) => r.required).join(", ") || "none"} · Invalid: ${faRows.filter((r) => r.status === "INVALID").map((r) => r.found ?? r.required).join(", ") || "none"}` },
       { at: report.at, stage: "Planned / Created / Missing / Extra files", result: report.completeness?.complete ? "PASS" : "FAIL", errors: report.completeness?.missing.length ?? 0, repairs: `${report.completeness?.planned.length ?? 0} / ${report.completeness?.created.length ?? 0} / ${report.completeness?.missing.length ?? 0} / ${report.completeness?.extra.length ?? 0}` },
       ...report.stages.map((s) => ({ at: report.at, stage: s.label, result: s.result, errors: s.errors.length, repairs: "—" })),
     ];
