@@ -350,7 +350,7 @@ export function auditUserPrompt(opts: {
   audit: StaticAudit;
   buildLogs: string;
   crawl: CrawlResult[] | null;
-  ai1Report?: string;
+  ai1Report?: string | undefined;
 }) {
   const fs = real(opts.files);
   const tree = fs.map((f) => `- ${f.path} (${f.content.split("\n").length} lines)`).join("\n");
