@@ -251,18 +251,65 @@ export function checkCompleteness(files: AssuranceFile[], plannedFiles: string[]
   return { planned, created, missing, extra, complete: missing.length === 0 };
 }
 
-export interface FrameworkFileRow { required: string; expected: string; exists: boolean; found?: string | undefined }
+export type IntegrityStatus = "VALID" | "INVALID" | "MISSING";
+export interface FrameworkFileRow { required: string; expected: string; exists: boolean; found?: string | undefined; valid?: boolean | undefined; status?: IntegrityStatus | undefined; problems?: string[] | undefined }
 export interface FrameworkFileAudit { framework: string | null; source: "files" | "plan" | "source-inference" | "none"; rows: FrameworkFileRow[]; complete: boolean }
+
+function parseJsonc(src: string): unknown {
+  const stripped = src
+    .replace(/("(?:\\.|[^"\\])*")|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (m, s: string | undefined) => s ?? "")
+    .replace(/,(\s*[}\]])/g, "$1");
+  return JSON.parse(stripped);
+}
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
+/** Required File Integrity rules — minimum structure per file type. Unknown file types pass if non-empty. */
+export function checkFileIntegrity(path: string, content: string): string[] {
+  const p = norm(path);
+  const base = p.split("/").pop() ?? p;
+  const errs: string[] = [];
+  if (!content.trim()) return ["File is empty"];
+  if (base === "package.json") {
+    let j: unknown;
+    try { j = JSON.parse(content); } catch (e) { return [`Invalid JSON: ${(e as Error).message}`]; }
+    if (!isObj(j)) return ["Not a JSON object"];
+    if (typeof j["name"] !== "string" || !j["name"]) errs.push("Missing \"name\"");
+    if (!isObj(j["scripts"]) || !Object.keys(j["scripts"]).length) errs.push("Missing \"scripts\"");
+    if (!isObj(j["dependencies"]) || !Object.keys(j["dependencies"]).length) errs.push("Missing \"dependencies\"");
+  } else if (/^(ts|js)config(\.[\w-]+)?\.json$/.test(base)) {
+    let j: unknown;
+    try { j = parseJsonc(content); } catch (e) { return [`Invalid JSON: ${(e as Error).message}`]; }
+    if (!isObj(j)) return ["Not a JSON object"];
+    if (!isObj(j["compilerOptions"]) && !Array.isArray(j["references"]) && !j["extends"] && !Array.isArray(j["include"]) && !Array.isArray(j["files"]))
+      errs.push("No compilerOptions, extends, references, include or files");
+  } else if (base === "index.html") {
+    if (!/<html[\s>]/i.test(content) && !/<body[\s>]/i.test(content)) errs.push("No <html> or <body> element");
+    if (!/<[a-z]+[^>]*\bid\s*=\s*["'](root|app)["']/i.test(content)) errs.push("No root mount element (id=\"root\" or id=\"app\")");
+  } else if (/^vite\.config\.(m?[jt]s)$/.test(base)) {
+    if (!/export\s+default/.test(content) && !/module\.exports/.test(content)) errs.push("No default export of a Vite configuration");
+    if (!/defineConfig|plugins\s*:|\{[\s\S]*\}/.test(content)) errs.push("No configuration object");
+  } else if (/^src\/main\.(t|j)sx$/.test(p)) {
+    if (!/createRoot\s*\([\s\S]*?\)\s*\.render\s*\(|hydrateRoot\s*\(|ReactDOM\.render\s*\(/.test(content)) errs.push("No React entry render (createRoot(...).render / hydrateRoot / ReactDOM.render)");
+  } else if (/(^|\/)App\.(t|j)sx$/.test(p)) {
+    if (!/export\s+default\b/.test(content) && !/export\s+(function|const|class)\s+App\b/.test(content) && !/export\s*\{[^}]*\bApp\b/.test(content)) errs.push("No component export (export default / export App)");
+  } else if (/^next\.config\./.test(base)) {
+    if (!/export\s+default|module\.exports/.test(content)) errs.push("No exported Next.js configuration");
+  }
+  return errs;
+}
 
 /**
  * Framework Required File Audit — independent of Planned Files and Import Validation.
  * Scans the whole project root. If the framework cannot be detected from the files themselves
  * (e.g. package.json / vite.config are the missing files), it is inferred from the build plan,
  * then from source extensions, so missing root files cannot hide the framework.
+ * Each existing file is also integrity-checked; invalid counts as a failure exactly like missing.
  */
 export function auditFrameworkFiles(files: AssuranceFile[], plannedFiles: string[] = []): FrameworkFileAudit {
-  const set = new Set(files.filter((f) => f.content.trim().length > 0).map((f) => norm(f.path)));
-  let fw = detectFramework(files.filter((f) => f.content.trim().length > 0));
+  const present = files.filter((f) => f.content.trim().length > 0);
+  const set = new Set(present.map((f) => norm(f.path)));
+  const byPath = new Map(present.map((f) => [norm(f.path), f.content]));
+  let fw = detectFramework(present);
   let source: FrameworkFileAudit["source"] = fw ? "files" : "none";
   if (!fw && plannedFiles.length) { fw = detectFramework(plannedFiles.map((p) => ({ path: p, content: "" }))); if (fw) source = "plan"; }
   if (!fw || fw.id === "static") {
@@ -270,14 +317,23 @@ export function auditFrameworkFiles(files: AssuranceFile[], plannedFiles: string
     if (all.some((p) => /^src\/.*\.(t|j)sx$/.test(p))) { fw = FRAMEWORK_REGISTRY.find((f) => f.id === "react-vite")!; source = "source-inference"; }
   }
   if (!fw) return { framework: null, source: "none", rows: [], complete: false };
+  const resolvePath = (name: string) => (name.startsWith(".") ? [...set].find((p) => p.endsWith(name)) : set.has(name) ? name : undefined);
+  const finish = (row: Omit<FrameworkFileRow, "valid" | "status" | "problems">, path: string | undefined): FrameworkFileRow => {
+    if (!row.exists || !path) return { ...row, valid: false, status: "MISSING", problems: [] };
+    const problems = checkFileIntegrity(path, byPath.get(path) ?? "");
+    return { ...row, valid: problems.length === 0, status: problems.length ? "INVALID" : "VALID", problems };
+  };
   const rows: FrameworkFileRow[] = [];
-  for (const m of fw.mandatoryFiles) rows.push({ required: m, expected: `/${m} (project root)`.replace("/./", "/"), exists: hasFile(set, m) });
+  for (const m of fw.mandatoryFiles) { const hit = resolvePath(m); rows.push(finish({ required: m, expected: `/${m} (project root)`, exists: !!hit }, hit)); }
   for (const g of fw.anyOfFiles ?? []) {
     const found = g.find((x) => hasFile(set, x));
-    rows.push({ required: g[0]!, expected: g.map((x) => "/" + x).join(" | "), exists: !!found, found });
+    rows.push(finish({ required: g[0]!, expected: g.map((x) => "/" + x).join(" | "), exists: !!found, found }, found ? resolvePath(found) : undefined));
   }
-  for (const d of fw.requiredDirs ?? []) rows.push({ required: d + "/", expected: `/${d}/ (non-empty)`, exists: [...set].some((p) => p.startsWith(d + "/")) });
-  return { framework: fw.id, source, rows, complete: rows.every((r) => r.exists) };
+  for (const d of fw.requiredDirs ?? []) {
+    const ok = [...set].some((p) => p.startsWith(d + "/"));
+    rows.push({ required: d + "/", expected: `/${d}/ (non-empty)`, exists: ok, valid: ok, status: ok ? "VALID" : "MISSING", problems: [] });
+  }
+  return { framework: fw.id, source, rows, complete: rows.every((r) => r.status === "VALID") };
 }
 
 export interface AssuranceReport {
@@ -323,7 +379,7 @@ export function runAssurance(input: AssuranceInput): AssuranceReport {
   // Pre-gate — Framework Required File Audit (independent of plan and imports; fails immediately)
   const frameworkFiles = auditFrameworkFiles(files, input.plannedFiles);
   push("framework-files", "Framework Required File Audit",
-    frameworkFiles.framework ? frameworkFiles.rows.filter((r) => !r.exists).map((r) => `Framework critical file missing: ${r.expected}`) : ["Framework could not be determined from files, plan or sources."],
+    frameworkFiles.framework ? frameworkFiles.rows.filter((r) => r.status !== "VALID").map((r) => r.status === "INVALID" ? `Framework critical file invalid: ${r.found ?? r.required} — ${(r.problems ?? []).join("; ")}` : `Framework critical file missing: ${r.expected}`) : ["Framework could not be determined from files, plan or sources."],
     frameworkFiles.framework ? `${frameworkFiles.framework} (detected from ${frameworkFiles.source})` : undefined);
 
   // Phase 0 — Generation Completeness Gate
@@ -331,7 +387,7 @@ export function runAssurance(input: AssuranceInput): AssuranceReport {
   push("completeness", "Generation Completeness", completeness.missing.map((m) => `Planned but not generated: ${m}`),
     input.plannedFiles.length ? `${completeness.created.length} created / ${completeness.planned.length} planned` : "No build plan — nothing planned to compare");
   if (!frameworkFiles.complete || !completeness.complete) {
-    const why = !frameworkFiles.complete ? "Blocked — framework-critical file missing" : "Blocked by Generation Completeness Gate";
+    const why = !frameworkFiles.complete ? "Blocked — framework-critical file missing or invalid" : "Blocked by Generation Completeness Gate";
     for (const [id, label] of LATER) blocked(id, label, why);
     return { at: new Date().toISOString(), framework: frameworkFiles.framework, stages, completeness, frameworkFiles, compileAllowed: false, score: 0, verified: false };
   }
