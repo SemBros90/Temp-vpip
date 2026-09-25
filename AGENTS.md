@@ -8,3 +8,6 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- AI 2 Auditor (src/lib/vpip/auditor.ts, AuditorPanel.tsx) is read-only: it stores audits in vpip_ai2_audits and only hands prompts to the Coder input; why: spec VPIP-AI2-001 forbids AI 2 editing, committing or deploying.
+- "lovable" engine in /api/ai/chat routes to the Lovable AI Gateway Responses API with LOVABLE_API_KEY; why: works without user provider keys.

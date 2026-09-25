@@ -791,7 +791,7 @@ function CoderPage() {
           groupRef={workspaceRef}
           id="vpip-coder-workspace"
           orientation="horizontal"
-          defaultLayout={{ files: 0, chat: 20, preview: 80 }}
+          defaultLayout={{ files: 0, chat: 40, preview: 60 }}
           onLayoutChanged={(layout) =>
             window.localStorage.setItem("vpip-coder-layout", JSON.stringify(layout))
           }
