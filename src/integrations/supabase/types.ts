@@ -64,6 +64,78 @@ export type Database = {
           },
         ]
       }
+      vpip_ai2_audits: {
+        Row: {
+          build_session_id: string
+          corrective_prompt: string
+          created_at: string
+          engine: string | null
+          findings: Json
+          id: string
+          kind: string
+          mode: string
+          model: string | null
+          project_id: string
+          report: string
+          score: number | null
+          snapshot: Json
+        }
+        Insert: {
+          build_session_id: string
+          corrective_prompt?: string
+          created_at?: string
+          engine?: string | null
+          findings?: Json
+          id?: string
+          kind: string
+          mode: string
+          model?: string | null
+          project_id: string
+          report?: string
+          score?: number | null
+          snapshot?: Json
+        }
+        Update: {
+          build_session_id?: string
+          corrective_prompt?: string
+          created_at?: string
+          engine?: string | null
+          findings?: Json
+          id?: string
+          kind?: string
+          mode?: string
+          model?: string | null
+          project_id?: string
+          report?: string
+          score?: number | null
+          snapshot?: Json
+        }
+        Relationships: []
+      }
+      vpip_ai2_settings: {
+        Row: {
+          build_session_id: string
+          continuous: boolean
+          mode: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          build_session_id: string
+          continuous?: boolean
+          mode?: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          build_session_id?: string
+          continuous?: boolean
+          mode?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vpip_artifacts: {
         Row: {
           branch: string | null
