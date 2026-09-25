@@ -789,10 +789,50 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
 </script>`;
 }
 
+// No builder default styles here: they would recolor the generated app and make
+// Browser Preview differ from the real (sandbox) page.
 const SHELL = (head: string, body: string) => `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;background:#fff;color:#111}</style>
 ${head}</head><body><div id="root"></div>${body}</body></html>`;
+
+/**
+ * Best-effort load of the project's own tailwind.config so custom colors
+ * (e.g. `brand`) exist in Browser Preview. Returns a JS expression or null.
+ */
+function tailwindConfigExpr(files: CoderFile[]): string | null {
+  const cfg = files.find((f) => /(^|\/)tailwind\.config\.[cm]?[jt]s$/.test(f.path) && !f.path.includes("node_modules/"));
+  if (!cfg) return null;
+  let src = cfg.content
+    .replace(/^\s*import\s+type\s[^;]+;?/gm, "")
+    .replace(/^\s*import\s[^;]+;?/gm, "")
+    .replace(/\bsatisfies\s+[A-Za-z_.<>]+/g, "")
+    .replace(/\bas\s+const\b/g, "")
+    .replace(/:\s*Config\b/g, "")
+    .replace(/require\(\s*["'][^"']+["']\s*\)(\([^)]*\))?/g, "undefined")
+    .replace(/plugins\s*:\s*\[[^\]]*\]/g, "plugins: []");
+  src = src.replace(/export\s+default\s+/, "return ").replace(/module\.exports\s*=\s*/, "return ");
+  if (!/\breturn\b/.test(src)) return null;
+  const body = JSON.stringify(src);
+  return `(function(){try{var c=new Function(${body})();if(c&&typeof c==='object'){delete c.content;c.plugins=[];return c}}catch(e){console.warn('[vpip] tailwind.config could not be loaded in Browser Preview: '+(e&&e.message?e.message:e))}return null})()`;
+}
+
+/** Stylesheet + Tailwind runtime matching the project's Tailwind major version. */
+function tailwindStyleTag(files: CoderFile[], cssFiles: CoderFile[], css: string): string {
+  const v4 = cssFiles.some((f) => /@import\s+["']tailwindcss["']/.test(f.content));
+  const v3 = cssFiles.some((f) => /@tailwind\s+(base|components|utilities)/.test(f.content));
+  if (v4) {
+    // v4 browser build compiles <style type="text/tailwindcss"> (incl. @theme, @apply).
+    const cleaned = css.replace(/@import\s+["']tailwindcss["'][^;]*;/g, "").replace(/@import\s+["']tw-animate-css["'];?/g, "").replace(/@source[^;]*;/g, "");
+    return `\n<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"><\/script>\n<style type="text/tailwindcss">\n${cleaned}\n</style>`;
+  }
+  if (v3) {
+    const expr = tailwindConfigExpr(files);
+    const cfg = expr ? `\n<script>(function(){var c=${expr};if(c)window.tailwind.config=c;})();<\/script>` : "";
+    // text/tailwindcss lets the CDN runtime process @tailwind, @apply and theme().
+    return `\n<script src="https://cdn.tailwindcss.com"><\/script>${cfg}\n<style type="text/tailwindcss">\n${css}\n</style>`;
+  }
+  return css ? `\n<style>\n${css}\n</style>` : "";
+}
 
 /**
  * Assembles the virtual files into a single previewable document.
@@ -807,13 +847,11 @@ export function buildPreviewDoc(
   const real = files.filter((f) => fileName(f.path) !== FOLDER_KEEP);
   if (!real.length) return null;
   const cssAssets = assetMap(real);
-  const css = real
-    .filter((f) => f.path.endsWith(".css"))
-    .map((f) => inlineCssAssets(f.content, f.path, cssAssets, opts.aliases ?? []))
+  const cssFiles = real.filter((f) => f.path.endsWith(".css") && !/(^|\/)node_modules\//.test(f.path));
+  const css = cssFiles
+    .map((f) => `/* ${f.path} */\n${inlineCssAssets(f.content, f.path, cssAssets, opts.aliases ?? [])}`)
     .join("\n");
-  const needsTailwindRuntime = real.some((f) => f.path.endsWith(".css") && /@tailwind\s+(base|components|utilities)/.test(f.content));
-  const tailwindRuntime = needsTailwindRuntime ? `\n<script src="https://cdn.tailwindcss.com"><\/script>` : "";
-  const styleTag = `${tailwindRuntime}${css ? `\n<style>\n${css}\n</style>` : ""}`;
+  const styleTag = tailwindStyleTag(real, cssFiles, css);
 
   const html =
     real.find((f) => f.path === entryPath && f.path.endsWith(".html")) ??
