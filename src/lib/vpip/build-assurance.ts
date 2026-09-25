@@ -13,6 +13,8 @@ export interface FrameworkProfile {
   mandatoryFiles: string[];
   /** alternatives: at least one of each group must exist */
   anyOfFiles?: string[][];
+  /** folders that must contain at least one file */
+  requiredDirs?: string[];
   installCommand: string;
   buildCommand: string;
   devCommand: string;
@@ -21,8 +23,9 @@ export interface FrameworkProfile {
 
 /** Framework Registry — add new frameworks here; no framework rule is hardcoded elsewhere. */
 export const FRAMEWORK_REGISTRY: FrameworkProfile[] = [
-  { id: "nextjs", label: "Next.js", detectDeps: ["next"], detectFiles: ["next.config.js", "next.config.mjs", "next.config.ts"], mandatoryFiles: ["package.json"], anyOfFiles: [["app/layout.tsx", "src/app/layout.tsx", "pages/_app.tsx", "src/pages/_app.tsx", "app/layout.jsx", "pages/index.tsx", "pages/index.jsx"]], installCommand: "npm install", buildCommand: "npm run build", devCommand: "npm run dev", priority: 90 },
-  { id: "react-native", label: "React Native", detectDeps: ["react-native"], detectFiles: ["app.json"], mandatoryFiles: ["package.json", "app.json"], installCommand: "npm install", buildCommand: "npx expo export", devCommand: "npx expo start", priority: 85 },
+  { id: "nextjs", label: "Next.js", detectDeps: ["next"], detectFiles: ["next.config.js", "next.config.mjs", "next.config.ts"], mandatoryFiles: ["package.json"], anyOfFiles: [["next.config.js", "next.config.mjs", "next.config.ts"], ["app/layout.tsx", "src/app/layout.tsx", "app/layout.jsx", "pages/_app.tsx", "src/pages/_app.tsx", "pages/_app.jsx"], ["app/page.tsx", "src/app/page.tsx", "app/page.jsx", "pages/index.tsx", "src/pages/index.tsx", "pages/index.jsx"]], installCommand: "npm install", buildCommand: "npm run build", devCommand: "npm run dev", priority: 90 },
+  { id: "flutter", label: "Flutter", detectDeps: [], detectFiles: ["pubspec.yaml"], mandatoryFiles: ["pubspec.yaml", "lib/main.dart"], installCommand: "flutter pub get", buildCommand: "flutter build web", devCommand: "flutter run -d web-server", priority: 88 },
+  { id: "react-native", label: "React Native", detectDeps: ["react-native"], detectFiles: ["app.json"], mandatoryFiles: ["package.json"], anyOfFiles: [["App.tsx", "App.js", "App.jsx", "src/App.tsx"]], requiredDirs: ["android", "ios"], installCommand: "npm install", buildCommand: "npx expo export", devCommand: "npx expo start", priority: 85 },
   { id: "electron", label: "Electron", detectDeps: ["electron"], detectFiles: [], mandatoryFiles: ["package.json"], installCommand: "npm install", buildCommand: "npm run build", devCommand: "npm start", priority: 80 },
   { id: "capacitor", label: "Capacitor", detectDeps: ["@capacitor/core"], detectFiles: ["capacitor.config.ts", "capacitor.config.json"], mandatoryFiles: ["package.json"], anyOfFiles: [["capacitor.config.ts", "capacitor.config.json"]], installCommand: "npm install", buildCommand: "npm run build", devCommand: "npm run dev", priority: 78 },
   { id: "angular", label: "Angular", detectDeps: ["@angular/core"], detectFiles: ["angular.json"], mandatoryFiles: ["package.json", "angular.json", "tsconfig.json", "src/main.ts"], installCommand: "npm install", buildCommand: "npm run build", devCommand: "npm start", priority: 75 },
@@ -51,6 +54,9 @@ export const HOST_REGISTRY: HostProfile[] = [
   { id: "vercel", label: "Vercel", requiredFiles: [["vercel.json"]] },
   { id: "docker", label: "Docker", requiredFiles: [["Dockerfile"]] },
   { id: "iis", label: "IIS", requiredFiles: [["web.config", "public/web.config"]] },
+  { id: "github-pages", label: "GitHub Pages", requiredFiles: [["index.html", "public/index.html"]] },
+  { id: "cloudflare-pages", label: "Cloudflare Pages", requiredFiles: [] },
+  { id: "custom", label: "Custom Server", requiredFiles: [] },
   { id: "aws", label: "AWS", requiredFiles: [] },
   { id: "azure", label: "Azure", requiredFiles: [] },
   { id: "static", label: "Static Hosting", requiredFiles: [["index.html", "public/index.html"]] },
@@ -60,7 +66,7 @@ export const HOST_REGISTRY: HostProfile[] = [
 export const NOT_DECIDED = "Not Decided Yet";
 
 export const WIZARD_QUESTIONS = [
-  { key: "hosting", label: "Hosting provider", options: ["Netlify", "Vercel", "AWS", "Azure", "Docker", "IIS", "Static Hosting", NOT_DECIDED, "Other"] },
+  { key: "hosting", label: "Hosting provider", options: ["Netlify", "Vercel", "GitHub Pages", "Cloudflare Pages", "AWS", "Azure", "Docker", "IIS", "Static Hosting", "Custom Server", NOT_DECIDED, "Other"] },
   { key: "repository", label: "Repository provider", options: ["GitHub", "GitLab", "Bitbucket", "Local Only", NOT_DECIDED] },
   { key: "database", label: "Database provider", options: ["Supabase", "PostgreSQL", "MySQL", "SQL Server", "MongoDB", NOT_DECIDED] },
   { key: "auth", label: "Authentication provider", options: ["Google", "Microsoft", "Email/Password", "OTP", "None", NOT_DECIDED] },
@@ -216,20 +222,61 @@ function resolveLocal(fromPath: string, spec: string, set: Set<string>): string 
 const isLocal = (s: string) => s.startsWith(".") || s.startsWith("/") || s.startsWith("@/") || s.startsWith("~/");
 const pkgName = (s: string) => (s.startsWith("@") ? s.split("/").slice(0, 2).join("/") : s.split("/")[0]!);
 
+export interface AssuranceRequirement { code: string; title: string; status: string; files: string[] }
+
 export interface AssuranceInput {
   files: AssuranceFile[];
   plannedFiles: string[];
   hostingId: string;
+  requirements?: AssuranceRequirement[] | undefined;
   runtime?: { installed: boolean; running: boolean; previewReady: boolean; fatalErrors: number } | undefined;
+}
+
+export interface CompletenessResult {
+  planned: string[];
+  created: string[];
+  missing: string[];
+  extra: string[];
+  complete: boolean;
+}
+
+/** Phase 0 — Generation Completeness Gate: planned vs created registries. */
+export function checkCompleteness(files: AssuranceFile[], plannedFiles: string[]): CompletenessResult {
+  const created = [...new Set(files.filter((f) => f.content.trim().length > 0).map((f) => norm(f.path)))].sort();
+  const createdSet = new Set(created);
+  const planned = [...new Set(plannedFiles.map(norm))].sort();
+  const plannedSet = new Set(planned);
+  const missing = planned.filter((p) => !createdSet.has(p));
+  const extra = created.filter((p) => !plannedSet.has(p));
+  return { planned, created, missing, extra, complete: missing.length === 0 };
 }
 
 export interface AssuranceReport {
   at: string;
   framework: string | null;
   stages: StageReport[];
+  completeness?: CompletenessResult | undefined;
   compileAllowed: boolean;
   score: number;
   verified: boolean;
+}
+
+function routeTargetErrors(path: string, src: string): string[] {
+  const out: string[] = [];
+  const declared = new Set<string>();
+  for (const m of src.matchAll(/import\s+(?:type\s+)?([\s\S]*?)\s+from\s+["'][^"']+["']/g)) {
+    for (const id of m[1]!.replace(/[{}]/g, ",").split(",")) {
+      const t = id.trim().split(/\s+as\s+/).pop()!.replace(/^\*\s+as\s+/, "").trim();
+      if (t) declared.add(t);
+    }
+  }
+  for (const m of src.matchAll(/(?:function|const|let|var|class)\s+([A-Z][\w$]*)/g)) declared.add(m[1]!);
+  const refs = [
+    ...[...src.matchAll(/element=\{\s*<([A-Z][\w$]*)/g)].map((m) => m[1]!),
+    ...[...src.matchAll(/component[=:]\s*\{?\s*([A-Z][\w$]*)\s*\}?/g)].map((m) => m[1]!),
+  ];
+  for (const r of new Set(refs)) if (!declared.has(r)) out.push(`${path}: route target <${r}> is not defined or imported`);
+  return out;
 }
 
 export function runAssurance(input: AssuranceInput): AssuranceReport {
@@ -239,24 +286,41 @@ export function runAssurance(input: AssuranceInput): AssuranceReport {
   const stages: StageReport[] = [];
   const push = (id: string, label: string, errors: string[], note?: string) =>
     stages.push({ id, label, result: errors.length ? "FAIL" : "PASS", errors, ...(note ? { note } : {}) });
+  const blocked = (id: string, label: string, why: string) => stages.push({ id, label, result: "PENDING", errors: [], note: why });
 
-  // 1 framework
+  // Phase 0 — Generation Completeness Gate
+  const completeness = checkCompleteness(files, input.plannedFiles);
+  push("completeness", "Generation Completeness", completeness.missing.map((m) => `Planned but not generated: ${m}`),
+    input.plannedFiles.length ? `${completeness.created.length} created / ${completeness.planned.length} planned` : "No build plan — nothing planned to compare");
+  const GATE = "Blocked by Generation Completeness Gate";
+  if (!completeness.complete) {
+    for (const [id, label] of [["framework", "Framework Validation"], ["structure", "File Validation"], ["routes", "Route Validation"], ["imports", "Import Validation"], ["exports", "Export Validation"], ["packages", "Dependency Validation"], ["features", "Feature Completeness"], ["host", "Host Profile Validation"], ["compile", "Compile Validation"], ["runtime", "Runtime Validation"], ["preview", "Preview Validation"]] as const)
+      blocked(id, label, GATE);
+    return { at: new Date().toISOString(), framework: null, stages, completeness, compileAllowed: false, score: 0, verified: false };
+  }
+
+  // Phase 1 — framework
   const fw = detectFramework(files);
-  push("framework", "Framework Detection", fw ? [] : ["No registered framework matched the project files."], fw?.label);
+  push("framework", "Framework Validation", fw ? [] : ["No registered framework matched the project files."], fw?.label);
 
-  // 9 structure
+  // Phase 2 — framework required files
   const structErr: string[] = [];
   if (fw) {
-    for (const m of fw.mandatoryFiles) if (!hasFile(set, m)) structErr.push(`Missing mandatory file: ${m}`);
-    for (const group of fw.anyOfFiles ?? []) if (!group.some((g) => hasFile(set, g))) structErr.push(`Missing one of: ${group.join(" | ")}`);
+    for (const m of fw.mandatoryFiles) if (!hasFile(set, m)) structErr.push(`Framework critical file missing: ${m}`);
+    for (const group of fw.anyOfFiles ?? []) if (!group.some((g) => hasFile(set, g))) structErr.push(`Framework critical file missing: one of ${group.join(" | ")}`);
+    for (const d of fw.requiredDirs ?? []) if (![...set].some((p) => p.startsWith(d + "/"))) structErr.push(`Framework critical folder missing: ${d}/`);
   }
-  push("structure", "Repository Structure", structErr);
+  push("structure", "File Validation", structErr);
 
-  // 4 closure
-  const closure = input.plannedFiles.map(norm).filter((p) => !set.has(p)).map((p) => `Planned but not generated: ${p}`);
-  push("closure", "Build Closure Audit", closure, input.plannedFiles.length ? `${input.plannedFiles.length} planned` : "No build plan — nothing to compare");
+  // routes
+  const routeErr: string[] = [];
+  for (const f of files) {
+    const p = norm(f.path);
+    if (/\.(t|j)sx$/.test(p) && !p.startsWith("node_modules/")) routeErr.push(...routeTargetErrors(p, f.content));
+  }
+  push("routes", "Route Validation", routeErr);
 
-  // 5/6/7 graph
+  // imports / exports / packages
   const importErr: string[] = [];
   const exportErr: string[] = [];
   const pkgMissing = new Set<string>();
@@ -282,31 +346,34 @@ export function runAssurance(input: AssuranceInput): AssuranceReport {
   push("imports", "Import Validation", importErr);
   push("exports", "Export Validation", exportErr);
   const pkgErr = deps === null && fw && fw.mandatoryFiles.includes("package.json") ? ["package.json missing"] : [...pkgMissing].sort().map((n) => `Package not in manifest: ${n}`);
-  push("packages", "Package Validation", pkgErr);
+  push("packages", "Dependency Validation", pkgErr);
 
-  // 8 host
+  // feature completeness — every user requirement must be satisfied by existing files
+  const featErr: string[] = [];
+  for (const r of input.requirements ?? []) {
+    if (r.status === "Failed" || r.status === "Blocked") featErr.push(`${r.code} ${r.title} — status ${r.status}`);
+    else if (!r.files.map(norm).some((x) => set.has(x))) featErr.push(`${r.code} ${r.title} — no generated file implements it`);
+  }
+  push("features", "Feature Completeness", featErr, input.requirements?.length ? `${input.requirements.length} requirements` : "No registered requirements");
+
+  // host
   const host = HOST_REGISTRY.find((h) => h.label === input.hostingId || h.id === input.hostingId);
   const hostErr = (host?.requiredFiles ?? []).filter((g) => !g.some((x) => hasFile(set, x))).map((g) => `Missing host file for ${host!.label}: ${g.join(" | ")}`);
   push("host", "Host Profile Validation", hostErr, host?.label ?? input.hostingId);
 
   const compileAllowed = stages.every((s) => s.result === "PASS");
 
-  // 10–15 runtime-backed stages (evidence from the real runtime; checks-first delivery)
+  // runtime-backed stages
   const rt = input.runtime;
-  const pend = (id: string, label: string, ok: boolean | undefined, why: string) =>
-    stages.push({ id, label, result: !compileAllowed || ok === undefined ? "PENDING" : ok ? "PASS" : "FAIL", errors: ok === false ? [why] : [], note: !compileAllowed ? "Blocked until pre-compile gates pass" : ok === undefined ? "Launch Runtime to collect evidence" : undefined });
-  pend("install", "Dependency Install", rt?.installed, "Install did not complete");
-  pend("compile", "Compile", undefined, "");
-  stages[stages.length - 1]!.note = compileAllowed ? "Build-command check arrives in the next delivery" : "Blocked until pre-compile gates pass";
-  pend("runtime", "Runtime", rt?.running, "Dev server did not start");
-  pend("preview", "Preview", rt?.previewReady, "Preview not reachable");
-  pend("routes", "Route Validation", undefined, "");
-  stages[stages.length - 1]!.note = "Arrives in the next delivery";
-  pend("fatal", "Fatal Runtime Errors", rt ? rt.fatalErrors === 0 : undefined, `${rt?.fatalErrors ?? 0} fatal errors`);
+  const pend = (id: string, label: string, ok: boolean | undefined, why: string, noteIfUnknown: string) =>
+    stages.push({ id, label, result: !compileAllowed || ok === undefined ? "PENDING" : ok ? "PASS" : "FAIL", errors: ok === false ? [why] : [], note: !compileAllowed ? "Blocked until pre-compile gates pass" : ok === undefined ? noteIfUnknown : undefined });
+  pend("compile", "Compile Validation", rt ? rt.installed && rt.running : undefined, "Install or compile did not complete", "Launch Runtime to collect evidence");
+  pend("runtime", "Runtime Validation", rt ? rt.running && rt.fatalErrors === 0 : undefined, "Dev server did not start cleanly", "Launch Runtime to collect evidence");
+  pend("preview", "Preview Validation", rt?.previewReady, "Preview not reachable", "Launch Runtime to collect evidence");
 
   const pass = stages.filter((s) => s.result === "PASS").length;
   const score = Math.round((pass / stages.length) * 100);
-  return { at: new Date().toISOString(), framework: fw?.id ?? null, stages, compileAllowed, score, verified: score === 100 };
+  return { at: new Date().toISOString(), framework: fw?.id ?? null, stages, completeness, compileAllowed, score, verified: stages.every((s) => s.result === "PASS") };
 }
 
 export type RepairMode = "auto" | "approval";
