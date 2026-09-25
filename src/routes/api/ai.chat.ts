@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-type ProviderId = "openai" | "deepseek" | "perplexity" | "Gemini" | "Claude";
+type ProviderId = "openai" | "deepseek" | "perplexity" | "Gemini" | "Claude" | "lovable";
 
 interface ProviderDef {
   label: string;
@@ -37,6 +37,12 @@ const PROVIDERS: Record<ProviderId, ProviderDef> = {
     url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     env: "GEMINI_API_KEY",
     dialect: "openai",
+  },
+  lovable: {
+    label: "Lovable AI",
+    url: "https://ai.gateway.lovable.dev/v1/responses",
+    env: "LOVABLE_API_KEY",
+    dialect: "responses",
   },
   Claude: {
     label: "Claude",
@@ -173,6 +179,11 @@ export const Route = createFileRoute("/api/ai/chat")({
         } else {
           headers["Authorization"] = `Bearer ${key}`;
         }
+        const isLovable = provider === "lovable";
+        if (isLovable) {
+          headers["Lovable-API-Key"] = key;
+          headers["X-Lovable-AIG-SDK"] = "fetch";
+        }
 
         const payload = anthropic
           ? {
@@ -189,6 +200,7 @@ export const Route = createFileRoute("/api/ai/chat")({
             ? {
                 model: body.model,
                 stream,
+                ...(isLovable ? { store: false, reasoning: { effort: "medium" } } : {}),
                 ...(systemText ? { instructions: systemText } : {}),
                 input: turns.map((m) => ({
                   role: m.role === "assistant" ? "assistant" : "user",
