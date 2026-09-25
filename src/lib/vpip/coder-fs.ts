@@ -739,6 +739,11 @@ window.__vpipAssets = JSON.parse(${jsonScript(JSON.stringify(assets))});
 })();
 </script>
 <script type="module">
+  if (!window.__vpipExternals || !window.__vpipStart) {
+    const msg = 'The preview loader failed to start (see the first Console error above).';
+    if (window.__vpipShowError) window.__vpipShowError(msg); else document.body.textContent = msg;
+    throw new Error(msg);
+  }
   try {
     const [React, client, jsx, jsxDev, dom] = await Promise.all([
       import('https://esm.sh/react@19.2.0'),
@@ -843,13 +848,15 @@ export function buildPreviewDoc(
   doc = doc.includes("<head")
     ? doc.replace(/<head[^>]*>/i, (m) => `${m}\n${PREVIEW_BRIDGE}`)
     : `${PREVIEW_BRIDGE}\n${doc}`;
+  // Function replacers: user code may contain `$'`, `$&` etc., which a string
+  // replacement would expand and corrupt the injected runtime script.
   doc = doc.includes("</head>")
-    ? doc.replace("</head>", `${styleTag}\n</head>`)
+    ? doc.replace("</head>", () => `${styleTag}\n</head>`)
     : `${doc}\n${styleTag}`;
 
   if (scripts) {
     doc = doc.includes("</body>")
-      ? doc.replace("</body>", `${scripts}\n</body>`)
+      ? doc.replace("</body>", () => `${scripts}\n</body>`)
       : `${doc}\n${scripts}`;
   }
 
