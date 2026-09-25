@@ -159,6 +159,47 @@ export type Database = {
           },
         ]
       }
+      vpip_build_assurance: {
+        Row: {
+          assumptions: Json
+          audit: Json
+          build_session_id: string
+          config: Json
+          last_report: Json | null
+          project_id: string
+          repair_mode: string
+          updated_at: string
+        }
+        Insert: {
+          assumptions?: Json
+          audit?: Json
+          build_session_id: string
+          config?: Json
+          last_report?: Json | null
+          project_id: string
+          repair_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          assumptions?: Json
+          audit?: Json
+          build_session_id?: string
+          config?: Json
+          last_report?: Json | null
+          project_id?: string
+          repair_mode?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_build_assurance_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vpip_build_records: {
         Row: {
           artifact_ids: Json

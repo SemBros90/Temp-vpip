@@ -29,6 +29,7 @@ import { Route as ApiPublicRuntimeSweepRouteImport } from './routes/api/public/r
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdArtifactsRouteImport } from './routes/projects.$projectId.artifacts'
 import { Route as ProjectsProjectIdAskRouteImport } from './routes/projects.$projectId.ask'
+import { Route as ProjectsProjectIdAssuranceRouteImport } from './routes/projects.$projectId.assurance'
 import { Route as ProjectsProjectIdBuildsRouteImport } from './routes/projects.$projectId.builds'
 import { Route as ProjectsProjectIdContextRouteImport } from './routes/projects.$projectId.context'
 import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects.$projectId.documents'
@@ -150,6 +151,12 @@ const ProjectsProjectIdAskRoute = ProjectsProjectIdAskRouteImport.update({
   path: '/ask',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdAssuranceRoute =
+  ProjectsProjectIdAssuranceRouteImport.update({
+    id: '/assurance',
+    path: '/assurance',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdBuildsRoute = ProjectsProjectIdBuildsRouteImport.update({
   id: '/builds',
   path: '/builds',
@@ -282,6 +289,7 @@ export interface FileRoutesByFullPath {
   '/api/public/runtime-sweep': typeof ApiPublicRuntimeSweepRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/assurance': typeof ProjectsProjectIdAssuranceRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
   '/projects/$projectId/context': typeof ProjectsProjectIdContextRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
@@ -322,6 +330,7 @@ export interface FileRoutesByTo {
   '/api/public/runtime-sweep': typeof ApiPublicRuntimeSweepRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/assurance': typeof ProjectsProjectIdAssuranceRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
   '/projects/$projectId/context': typeof ProjectsProjectIdContextRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
@@ -364,6 +373,7 @@ export interface FileRoutesById {
   '/api/public/runtime-sweep': typeof ApiPublicRuntimeSweepRoute
   '/projects/$projectId/artifacts': typeof ProjectsProjectIdArtifactsRoute
   '/projects/$projectId/ask': typeof ProjectsProjectIdAskRoute
+  '/projects/$projectId/assurance': typeof ProjectsProjectIdAssuranceRoute
   '/projects/$projectId/builds': typeof ProjectsProjectIdBuildsRoute
   '/projects/$projectId/context': typeof ProjectsProjectIdContextRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
@@ -407,6 +417,7 @@ export interface FileRouteTypes {
     | '/api/public/runtime-sweep'
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
+    | '/projects/$projectId/assurance'
     | '/projects/$projectId/builds'
     | '/projects/$projectId/context'
     | '/projects/$projectId/documents'
@@ -447,6 +458,7 @@ export interface FileRouteTypes {
     | '/api/public/runtime-sweep'
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
+    | '/projects/$projectId/assurance'
     | '/projects/$projectId/builds'
     | '/projects/$projectId/context'
     | '/projects/$projectId/documents'
@@ -488,6 +500,7 @@ export interface FileRouteTypes {
     | '/api/public/runtime-sweep'
     | '/projects/$projectId/artifacts'
     | '/projects/$projectId/ask'
+    | '/projects/$projectId/assurance'
     | '/projects/$projectId/builds'
     | '/projects/$projectId/context'
     | '/projects/$projectId/documents'
@@ -672,6 +685,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdAskRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/assurance': {
+      id: '/projects/$projectId/assurance'
+      path: '/assurance'
+      fullPath: '/projects/$projectId/assurance'
+      preLoaderRoute: typeof ProjectsProjectIdAssuranceRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/builds': {
       id: '/projects/$projectId/builds'
       path: '/builds'
@@ -811,6 +831,7 @@ declare module '@tanstack/react-router' {
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdArtifactsRoute: typeof ProjectsProjectIdArtifactsRoute
   ProjectsProjectIdAskRoute: typeof ProjectsProjectIdAskRoute
+  ProjectsProjectIdAssuranceRoute: typeof ProjectsProjectIdAssuranceRoute
   ProjectsProjectIdBuildsRoute: typeof ProjectsProjectIdBuildsRoute
   ProjectsProjectIdContextRoute: typeof ProjectsProjectIdContextRoute
   ProjectsProjectIdDocumentsRoute: typeof ProjectsProjectIdDocumentsRoute
@@ -836,6 +857,7 @@ interface ProjectsProjectIdRouteChildren {
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdArtifactsRoute: ProjectsProjectIdArtifactsRoute,
   ProjectsProjectIdAskRoute: ProjectsProjectIdAskRoute,
+  ProjectsProjectIdAssuranceRoute: ProjectsProjectIdAssuranceRoute,
   ProjectsProjectIdBuildsRoute: ProjectsProjectIdBuildsRoute,
   ProjectsProjectIdContextRoute: ProjectsProjectIdContextRoute,
   ProjectsProjectIdDocumentsRoute: ProjectsProjectIdDocumentsRoute,
