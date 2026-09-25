@@ -77,7 +77,7 @@ interface Ctx {
   loadError: string | null;
   reload: () => Promise<void>;
   update: (fn: (ws: Workspace) => Workspace) => void;
-  saveNow: () => Promise<void>;
+  saveNow: () => Promise<boolean>;
   resetVault: () => Promise<void>;
   importWorkspace: (ws: Workspace) => void;
   /* persistence observability */
@@ -168,7 +168,10 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   const saveNow = useCallback(async () => {
     if (!readableRef.current) {
       console.warn("Vault save skipped: workspace was never loaded successfully");
-      return;
+      toast.error("Not saved — your saved data hasn't loaded yet", {
+        description: "The database may still be waking up. Wait a moment, refresh, then try again.",
+      });
+      return false;
     }
     const startedPending = pendingRef.current;
     const stamp = now();
@@ -206,6 +209,7 @@ export function VpipProvider({ children }: { children: ReactNode }) {
       } else {
         toast.dismiss("vpip-save-error");
       }
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failedRef.current = true;
@@ -224,6 +228,7 @@ export function VpipProvider({ children }: { children: ReactNode }) {
         duration: Infinity,
       });
       console.error("Vault save failed", err);
+      return false;
     } finally {
       savingRef.current = false;
       setQueueLength(saveQueueLength());
