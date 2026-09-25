@@ -13,7 +13,7 @@ import { completeChat } from "@/lib/vpip/ai";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import {
-  FRAMEWORK_REGISTRY, HOST_REGISTRY, WIZARD_QUESTIONS, NOT_DECIDED, resolveConfig, runAssurance, checkCompleteness,
+  FRAMEWORK_REGISTRY, HOST_REGISTRY, WIZARD_QUESTIONS, NOT_DECIDED, resolveConfig, runAssurance, checkCompleteness, computeMissingFiles,
   type AssuranceReport, type AuditEntry, type BuildConfig, type RepairMode, type Assumption,
 } from "@/lib/vpip/build-assurance";
 
@@ -79,6 +79,11 @@ function AssurancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [build?.files, build?.buildPlan],
   );
+  const missing = useMemo(
+    () => computeMissingFiles((build?.files ?? []).map((f) => ({ path: f.path, content: f.content })), planned),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [build?.files, build?.buildPlan],
+  );
 
   async function runtimeEvidence() {
     if (!buildId) return undefined;
@@ -109,42 +114,51 @@ function AssurancePage() {
     );
   }
 
-  /** Auto Recovery — regenerate ONLY missing planned files, re-check, repeat up to 3 attempts. */
+  /**
+   * Missing File Elimination Loop — structural, no approval needed.
+   * Expected = Framework ∪ Planned ∪ Import targets ∪ Route targets. Generate every missing file,
+   * re-scan, repeat until Missing File Count = 0 or MAX cycles. Business logic is never repaired here.
+   */
   async function recover() {
-    if (!build?.buildPlan) return;
-    const MAX = 3;
+    if (!build) return;
+    const MAX = 5;
     const have = new Map((build.files ?? []).map((f) => [f.path.replace(/^\/+/, ""), f.content]));
+    const scan = () => computeMissingFiles([...have].map(([path, content]) => ({ path, content })), planned).missing;
+    const plan = build.buildPlan;
     const log: AuditEntry[] = [];
+    const now = () => new Date().toISOString();
+    let cycle = 0;
+    let left = scan();
     try {
-      for (let attempt = 1; attempt <= MAX; attempt++) {
-        const missing = build.buildPlan.files.filter((f) => !(have.get(f.path.replace(/^\/+/, "")) ?? "").trim());
-        if (!missing.length) break;
-        for (const pf of missing) {
-          setRecovering(`Attempt ${attempt}/${MAX} · ${pf.path}`);
+      while (left.length && cycle < MAX) {
+        cycle++;
+        log.unshift({ at: now(), stage: `Missing File Elimination · cycle ${cycle}`, result: "FAIL", errors: left.length, repairs: `Detected: ${left.map((m) => m.path).join(", ")}` });
+        const created: string[] = [];
+        for (const mf of left) {
+          setRecovering(`Cycle ${cycle}/${MAX} · ${mf.path}`);
+          const pf = plan?.files.find((f) => f.path.replace(/^\/+/, "") === mf.path);
           const tree = [...have.keys()].sort().join("\n");
-          const deps = (build.buildPlan.moduleMap.find((m) => m.path === pf.path)?.imports ?? [])
-            .map((i) => (have.has(i) ? `--- ${i}\n${have.get(i)!.slice(0, 4000)}` : "")).filter(Boolean).join("\n\n");
-          let ok = false;
+          const refs = mf.referencedBy.map((r) => `--- ${r}\n${(have.get(r) ?? "").slice(0, 4000)}`).join("\n\n");
           try {
             const raw = await completeChat(provider, cfg, [
-              { role: "system", content: "You regenerate exactly ONE missing file of an existing project. Output only the complete file content, no explanations, no markdown fences, no ellipses." },
-              { role: "user", content: `File to generate: ${pf.path}\nPurpose: ${pf.purpose}\nRequirements: ${pf.requirements.join(", ") || "—"}\n\nExisting project files:\n${tree}\n\nRelated files:\n${deps || "(none)"}\n\nBuild plan:\n${build.buildPlan.markdown.slice(0, 6000)}` },
+              { role: "system", content: "You create exactly ONE missing file so an existing project is structurally complete. Match every name the referencing files import from it (default and named exports). Keep it minimal and valid; do not invent business features. Output only the complete file content — no explanations, no markdown fences, no ellipses." },
+              { role: "user", content: `File to create: ${mf.path}\nWhy expected: ${mf.sources.join(", ")}${pf ? `\nPlanned purpose: ${pf.purpose}` : ""}\n\nExisting project files:\n${tree}\n\nFiles that reference it:\n${refs || "(none)"}${plan ? `\n\nBuild plan:\n${plan.markdown.slice(0, 5000)}` : ""}` },
             ]);
             const content = raw.replace(/^\s*```[\w-]*\n/, "").replace(/\n```\s*$/, "");
             if (content.trim()) {
-              actions.writeCoderFile(build.id, pf.path, content, { note: "Build Assurance auto recovery", trace: { buildCode: build.code, promptId: build.promptId, promptVersion: build.promptVersion, decisionCodes: [], requirementCodes: pf.requirements, documentIds: [], discussionIds: [] }, provider, model: cfg.model });
-              have.set(pf.path.replace(/^\/+/, ""), content);
-              ok = true;
+              actions.writeCoderFile(build.id, mf.path, content, { note: "Build Assurance · Missing File Elimination", trace: { buildCode: build.code, promptId: build.promptId, promptVersion: build.promptVersion, decisionCodes: [], requirementCodes: pf?.requirements ?? [], documentIds: [], discussionIds: [] }, provider, model: cfg.model });
+              have.set(mf.path, content);
+              created.push(mf.path);
             }
           } catch (e) {
-            log.unshift({ at: new Date().toISOString(), stage: "Auto Recovery", result: "FAIL", errors: 1, repairs: `Attempt ${attempt}: ${pf.path} — ${(e as Error).message}` });
+            log.unshift({ at: now(), stage: `Missing File Elimination · cycle ${cycle}`, result: "FAIL", errors: 1, repairs: `${mf.path} — ${(e as Error).message}` });
           }
-          if (ok) log.unshift({ at: new Date().toISOString(), stage: "Auto Recovery", result: "PASS", errors: 0, repairs: `Attempt ${attempt}: regenerated ${pf.path}` });
         }
+        left = scan();
+        log.unshift({ at: now(), stage: `Missing File Elimination · cycle ${cycle} result`, result: left.length ? "FAIL" : "PASS", errors: left.length, repairs: `Created: ${created.join(", ") || "none"} · Remaining missing: ${left.length}` });
       }
-      const left = build.buildPlan.files.filter((f) => !(have.get(f.path.replace(/^\/+/, "")) ?? "").trim()).length;
-      log.unshift({ at: new Date().toISOString(), stage: "Auto Recovery summary", result: left ? "FAIL" : "PASS", errors: left, repairs: left ? `Maximum attempts reached — ${left} still missing` : "Planned Files = Created Files" });
-      toast[left ? "error" : "success"](left ? `${left} files still missing after ${MAX} attempts` : "All planned files now exist — re-run Build Assurance");
+      log.unshift({ at: now(), stage: "Missing File Elimination summary", result: left.length ? "FAIL" : "PASS", errors: left.length, repairs: left.length ? `Max cycles (${MAX}) reached — ${left.length} still missing: ${left.map((m) => m.path).join(", ")}` : `Missing File Count = 0 after ${cycle} cycle(s)` });
+      toast[left.length ? "error" : "success"](left.length ? `${left.length} files still missing after ${cycle} cycles` : "Missing File Count = 0 — re-run Build Assurance");
       await save({ ...row, audit: [...log, ...row.audit].slice(0, 500) });
     } finally {
       setRecovering(null);
@@ -168,22 +182,22 @@ function AssurancePage() {
               <Button onClick={() => void validate()} disabled={loading || !build || !!recovering}><Play className="mr-1 size-4" />Run Build Assurance</Button>
             </div>
             {build && (
-              <div className={cn("panel space-y-2 px-4 py-3 text-sm", !gate.complete && "border-destructive")}>
+              <div className={cn("panel space-y-2 px-4 py-3 text-sm", (!gate.complete || missing.missing.length > 0) && "border-destructive")}>
                 <div className="flex items-center gap-2 font-medium">
-                  {gate.complete ? <ShieldCheck className="size-4 text-success" /> : <Ban className="size-4 text-destructive" />}
-                  Phase 0 · Generation Completeness Gate —{" "}
-                  <span className={cn("font-mono", gate.complete ? "text-success" : "text-destructive")}>
-                    {planned.length === 0 ? "NO BUILD PLAN" : gate.complete ? "GENERATION COMPLETE" : "GENERATION INCOMPLETE · BUILD BLOCKED"}
+                  {missing.missing.length === 0 ? <ShieldCheck className="size-4 text-success" /> : <Ban className="size-4 text-destructive" />}
+                  Phase 0 · Missing File Elimination —{" "}
+                  <span className={cn("font-mono", missing.missing.length === 0 ? "text-success" : "text-destructive")}>
+                    Missing File Count {missing.missing.length}{missing.missing.length ? " · BUILD BLOCKED" : " · CLEAR"}
                   </span>
                 </div>
-                <div className="font-mono text-xs">Planned {gate.planned.length} · Created {gate.created.length} · Missing {gate.missing.length} · Extra {gate.extra.length}</div>
-                {!gate.complete && (
+                <div className="font-mono text-xs">Expected {missing.expected.length} (framework + planned + imports + routes) · Planned {gate.planned.length} · Created {gate.created.length} · Extra {gate.extra.length}{planned.length === 0 ? " · no build plan" : ""}</div>
+                {missing.missing.length > 0 && (
                   <>
-                    <p className="text-xs text-muted-foreground">Validation, Compile, Runtime, Browser Preview, Repair and Deployment are blocked until every planned file exists.</p>
-                    <ul className="max-h-40 overflow-y-auto font-mono text-xs text-destructive">{gate.missing.map((m) => <li key={m}>- {m}</li>)}</ul>
+                    <p className="text-xs text-muted-foreground">Validation, Compile, Runtime, Browser Preview, Repair and Deployment are blocked until Missing File Count = 0. Missing files are structural, so they are created without approval.</p>
+                    <ul className="max-h-40 overflow-y-auto font-mono text-xs text-destructive">{missing.missing.map((m) => <li key={m.path}>- {m.path} <span className="text-muted-foreground">({m.sources.join(", ")})</span></li>)}</ul>
                     <Button size="sm" variant="outline" onClick={() => void recover()} disabled={!!recovering}>
                       <RotateCw className={cn("mr-1 size-4", recovering && "animate-spin")} />
-                      {recovering ?? "Auto Recovery — regenerate missing files only"}
+                      {recovering ?? "Eliminate missing files (auto loop, max 5 cycles)"}
                     </Button>
                   </>
                 )}
