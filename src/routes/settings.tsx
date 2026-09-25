@@ -182,7 +182,7 @@ function SettingsPage() {
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button size="sm" className="h-8" onClick={() => saveNow().then(() => toast.success("Vault saved"))}>
+            <Button size="sm" className="h-8" onClick={() => void saveNow().then((ok) => { if (ok) toast.success("Settings saved"); })}>
               Save now
             </Button>
             <Button
