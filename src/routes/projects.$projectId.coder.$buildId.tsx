@@ -176,6 +176,19 @@ function CoderPage() {
   const [busy, setBusy] = useState(false);
   const [ai1Report, setAi1Report] = useState<{ id: string; report: string; sent_to_ai2: boolean; created_at: string } | null>(null);
   const [ai2Inbox, setAi2Inbox] = useState<{ id: string; report: string } | null>(null);
+  useEffect(() => {
+    setAi1Report(null);
+    void (supabase as unknown as { from: (t: string) => any })
+      .from("vpip_ai1_reports")
+      .select("id,report,sent_to_ai2,created_at")
+      .eq("build_session_id", buildId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }: { data: { id: string; report: string; sent_to_ai2: boolean; created_at: string } | null }) => {
+        if (data) setAi1Report(data);
+      });
+  }, [buildId]);
   const [previewKey, setPreviewKey] = useState(0);
   const [previewLogs, setPreviewLogs] = useState<{ kind: string; text: string }[]>([]);
   const [previewStatus, setPreviewStatus] = useState<{ rendered: boolean; compileErrors?: string[]; at: number } | null>(null);
