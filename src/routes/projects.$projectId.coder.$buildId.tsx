@@ -341,7 +341,7 @@ function CoderPage() {
 
   /** Open the live preview as a standalone page in a new browser tab. */
   const openPreviewInTab = useCallback(() => {
-    if (!previewDoc || genBlockedRef.current) return;
+    if (!previewDoc) return;
     const url = URL.createObjectURL(new Blob([previewDoc], { type: "text/html" }));
     window.open(url, "_blank", "noopener");
     // Reclaim the blob once the new tab has had time to load it.
