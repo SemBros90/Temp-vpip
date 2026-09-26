@@ -371,7 +371,7 @@ function AdminAiPage() {
                     </div>
                   </div>
 
-                  <AdminCodeSearch token={token} repo={repo} branch={branch} tree={data.tree} onOpen={(p) => void open(p)} />
+                  <AdminCodeSearch token={token} repo={repo} branch={branch} tree={data.tree} onOpen={(p) => void open(p)} onAsk={(md) => setInput(`${md}\n\nUsing this impact analysis, explain what breaks if this file is modified and the risk.`)} />
 
                   <div className="grid gap-4 lg:grid-cols-3">
                     <ListCard title="Recent commits" rows={data.commits.map((c) => `${c.sha.slice(0, 7)} · ${c.message.split("\n")[0]} — ${c.author}`)} />

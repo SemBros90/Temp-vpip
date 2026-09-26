@@ -20,6 +20,10 @@
 - [x] Admin AI Phase 2: snapshots before every AI 1 run, history, stable releases, compare, exact restore, failure trace + recovery
 - [x] Admin AI Full Admin — Stage 1: code search (text/references/imports/exports), Change Proposal approval request (Approve/Reject/Revise)
 - [x] Stage 2: Implement = snapshot → new branch → apply → implementation + diff report → user merges/rejects/revises (never main)
+- [x] Governance upgrade #1: Dependency tracing (impact, routes, APIs, DB objects, risk) + symbol/route/filename search
+- [ ] Governance #2: Knowledge base + root cause engine
+- [ ] Governance #3: Compare engine (snapshots/branches/commits/releases)
+- [ ] Governance #4: Message Center
 - [ ] Stage 3: AI1/AI2 message bus, implementation queue, separate Admin AI model setting, build/preview/runtime logs as input
 - [ ] Phase 2: AI Message Center
 - [ ] Phase 3: Separate AI settings per AI (provider, model, temperature, tokens, system prompt)
