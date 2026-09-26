@@ -60,7 +60,8 @@ export const Route = createFileRoute("/admin-ai")({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
 const LOVABLE_MODEL = "openai/gpt-6-astra";
-type Tab = "repository" | "recovery" | "audit" | "resources" | "knowledge" | "rootCause" | "inputs" | "chat" | "reports";
+type Tab = "home" | "explorer" | "search" | "dependency" | "github" | "snapshots" | "actionLog" | "ai1" | "ai2" | "knowledge" | "rootCause" | "runtime" | "proposals" | "accessibility";
+const SECTIONS: Array<[Tab, string]> = [["home", "Home"], ["explorer", "Repository Explorer"], ["search", "Search Center"], ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"], ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"], ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"], ["proposals", "Change Proposal Center"], ["accessibility", "Accessibility Center"]];
 type Engine = "lovable" | ProviderId;
 
 interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string }
@@ -69,7 +70,7 @@ interface FileAuditItem { label: string; status: "PASS" | "FAIL"; result?: Repos
 
 function AdminAiPage() {
   const { ws } = useVpip();
-  const [tab, setTab] = useState<Tab>("repository");
+  const [tab, setTab] = useState<Tab>("home");
   const [repo, setRepo] = useState("");
   const [branch, setBranch] = useState("");
   const [token, setToken] = useState("");
@@ -318,7 +319,7 @@ function AdminAiPage() {
 
   async function generate(kind: ReportKind) {
     if (stream !== null) return;
-    setTab("reports");
+    setTab("proposals");
     try {
       const full = await run("", [], kind);
       if (!full.trim()) return;
@@ -336,7 +337,7 @@ function AdminAiPage() {
   }
 
   async function runRecovery(instruction: string, ctx: string, title: string) {
-    setTab("reports");
+    setTab("proposals");
     try {
       const full = await run("", [], undefined, { instruction, context: ctx });
       if (!full.trim()) return;
@@ -397,22 +398,15 @@ function AdminAiPage() {
         </div>
       }
     >
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 gap-1 border-b border-border px-6 pt-2">
-          {(["repository", "recovery", "audit", "resources", "knowledge", "rootCause", "inputs", "chat", "reports"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`rounded-t px-3 py-1.5 text-xs font-medium capitalize ${tab === t ? "bg-surface text-foreground border border-b-0 border-border" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {t === "recovery" ? "Snapshots & Recovery" : t === "audit" ? "Action Log" : t === "resources" ? "AI Resources" : t === "knowledge" ? "Knowledge Base" : t === "rootCause" ? "Root Cause" : t === "inputs" ? "Inputs & Feedback" : t === "reports" ? "Improvement Reports" : t}
-            </button>
+        <div className="flex h-full min-h-0">
+        <nav className="w-52 shrink-0 space-y-0.5 overflow-y-auto border-r border-border p-2">
+          <div className="label-mono px-2 py-1">Admin AI</div>
+          {SECTIONS.map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)} className={`block w-full rounded px-2 py-1.5 text-left text-xs font-medium ${tab === t ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}>{label}</button>
           ))}
-        </div>
-
+        </nav>
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
-          {tab === "repository" ? (
-            <div className="space-y-4">
+{tab === "home" ? (<div className="space-y-4">
               <div className="grid gap-2 rounded-md border border-border bg-surface p-4 md:grid-cols-[1fr_1fr_auto]">
                 <Input placeholder="VPIP repository, e.g. SemBros90/vpip" value={repo} onChange={(e) => setRepo(e.target.value)} />
                 <Input type="password" placeholder="GitHub token (read access; optional for public repos)" value={token} onChange={(e) => setToken(e.target.value)} onBlur={() => void saveSettings({ token })} />
@@ -435,9 +429,32 @@ function AdminAiPage() {
                 <Stat k="Last Sync Time" v={data ? new Date(data.syncedAt).toLocaleString() : "Never"} />
                 {data ? <div className="label-mono sm:col-span-3 lg:col-span-6">Admin AI reads: file list, {configFiles.length} build/config files ({configFiles.map((f) => f.path).join(", ") || "none found"}), branches, commits, {snapshots.length} latest snapshots, and any file you name in chat.</div> : null}
               </div>
+            <div className="mx-auto flex max-w-3xl flex-col rounded-md border border-border bg-surface p-4">
+              <div className="text-sm font-semibold">Admin AI Chat</div>
+<div className="flex-1 space-y-3">
+                {msgs.length === 0 && stream === null ? (
+                  <div className="text-sm text-muted-foreground">Ask Admin AI about VPIP — e.g. "Why do AI 1 builds keep failing on routes?" It sees the connected repository, pinned files, AI 1/AI 2 reports and your feedback.</div>
+                ) : null}
+                {msgs.map((m, i) => (
+                  <div key={m.id ?? i} className={m.role === "user" ? "ml-auto max-w-[80%] rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground" : "text-sm"}>
+                    {m.role === "user" ? m.content : <Markdown source={m.content} />}
+                  </div>
+                ))}
+                {stream !== null ? <div className="text-sm"><Markdown source={stream || "Thinking…"} /></div> : null}
+              </div>
+              <div className="sticky bottom-0 mt-4 flex gap-2 bg-background pt-2">
+                <Textarea rows={2} value={input} placeholder="Message Admin AI" onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }} />
+                <Button onClick={() => void send()} disabled={stream !== null || !input.trim()}>Send</Button>
+              </div>
+            </div>
+</div>) : null}
 
-              {data ? (
-                <>
+{tab === "explorer" ? (<div className="space-y-4">{data ? (<>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="label-mono">Branch</span>
                     <select className="rounded border border-border bg-background px-2 py-1" value={branch} onChange={(e) => void connect(e.target.value)}>
@@ -474,17 +491,11 @@ function AdminAiPage() {
                       )}
                     </div>
                   </div>
-
-                  <AdminCodeSearch token={token} repo={repo} branch={branch} tree={data.tree} onOpen={(p) => void open(p)} onAsk={(md) => setInput(`${md}\n\nUsing this impact analysis, explain what breaks if this file is modified and the risk.`)} />
-
-                  <AdminGithubHistory token={token} repo={repo} branch={branch} onAsk={(md) => { setInput(md); setTab("chat"); }} />
-
                   <div className="grid gap-4 lg:grid-cols-3">
                     <ListCard title="Recent commits" rows={data.commits.map((c) => `${c.sha.slice(0, 7)} · ${c.message.split("\n")[0]} — ${c.author}`)} />
                     <ListCard title="Pull requests" rows={data.pulls.map((p) => `#${p.number} [${p.state}] ${p.title} — ${p.user}`)} />
                     <ListCard title="Issues" rows={data.issues.map((i) => `#${i.number} [${i.state}] ${i.title} — ${i.user}`)} />
                   </div>
-
                   <div className="rounded-md border border-border bg-surface p-4">
                     <div className="mb-1 text-sm font-semibold">Phase 1 — Repository Visibility Audit</div>
                     <p className="mb-3 text-xs text-muted-foreground">Evidence is generated only from the live GitHub responses from the most recent connection. A truncated tree fails exact file and folder verification.</p>
@@ -507,7 +518,18 @@ function AdminAiPage() {
                     </div>
                     {fileAudit.length ? <div className="mt-3 space-y-3">{fileAudit.map((item) => <FileAuditCard key={item.label} item={item} />)}</div> : <div className="mt-3 text-xs text-muted-foreground">Run the audit to produce live PASS/FAIL evidence for the five required repository files.</div>}
                   </div>
+</>) : <NoRepo onGo={() => setTab("home")} />}</div>) : null}
 
+{tab === "search" ? (<div className="space-y-4"><p className="text-xs text-muted-foreground">Text, reference, import/export, symbol, route and file-name search across the connected repository.</p>{data ? (<>
+                  <AdminCodeSearch token={token} repo={repo} branch={branch} tree={data.tree} onOpen={(p) => void open(p)} onAsk={(md) => setInput(`${md}\n\nUsing this impact analysis, explain what breaks if this file is modified and the risk.`)} />
+</>) : <NoRepo onGo={() => setTab("home")} />}</div>) : null}
+
+{tab === "dependency" ? (<div className="space-y-4"><p className="text-xs text-muted-foreground">Pick a file and run dependency impact to see dependents, routes, APIs, database objects and risk.</p>{data ? (<>
+                  <AdminCodeSearch token={token} repo={repo} branch={branch} tree={data.tree} onOpen={(p) => void open(p)} onAsk={(md) => setInput(`${md}\n\nUsing this impact analysis, explain what breaks if this file is modified and the risk.`)} />
+</>) : <NoRepo onGo={() => setTab("home")} />}</div>) : null}
+
+{tab === "github" ? (<div className="space-y-4">{data ? (<>
+                  <AdminGithubHistory token={token} repo={repo} branch={branch} onAsk={(md) => { setInput(md); setTab("home"); }} />
                   <div className="rounded-md border border-border bg-surface p-4">
 
                     <div className="mb-2 text-sm font-semibold">Compare branches</div>
@@ -546,24 +568,13 @@ function AdminAiPage() {
                     </div>
                     {shaCmp.out ? <pre className="mt-2 max-h-60 overflow-auto text-[11px]">{shaCmp.out}</pre> : null}
                   </div>
-                </>
-              ) : null}
-            </div>
-          ) : null}
+</>) : <NoRepo onGo={() => setTab("home")} />}</div>) : null}
 
-          {tab === "recovery" ? <AdminRecovery runAi={runRecovery} streaming={stream !== null} /> : null}
+          {tab === "snapshots" ? <AdminRecovery runAi={runRecovery} streaming={stream !== null} /> : null}
 
-          {tab === "audit" ? <AdminActionLog /> : null}
+          {tab === "actionLog" ? <AdminActionLog /> : null}
 
-          {tab === "resources" ? <AdminAiAccessibility /> : null}
-
-          {tab === "knowledge" ? <AdminKnowledgeBase /> : null}
-
-          {tab === "rootCause" ? <AdminRootCause commits={data?.commits ?? []} branches={data?.branches ?? []} /> : null}
-
-          {tab === "inputs" ? (
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="space-y-2">
+{tab === "ai1" ? (<div className="space-y-4">              <div className="space-y-2">
                 <div className="text-sm font-semibold">From AI 1 — build reports ({ai1.length})</div>
                 {ai1.length ? ai1.map((r, i) => (
                   <details key={i} className="rounded border border-border bg-surface p-2 text-xs">
@@ -571,8 +582,9 @@ function AdminAiPage() {
                     <Markdown source={r.report} className="mt-2" />
                   </details>
                 )) : <div className="text-xs text-muted-foreground">No AI 1 reports yet.</div>}
-              </div>
-              <div className="space-y-2">
+              </div><EvidenceGroup evidence={evidence} keys={["AI 1 prompts", "Build results"]} /></div>) : null}
+
+{tab === "ai2" ? (<div className="space-y-4">              <div className="space-y-2">
                 <div className="text-sm font-semibold">From AI 2 — audits ({ai2.length})</div>
                 {ai2.length ? ai2.map((r, i) => (
                   <details key={i} className="rounded border border-border bg-surface p-2 text-xs">
@@ -580,9 +592,17 @@ function AdminAiPage() {
                     <Markdown source={r.report} className="mt-2" />
                   </details>
                 )) : <div className="text-xs text-muted-foreground">No AI 2 audits yet.</div>}
-              </div>
-              <div className="space-y-2">
-                <div className="text-sm font-semibold">From you — feedback</div>
+              </div><EvidenceGroup evidence={evidence} keys={["AI 2 chat messages", "AI 2 corrective prompts"]} /></div>) : null}
+
+{tab === "knowledge" ? (<div className="space-y-4"><AdminKnowledgeBase /><EvidenceGroup evidence={evidence} keys={["Outcomes & lessons", "Cross-project intelligence", "Activity log"]} /></div>) : null}
+
+          {tab === "rootCause" ? <AdminRootCause commits={data?.commits ?? []} branches={data?.branches ?? []} /> : null}
+
+{tab === "runtime" ? (<div className="space-y-4"><div className="text-sm font-semibold">Runtime Center</div><p className="text-xs text-muted-foreground">Runtime events, errors, failures, validation runs and repair/import reports read by Admin AI.</p><EvidenceGroup evidence={evidence} keys={["Runtime & error events", "Failure records", "Validation runs", "Safe Repair audit", "Repository import reports"]} /></div>) : null}
+
+          {tab === "proposals" ? (
+            <div className="space-y-4">
+<div className="max-w-xl space-y-2">                <div className="text-sm font-semibold">From you — feedback</div>
                 <div className="space-y-2 rounded border border-border bg-surface p-2">
                   <select className="w-full rounded border border-border bg-background px-2 py-1 text-xs" value={fbKind} onChange={(e) => setFbKind(e.target.value)}>
                     {["Feedback", "Complaint", "Feature Request"].map((k) => <option key={k}>{k}</option>)}
@@ -595,48 +615,7 @@ function AdminAiPage() {
                     <Tag>{f.kind}</Tag> <span className="ml-1">{f.content}</span>
                   </div>
                 ))}
-              </div>
-              <div className="space-y-2 lg:col-span-3">
-                <div className="text-sm font-semibold">Other connected VPIP evidence (read by Admin AI)</div>
-                <div className="grid gap-2 md:grid-cols-3">
-                  {Object.entries(evidence).map(([k, rows]) => (
-                    <details key={k} className="rounded border border-border bg-surface p-2 text-xs">
-                      <summary className="cursor-pointer">{k} ({rows.length})</summary>
-                      <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap text-[11px]">{rows.length ? rows.map((r) => JSON.stringify(r, null, 1).slice(0, 600)).join("\n\n") : "None recorded yet."}</pre>
-                    </details>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {tab === "chat" ? (
-            <div className="mx-auto flex h-full max-w-3xl flex-col">
-              <div className="flex-1 space-y-3">
-                {msgs.length === 0 && stream === null ? (
-                  <div className="text-sm text-muted-foreground">Ask Admin AI about VPIP — e.g. "Why do AI 1 builds keep failing on routes?" It sees the connected repository, pinned files, AI 1/AI 2 reports and your feedback.</div>
-                ) : null}
-                {msgs.map((m, i) => (
-                  <div key={m.id ?? i} className={m.role === "user" ? "ml-auto max-w-[80%] rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground" : "text-sm"}>
-                    {m.role === "user" ? m.content : <Markdown source={m.content} />}
-                  </div>
-                ))}
-                {stream !== null ? <div className="text-sm"><Markdown source={stream || "Thinking…"} /></div> : null}
-              </div>
-              <div className="sticky bottom-0 mt-4 flex gap-2 bg-background pt-2">
-                <Textarea rows={2} value={input} placeholder="Message Admin AI" onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void send();
-                  }
-                }} />
-                <Button onClick={() => void send()} disabled={stream !== null || !input.trim()}>Send</Button>
-              </div>
-            </div>
-          ) : null}
-
-          {tab === "reports" ? (
-            <div className="space-y-4">
+              </div></div>
               <div className="flex flex-wrap gap-2">
                 {(Object.keys(REPORT_KINDS) as ReportKind[]).map((k) => (
                   <Button key={k} size="sm" variant="outline" disabled={stream !== null} onClick={() => void generate(k)}>Generate {REPORT_KINDS[k]}</Button>
@@ -687,10 +666,20 @@ function AdminAiPage() {
               </div>
             </div>
           ) : null}
+
+          {tab === "accessibility" ? <AdminAiAccessibility /> : null}
         </div>
       </div>
     </Shell>
   );
+}
+
+function NoRepo({ onGo }: { onGo: () => void }) {
+  return <div className="rounded-md border border-border bg-surface p-6 text-sm text-muted-foreground">Connect the repository on Home first. <button className="underline" onClick={onGo}>Go to Home</button></div>;
+}
+
+function EvidenceGroup({ evidence, keys }: { evidence: Record<string, unknown[]>; keys: string[] }) {
+  return <div className="grid gap-2 md:grid-cols-2">{keys.map((k) => { const rows = evidence[k] ?? []; return <details key={k} className="rounded border border-border bg-surface p-2 text-xs"><summary className="cursor-pointer">{k} ({rows.length})</summary><pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap text-[11px]">{rows.length ? rows.map((r) => JSON.stringify(r, null, 1).slice(0, 600)).join("\n\n") : "None recorded yet."}</pre></details>; })}</div>;
 }
 
 function Stat({ k, v }: { k: string; v: string }) {
