@@ -117,12 +117,12 @@ function AdminAiPage() {
     void loadAll();
   }, [loadAll]);
 
-  async function saveSettings(next?: Partial<{ repo: string; branch: string; engine: Engine }>) {
+  async function saveSettings(next?: Partial<{ repo: string; branch: string; engine: Engine; token: string }>) {
     const { error } = await db.from("vpip_admin_ai_settings").upsert({
       id: "default",
       repo_full_name: (next?.repo ?? repo).trim(),
       branch: next?.branch ?? branch,
-      token,
+      token: next?.token ?? token,
       engine: next?.engine ?? engine,
       updated_at: new Date().toISOString(),
     });
@@ -144,7 +144,7 @@ function AdminAiPage() {
       setData(d);
       setBranch(b);
       setRepo(name);
-      await saveSettings({ repo: name, branch: b });
+      await saveSettings({ repo: name, branch: b, token: tk });
     } catch (e) {
       setData(null);
       setRepoError(e instanceof Error ? e.message : "Could not reach GitHub.");
@@ -315,7 +315,7 @@ function AdminAiPage() {
             <div className="space-y-4">
               <div className="grid gap-2 rounded-md border border-border bg-surface p-4 md:grid-cols-[1fr_1fr_auto]">
                 <Input placeholder="VPIP repository, e.g. SemBros90/vpip" value={repo} onChange={(e) => setRepo(e.target.value)} />
-                <Input type="password" placeholder="GitHub token (read access; optional for public repos)" value={token} onChange={(e) => setToken(e.target.value)} />
+                <Input type="password" placeholder="GitHub token (read access; optional for public repos)" value={token} onChange={(e) => setToken(e.target.value)} onBlur={() => void saveSettings({ token })} />
                 <Button onClick={() => void connect()} disabled={loadingRepo}>{loadingRepo ? "Connecting…" : data ? "Reload" : "Connect"}</Button>
                 {repoError ? <div className="text-xs text-destructive md:col-span-3">{repoError}</div> : null}
                 <div className="label-mono md:col-span-3">Read-only access: tree, files, branches, commits, pull requests, issues. Admin AI never writes to GitHub on its own.</div>
