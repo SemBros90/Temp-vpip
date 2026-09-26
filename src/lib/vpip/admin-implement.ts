@@ -8,7 +8,7 @@ const API = "https://api.github.com";
 async function gh<T>(token: string, path: string, init?: { method?: string; body?: unknown }): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method: init?.method ?? "GET",
-    headers: {
+    headers: <Record<string, string>>{
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
       Authorization: `Bearer ${token.trim()}`,
