@@ -24,6 +24,7 @@ import {
   Stethoscope,
   ShieldCheck,
   Server,
+  ShieldQuestion,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useVpip } from "@/lib/vpip/store";
@@ -137,6 +138,7 @@ export function Shell({
           <NavItem to="/intelligence" icon={Network} label="Intelligence Register" />
           <NavItem to="/validation" icon={ShieldCheck} label="Repository Validation" />
           <NavItem to="/runtime-dashboard" icon={Server} label="Runtime Dashboard" />
+          <NavItem to="/admin-ai" icon={ShieldQuestion} label="Admin AI" />
           <NavItem to="/settings" icon={SettingsIcon} label="Settings" />
 
           {project ? (

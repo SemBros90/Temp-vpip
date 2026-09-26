@@ -14,3 +14,9 @@
 - [x] Lovable-style AI Coder workspace: adjustable 20/80 chat and preview split, retained tools, narrow-screen layout, and browser verification.
 
 - [x] Repository compatibility engine + preview diagnostics (reports saved, repair & preview, AI sees diagnostics)
+
+## Three-AI collaboration (VPIP feature request)
+- [x] Phase 1: Admin AI page (separate page: GitHub read-only repo access, AI1/AI2 inputs, feedback, chat, improvement reports with approval)
+- [ ] Phase 2: AI Message Center
+- [ ] Phase 3: Separate AI settings per AI (provider, model, temperature, tokens, system prompt)
+- [ ] Phase 4: Fill AI 2 gaps (extra report sections, runtime logs, Git status inputs)
