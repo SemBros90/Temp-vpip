@@ -15,6 +15,7 @@ import { PROVIDER_LABEL, type ProviderConfig, type ProviderId } from "@/lib/vpip
 import {
   adminSystemPrompt,
   buildContext,
+  BUILD_CONFIG_RE,
   compareBranches,
   loadRepo,
   readFile,
@@ -60,6 +61,10 @@ function AdminAiPage() {
   const [filter, setFilter] = useState("");
   const [openFile, setOpenFile] = useState<{ path: string; content: string } | null>(null);
   const [pinned, setPinned] = useState<Array<{ path: string; content: string }>>([]);
+  const [configFiles, setConfigFiles] = useState<Array<{ path: string; content: string }>>([]);
+  const [snapshots, setSnapshots] = useState<Array<{ label: string; created_at: string; project: string; files: Array<{ path: string; content?: string }> }>>([]);
+  const [shaCmp, setShaCmp] = useState({ base: "", head: "", out: "" });
+  const autoTried = useRef(false);
   const [cmp, setCmp] = useState<{ base: string; head: string; out: string }>({ base: "", head: "", out: "" });
 
   const [ai1, setAi1] = useState<Array<{ created_at: string; report: string; project_id: string }>>([]);
@@ -76,19 +81,30 @@ function AdminAiPage() {
   const [openReport, setOpenReport] = useState<Report | null>(null);
 
   const loadAll = useCallback(async () => {
-    const [s, m, r, f, a1, a2] = await Promise.all([
+    const [s, m, r, f, a1, a2, sn] = await Promise.all([
       db.from("vpip_admin_ai_settings").select("*").eq("id", "default").maybeSingle(),
       db.from("vpip_admin_ai_messages").select("*").order("created_at", { ascending: true }).limit(200),
       db.from("vpip_admin_ai_reports").select("*").order("created_at", { ascending: false }).limit(100),
       db.from("vpip_admin_ai_feedback").select("*").order("created_at", { ascending: false }).limit(100),
       db.from("vpip_ai1_reports").select("created_at,report,project_id").order("created_at", { ascending: false }).limit(15),
       db.from("vpip_ai2_audits").select("created_at,kind,score,report,project_id").order("created_at", { ascending: false }).limit(15),
+      db.from("vpip_repo_snapshots").select("label,created_at,project_id,files").order("created_at", { ascending: false }).limit(3),
     ]);
+    setSnapshots(((sn.data ?? []) as Array<{ label: string; created_at: string; project_id: string; files: unknown }>).map((x) => ({
+      label: x.label,
+      created_at: x.created_at,
+      project: x.project_id,
+      files: Array.isArray(x.files) ? (x.files as Array<{ path: string; content?: string }>) : [],
+    })));
     if (s.data) {
       setRepo(s.data.repo_full_name);
       setBranch(s.data.branch);
       setToken(s.data.token);
       setEngine(s.data.engine as Engine);
+      if (s.data.repo_full_name && !autoTried.current) {
+        autoTried.current = true;
+        void connect(s.data.branch || undefined, s.data.repo_full_name, s.data.token);
+      }
     }
     setMsgs(m.data ?? []);
     setReports(r.data ?? []);
@@ -112,19 +128,24 @@ function AdminAiPage() {
     if (error) toast.error(error.message);
   }
 
-  async function connect(ref?: string) {
-    const name = repo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
+  async function connect(ref?: string, repoArg?: string, tokenArg?: string) {
+    const tk = tokenArg ?? token;
+    const name = (repoArg ?? repo).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
     if (!/^[^/\s]+\/[^/\s]+$/.test(name)) return setRepoError("Enter the repository as owner/name, e.g. SemBros90/vpip.");
     setLoadingRepo(true);
     setRepoError("");
     try {
-      const d = await loadRepo(token, name, ref ?? branch);
-      setData(d);
+      const d = await loadRepo(tk, name, ref ?? branch);
       const b = ref ?? (branch || d.defaultBranch);
+      const cfgPaths = d.tree.filter((t) => t.type === "blob" && BUILD_CONFIG_RE.test(t.path)).map((t) => t.path);
+      const cfg = await Promise.all(cfgPaths.map(async (p) => ({ path: p, content: await readFile(tk, name, b, p).catch((e) => `[read failed: ${e instanceof Error ? e.message : e}]`) })));
+      setConfigFiles(cfg);
+      setData(d);
       setBranch(b);
       setRepo(name);
       await saveSettings({ repo: name, branch: b });
     } catch (e) {
+      setData(null);
       setRepoError(e instanceof Error ? e.message : "Could not reach GitHub.");
     } finally {
       setLoadingRepo(false);
@@ -147,8 +168,8 @@ function AdminAiPage() {
   const engineLabel = engine === "lovable" ? "Lovable AI" : (PROVIDER_LABEL[engine] ?? engine);
 
   const context = useMemo(
-    () => buildContext({ repo, branch, tree: data?.tree ?? [], pinned, ai1, ai2, feedback }),
-    [repo, branch, data, pinned, ai1, ai2, feedback],
+    () => buildContext({ repo, branch, data, error: repoError, configFiles, snapshots, tree: data?.tree ?? [], pinned, ai1, ai2, feedback }),
+    [repo, branch, data, repoError, configFiles, snapshots, pinned, ai1, ai2, feedback],
   );
 
   async function run(userText: string, history: Msg[], kind?: ReportKind, extra?: { instruction: string; context: string }) {
@@ -178,7 +199,17 @@ function AdminAiPage() {
     setMsgs((m) => [...m, { role: "user", content: text }]);
     await db.from("vpip_admin_ai_messages").insert({ role: "user", content: text });
     try {
-      const full = await run(text, history);
+      // Read any repository files the user names so the answer uses real contents.
+      let prompt = text;
+      if (data) {
+        const known = new Set(configFiles.map((f) => f.path));
+        const named = data.tree.filter((t) => t.type === "blob" && !known.has(t.path) && text.includes(t.path)).slice(0, 5);
+        for (const f of named) {
+          const c = await readFile(token, repo, branch, f.path).catch((e) => `[read failed: ${e instanceof Error ? e.message : e}]`);
+          prompt += `\n\n### File read live from repository: ${f.path}\n\`\`\`\n${c.slice(0, 15000)}\n\`\`\``;
+        }
+      }
+      const full = await run(prompt, history);
       setMsgs((m) => [...m, { role: "assistant", content: full }]);
       await db.from("vpip_admin_ai_messages").insert({ role: "assistant", content: full, engine: engineLabel, model: resolve().cfg.model });
     } catch (e) {
@@ -289,6 +320,17 @@ function AdminAiPage() {
                 <div className="label-mono md:col-span-3">Read-only access: tree, files, branches, commits, pull requests, issues. Admin AI never writes to GitHub.</div>
               </div>
 
+              <div className="grid gap-2 rounded-md border border-border bg-surface p-4 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                <div className="sm:col-span-3 lg:col-span-6 text-sm font-semibold">Repository Status</div>
+                <Stat k="Repository Connected" v={loadingRepo ? "Checking…" : data ? "Yes" : "No"} />
+                <Stat k="Repository Name" v={data ? repo : "—"} />
+                <Stat k="Branch" v={data ? branch : "—"} />
+                <Stat k="Commit" v={data?.headSha ? data.headSha.slice(0, 7) : "—"} />
+                <Stat k="Total Files" v={data ? `${data.fileCount}${data.truncated ? "+" : ""}` : "—"} />
+                <Stat k="Last Sync Time" v={data ? new Date(data.syncedAt).toLocaleString() : "Never"} />
+                {data ? <div className="label-mono sm:col-span-3 lg:col-span-6">Admin AI reads: file list, {configFiles.length} build/config files ({configFiles.map((f) => f.path).join(", ") || "none found"}), branches, commits, {snapshots.length} latest snapshots, and any file you name in chat.</div> : null}
+              </div>
+
               {data ? (
                 <>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -352,6 +394,23 @@ function AdminAiPage() {
                       }}>Compare</Button>
                     </div>
                     {cmp.out ? <pre className="mt-2 max-h-60 overflow-auto text-[11px]">{cmp.out}</pre> : null}
+                  </div>
+
+                  <div className="rounded-md border border-border bg-surface p-4">
+                    <div className="mb-2 text-sm font-semibold">Changed files between commits</div>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <Input className="w-48" placeholder="Base commit SHA" value={shaCmp.base} onChange={(e) => setShaCmp((c) => ({ ...c, base: e.target.value.trim() }))} />
+                      <Input className="w-48" placeholder="Head commit SHA" value={shaCmp.head} onChange={(e) => setShaCmp((c) => ({ ...c, head: e.target.value.trim() }))} />
+                      <Button size="sm" variant="outline" disabled={!shaCmp.base || !shaCmp.head} onClick={async () => {
+                        try {
+                          const r = await compareBranches(token, repo, shaCmp.base, shaCmp.head);
+                          setShaCmp((c) => ({ ...c, out: `${(r.files ?? []).length} files changed\n${(r.files ?? []).map((f) => `${f.status} ${f.filename} +${f.additions}/-${f.deletions}`).join("\n")}` }));
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Compare failed.");
+                        }
+                      }}>Compare</Button>
+                    </div>
+                    {shaCmp.out ? <pre className="mt-2 max-h-60 overflow-auto text-[11px]">{shaCmp.out}</pre> : null}
                   </div>
                 </>
               ) : null}
@@ -463,6 +522,15 @@ function AdminAiPage() {
         </div>
       </div>
     </Shell>
+  );
+}
+
+function Stat({ k, v }: { k: string; v: string }) {
+  return (
+    <div>
+      <div className="label-mono">{k}</div>
+      <div className="truncate font-medium">{v}</div>
+    </div>
   );
 }
 
