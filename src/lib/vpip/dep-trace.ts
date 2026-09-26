@@ -28,6 +28,33 @@ export interface DepGraph {
   imports: Map<string, string[]>;
   importedBy: Map<string, string[]>;
   packages: Map<string, string[]>;
+  exports: Map<string, string[]>;
+  cycles: string[][];
+}
+
+const EXPORT_RE = /^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function|const|let|class|interface|type|enum)\s+(\w+)/gm;
+
+function findCycles(imports: Map<string, string[]>) {
+  const cycles: string[][] = [];
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const stack: string[] = [];
+  const walk = (path: string) => {
+    if (visiting.has(path)) {
+      const start = stack.indexOf(path);
+      if (start >= 0) cycles.push([...stack.slice(start), path]);
+      return;
+    }
+    if (visited.has(path)) return;
+    visiting.add(path);
+    stack.push(path);
+    for (const dep of imports.get(path) ?? []) walk(dep);
+    stack.pop();
+    visiting.delete(path);
+    visited.add(path);
+  };
+  for (const path of imports.keys()) walk(path);
+  return cycles;
 }
 
 export function buildGraph(index: Map<string, string>): DepGraph {
@@ -35,6 +62,7 @@ export function buildGraph(index: Map<string, string>): DepGraph {
   const imports = new Map<string, string[]>();
   const importedBy = new Map<string, string[]>();
   const packages = new Map<string, string[]>();
+  const exports = new Map<string, string[]>();
   for (const [path, content] of index) {
     if (!/\.(tsx?|jsx?|mjs)$/.test(path)) continue;
     const deps = new Set<string>();
@@ -48,9 +76,10 @@ export function buildGraph(index: Map<string, string>): DepGraph {
     }
     imports.set(path, [...deps]);
     packages.set(path, [...pkgs]);
+    exports.set(path, [...content.matchAll(EXPORT_RE)].map((match) => match[1]!).filter(Boolean));
     for (const d of deps) importedBy.set(d, [...(importedBy.get(d) ?? []), path]);
   }
-  return { imports, importedBy, packages };
+  return { imports, importedBy, packages, exports, cycles: findCycles(imports) };
 }
 
 export type Risk = "Low" | "Medium" | "High" | "Critical";
@@ -62,17 +91,22 @@ export interface Impact {
   routes: string[];
   apis: string[];
   components: string[];
+  services: string[];
   dbObjects: string[];
   imports: string[];
   packages: string[];
   exports: string[];
   risk: Risk;
+  riskScore: number;
   reason: string;
+  cycles: string[][];
+  dependencyTree: Array<{ path: string; depth: number; direction: "imports" | "imported-by" }>;
 }
 
 const isRoute = (p: string) => p.startsWith("src/routes/") && !p.includes("/api/") && !p.endsWith(".gen.ts");
 const isApi = (p: string) => p.startsWith("src/routes/api/") || /\.functions\.tsx?$|\.server\.tsx?$/.test(p);
 const isComponent = (p: string) => p.startsWith("src/components/");
+const isService = (p: string) => p.startsWith("src/lib/") || p.includes("/services/") || /\.server\.tsx?$/.test(p);
 
 export function traceImpact(g: DepGraph, index: Map<string, string>, target: string): Impact {
   const seen = new Map<string, number>();
@@ -85,15 +119,16 @@ export function traceImpact(g: DepGraph, index: Map<string, string>, target: str
   }
   const all = [...seen.keys()];
   const withSelf = [target, ...all];
-  const content = index.get(target) ?? "";
-  const exports = [...content.matchAll(/^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function|const|let|class|interface|type|enum)\s+(\w+)/gm)].map((m) => m[1]!);
-  const dbObjects = [...new Set(withSelf.flatMap((p) => [...(index.get(p) ?? "").matchAll(/\.from\(\s*["'`](\w+)["'`]\s*\)|\.rpc\(\s*["'`](\w+)["'`]/g)].map((m) => (m[1] ?? m[2])!)))].filter(Boolean);
+  const exports = g.exports.get(target) ?? [];
+  const dbObjects = [...new Set(withSelf.flatMap((p) => [...(index.get(p) ?? "").matchAll(/\.from\(\s*["'`]([\w-]+)["'`]\s*\)|\.rpc\(\s*["'`]([\w-]+)["'`]|\b(?:create\s+table|from|join|into|update)\s+([\w.-]+)/gi)].map((m) => (m[1] ?? m[2] ?? m[3])!)))].filter(Boolean);
   const routes = withSelf.filter(isRoute);
   const apis = withSelf.filter(isApi);
   const components = all.filter(isComponent);
+  const services = all.filter(isService);
   const n = all.length;
   const core = target === "src/routes/__root.tsx" || /^(src\/(router|start|server)\.tsx?|vite\.config|package\.json|src\/styles\.css)/.test(target) || target.startsWith("src/integrations/");
   const risk: Risk = core || n >= 40 ? "Critical" : n >= 15 || routes.length >= 5 ? "High" : n >= 3 || apis.length ? "Medium" : "Low";
+  const riskScore = core ? 100 : Math.min(95, n * 4 + routes.length * 8 + apis.length * 6 + dbObjects.length * 5 + services.length * 2);
   const reason = core
     ? "Core app entry / integration file — every page depends on it."
     : `${n} dependent file(s), ${routes.length} page(s), ${apis.length} server/API file(s), ${dbObjects.length} database object(s).`;
@@ -101,17 +136,23 @@ export function traceImpact(g: DepGraph, index: Map<string, string>, target: str
     target,
     direct: g.importedBy.get(target) ?? [],
     transitive: all.map((path) => ({ path, depth: seen.get(path)! })).sort((a, b) => a.depth - b.depth || a.path.localeCompare(b.path)),
-    routes, apis, components, dbObjects,
+    routes, apis, components, services, dbObjects,
     imports: g.imports.get(target) ?? [],
     packages: g.packages.get(target) ?? [],
     exports, risk, reason,
+    riskScore,
+    cycles: g.cycles.filter((cycle) => cycle.includes(target)),
+    dependencyTree: [
+      ...(g.imports.get(target) ?? []).map((path) => ({ path, depth: 1, direction: "imports" as const })),
+      ...all.map((path) => ({ path, depth: seen.get(path)!, direction: "imported-by" as const })),
+    ],
   };
 }
 
 export function impactMarkdown(i: Impact) {
   const list = (a: string[]) => (a.length ? a.map((x) => `- ${x}`).join("\n") : "- none");
   return `# Impact Analysis: ${i.target}
-**Risk:** ${i.risk} — ${i.reason}
+**Risk:** ${i.risk} (${i.riskScore}/100) — ${i.reason}
 
 ## Exports
 ${list(i.exports)}
@@ -129,6 +170,10 @@ ${list(i.routes)}
 ${list(i.apis)}
 ## Affected components
 ${list(i.components)}
+## Affected services
+${list(i.services)}
 ## Database objects touched
-${list(i.dbObjects)}`;
+${list(i.dbObjects)}
+## Circular dependencies involving this file
+${i.cycles.length ? i.cycles.map((cycle) => `- ${cycle.join(" → ")}`).join("\n") : "- none"}`;
 }

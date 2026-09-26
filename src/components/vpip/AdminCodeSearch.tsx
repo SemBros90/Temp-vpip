@@ -57,6 +57,7 @@ export function AdminCodeSearch(props: {
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [searchError, setSearchError] = useState("");
   const [audit, setAudit] = useState<SearchAudit[]>([]);
+  const [dependencyAudit, setDependencyAudit] = useState<Impact | null>(null);
 
   const candidates = useMemo(
     () => props.tree.filter((t) => t.type === "blob" && TEXT_RE.test(t.path) && !SKIP_RE.test(t.path) && (t.size ?? 0) < 300_000),
@@ -114,6 +115,11 @@ export function AdminCodeSearch(props: {
     const t = target.trim();
     const match = index.has(t) ? t : [...index.keys()].find((k) => k.endsWith(t));
     if (match) setImpact(traceImpact(graph, index, match));
+  }
+  function runDependencyAudit() {
+    if (!graph) return;
+    const target = [...index.keys()].find((path) => /^src\/lib\/vpip\/.+\.(ts|tsx)$/.test(path));
+    if (target) setDependencyAudit(traceImpact(graph, index, target));
   }
   const ready = index.size > 0;
   return (
@@ -173,8 +179,8 @@ export function AdminCodeSearch(props: {
         </div>
         {impact ? (
           <div className="space-y-2 text-xs">
-            <div><span className="label-mono">Risk</span> <b className={impact.risk === "Low" ? "" : "text-destructive"}>{impact.risk}</b> — {impact.reason}</div>
-            {([["Directly imported by", impact.direct], ["Affected pages/routes", impact.routes], ["Affected server/API files", impact.apis], ["Affected components", impact.components], ["Database objects", impact.dbObjects], ["Exports", impact.exports], ["Imports", impact.imports], ["Packages", impact.packages]] as const).map(([label, arr]) => (
+            <div><span className="label-mono">Risk</span> <b className={impact.risk === "Low" ? "" : "text-destructive"}>{impact.risk} ({impact.riskScore}/100)</b> — {impact.reason}</div>
+            {([["Directly imported by", impact.direct], ["Affected pages/routes", impact.routes], ["Affected server/API files", impact.apis], ["Affected components", impact.components], ["Affected services", impact.services], ["Database objects", impact.dbObjects], ["Exports", impact.exports], ["Imports", impact.imports], ["Packages", impact.packages]] as const).map(([label, arr]) => (
               <div key={label}>
                 <div className="label-mono">{label} ({arr.length})</div>
                 <div className="flex flex-wrap gap-1 font-mono text-[11px]">
@@ -186,8 +192,22 @@ export function AdminCodeSearch(props: {
             <div className="max-h-48 overflow-y-auto font-mono text-[11px]">
               {impact.transitive.map((t) => <button key={t.path} className="block hover:text-primary" onClick={() => props.onOpen(t.path)}>depth {t.depth} · {t.path}</button>)}
             </div>
+            <div className="label-mono">Circular dependencies ({impact.cycles.length})</div>
+            <div className="font-mono text-[11px]">{impact.cycles.length ? impact.cycles.map((cycle) => cycle.join(" → ")).join("\n") : "none"}</div>
           </div>
         ) : null}
+      </div>
+      <div className="space-y-2 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center gap-2"><div className="text-sm font-semibold">Phase 4 — Dependency & Impact Audit</div><Button size="sm" variant="outline" className="ml-auto" disabled={!graph} onClick={runDependencyAudit}>Run live dependency audit</Button></div>
+        <p className="text-xs text-muted-foreground">Selects one VPIP file from the repository index and calculates relationships from the live import/export graph.</p>
+        {dependencyAudit ? <div className="rounded border border-border p-2 text-xs">
+          <div><b className="text-primary">PASS</b> · <span className="font-mono">{dependencyAudit.target}</span></div>
+          <div className="mt-1"><span className="label-mono">What imports it</span> {dependencyAudit.direct.length ? dependencyAudit.direct.join(", ") : "none"}</div>
+          <div className="mt-1"><span className="label-mono">What it imports</span> {dependencyAudit.imports.length ? dependencyAudit.imports.join(", ") : "none"}</div>
+          <div className="mt-1"><span className="label-mono">Affected files</span> {dependencyAudit.transitive.length}</div>
+          <div className="mt-1"><span className="label-mono">Risk score</span> {dependencyAudit.riskScore}/100 ({dependencyAudit.risk})</div>
+          <div className="mt-1"><span className="label-mono">Dependency tree</span><pre className="mt-1 max-h-48 overflow-auto rounded bg-muted p-2 text-[10px]">{dependencyAudit.dependencyTree.map((node) => `${"  ".repeat(node.depth - 1)}${node.direction} → ${node.path}`).join("\n") || "no internal edges"}</pre></div>
+        </div> : <div className="text-xs text-muted-foreground">Run the audit after VPIP has read the repository source files.</div>}
       </div>
     </div>
   );
