@@ -6,7 +6,7 @@ import { AdminRecovery } from "@/components/vpip/AdminRecovery";
 import { AdminCodeSearch } from "@/components/vpip/AdminCodeSearch";
 import { AdminImplement } from "@/components/vpip/AdminImplement";
 import { AdminGithubHistory } from "@/components/vpip/AdminGithubHistory";
-import { logAdminAction } from "@/lib/vpip/admin-log";
+import { logAdminAction, listAdminActions } from "@/lib/vpip/admin-log";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,11 @@ import {
   compareBranches,
   loadRepo,
   readFile,
+  listTags,
+  listReleases,
+  getCommit,
+  getPull,
+  filesDiffMarkdown,
   REPORT_KINDS,
   reportInstruction,
   type AdminRepoData,
