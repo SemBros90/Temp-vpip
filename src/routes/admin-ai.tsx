@@ -28,6 +28,7 @@ import {
   getCommit,
   getPull,
   filesDiffMarkdown,
+  repositoryVisibilityAudit,
   REPORT_KINDS,
   reportInstruction,
   type AdminRepoData,
@@ -326,6 +327,7 @@ function AdminAiPage() {
   }
 
   const files = (data?.tree ?? []).filter((t) => t.type === "blob" && t.path.toLowerCase().includes(filter.toLowerCase())).slice(0, 400);
+  const phaseOneAudit = useMemo(() => repositoryVisibilityAudit(data), [data]);
   const projName = (id: string) => ws.projects.find((p) => p.id === id)?.name ?? "project";
 
   return (
@@ -384,10 +386,14 @@ function AdminAiPage() {
               <div className="grid gap-2 rounded-md border border-border bg-surface p-4 text-xs sm:grid-cols-3 lg:grid-cols-6">
                 <div className="sm:col-span-3 lg:col-span-6 text-sm font-semibold">Repository Status</div>
                 <Stat k="Repository Connected" v={loadingRepo ? "Checking…" : data ? "Yes" : "No"} />
-                <Stat k="Repository Name" v={data ? repo : "—"} />
+                <Stat k="Repository Name" v={data?.metadata.name ?? "—"} />
+                <Stat k="Repository Owner" v={data?.metadata.owner ?? "—"} />
+                <Stat k="Default Branch" v={data?.defaultBranch ?? "—"} />
                 <Stat k="Branch" v={data ? branch : "—"} />
                 <Stat k="Commit" v={data?.headSha ? data.headSha.slice(0, 7) : "—"} />
                 <Stat k="Total Files" v={data ? `${data.fileCount}${data.truncated ? "+" : ""}` : "—"} />
+                <Stat k="Total Folders" v={data ? `${data.folderCount}${data.truncated ? "+" : ""}` : "—"} />
+                <Stat k="Sync Status" v={data?.syncStatus ?? "Not connected"} />
                 <Stat k="Last Sync Time" v={data ? new Date(data.syncedAt).toLocaleString() : "Never"} />
                 {data ? <div className="label-mono sm:col-span-3 lg:col-span-6">Admin AI reads: file list, {configFiles.length} build/config files ({configFiles.map((f) => f.path).join(", ") || "none found"}), branches, commits, {snapshots.length} latest snapshots, and any file you name in chat.</div> : null}
               </div>
@@ -397,7 +403,7 @@ function AdminAiPage() {
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="label-mono">Branch</span>
                     <select className="rounded border border-border bg-background px-2 py-1" value={branch} onChange={(e) => void connect(e.target.value)}>
-                      {data.branches.map((b) => <option key={b}>{b}</option>)}
+                      {data.branches.map((b) => <option key={b.name}>{b.name}</option>)}
                     </select>
                     <Tag>{data.tree.filter((t) => t.type === "blob").length} files{data.truncated ? " (truncated)" : ""}</Tag>
                     <Tag>{pinned.length} files pinned for Admin AI</Tag>
@@ -441,12 +447,23 @@ function AdminAiPage() {
                   </div>
 
                   <div className="rounded-md border border-border bg-surface p-4">
+                    <div className="mb-1 text-sm font-semibold">Phase 1 — Repository Visibility Audit</div>
+                    <p className="mb-3 text-xs text-muted-foreground">Evidence is generated only from the live GitHub responses from the most recent connection. A truncated tree fails exact file and folder verification.</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[760px] text-left text-xs">
+                        <thead className="border-b border-border text-muted-foreground"><tr><th className="p-2">Capability</th><th className="p-2">Status</th><th className="p-2">Evidence</th><th className="p-2">Source</th></tr></thead>
+                        <tbody>{phaseOneAudit.map((item) => <tr key={item.capability} className="border-b border-border/60 align-top"><td className="p-2 font-medium">{item.capability}</td><td className={`p-2 font-semibold ${item.status === "PASS" ? "text-primary" : "text-destructive"}`}>{item.status}</td><td className="p-2">{item.evidence}</td><td className="p-2 font-mono text-[10px]">{item.source}</td></tr>)}</tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border bg-surface p-4">
                     <div className="mb-2 text-sm font-semibold">Compare branches</div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       {(["base", "head"] as const).map((k) => (
                         <select key={k} className="rounded border border-border bg-background px-2 py-1" value={cmp[k]} onChange={(e) => setCmp((c) => ({ ...c, [k]: e.target.value }))}>
                           <option value="">{k}…</option>
-                          {data.branches.map((b) => <option key={b}>{b}</option>)}
+                          {data.branches.map((b) => <option key={b.name}>{b.name}</option>)}
                         </select>
                       ))}
                       <Button size="sm" variant="outline" disabled={!cmp.base || !cmp.head} onClick={async () => {
