@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { readFile } from "@/lib/vpip/admin-ai";
 import { affectedPaths, applyChangeSet, changeSetInstruction, changeStats, parseChangeSet, undoChange, type ChangeSet } from "@/lib/vpip/admin-implement";
+import { logAdminAction } from "@/lib/vpip/admin-log";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
