@@ -9,7 +9,7 @@ const TEXT_RE = /\.(tsx?|jsx?|mjs|cjs|json|sql|css|md|toml|ya?ml|html)$/i;
 const SKIP_RE = /(^|\/)(node_modules|dist|build|\.git|\.lovable)\/|routeTree\.gen\.ts$|lock(file)?\.|bun\.lockb?$/;
 type Mode = "text" | "references" | "imports" | "exports" | "definitions" | "functions" | "components" | "routes" | "tables" | "filenames" | "regex";
 interface Hit { path: string; line: number; text: string }
-interface SearchAudit { query: string; status: "PASS" | "FAIL"; hits: Hit[]; error?: string }
+interface SearchAudit { query: string; status: "PASS" | "FAIL"; hits: Hit[]; error?: string | undefined }
 
 function esc(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

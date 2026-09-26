@@ -56,7 +56,7 @@ export async function listAdminActions(limit = 300, filter: AdminLogFilter = {})
 }
 
 export function actionActor(action: AdminAction) {
-  return typeof action.detail.actor === "string" ? action.detail.actor : "Admin AI";
+  return typeof action.detail["actor"] === "string" ? action.detail["actor"] : "Admin AI";
 }
 
 /** CSV is generated locally from selected immutable records; no data is modified. */

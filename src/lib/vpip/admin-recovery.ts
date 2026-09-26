@@ -91,7 +91,7 @@ export interface RecoveryAuditItem { capability: string; status: "PASS" | "FAIL"
 export function recoveryAudit(snaps: SnapRow[], verification: SnapshotVerification | null): RecoveryAuditItem[] {
   const latest = snaps.at(-1);
   const stable = snaps.filter((snapshot) => snapshot.metadata.stable);
-  const recoveries = snaps.filter((snapshot) => snapshot.metadata.kind === "pre-restore" || typeof snapshot.metadata.restoredFrom === "string");
+  const recoveries = snaps.filter((snapshot) => snapshot.metadata.kind === "pre-restore" || typeof snapshot.metadata["restoredFrom"] === "string");
   const present = snaps.length > 0;
   const empty = "No snapshots exist yet; the live inventory response is empty.";
   return [

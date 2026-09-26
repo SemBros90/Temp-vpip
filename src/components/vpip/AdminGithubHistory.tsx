@@ -83,8 +83,8 @@ export function AdminGithubHistory(props: { token: string; repo: string; branch:
     {commits ? <div className="grid gap-3 lg:grid-cols-2 text-xs">
       <HistoryList title={`Commit history (${commits.length})`} source="GET /repos/{owner}/{repo}/commits?sha={branch}&per_page=100" empty="[]" rows={commits.map((commit) => <div key={commit.sha} className="flex gap-2"><button className="font-mono text-primary hover:underline" onClick={() => void showCommit(commit.sha)}>{commit.sha.slice(0, 7)}</button><span className="min-w-0 flex-1 truncate">{commit.message.split("\n")[0]}</span><button className="text-muted-foreground hover:text-foreground" onClick={() => void showCommit(commit.sha, true)}>patch</button></div>)} />
       <HistoryList title={`Pull requests (${pulls?.length ?? 0})`} source="GET /repos/{owner}/{repo}/pulls?state=all&per_page=100" empty="[]" rows={(pulls ?? []).map((pull) => <button key={pull.number} className="block max-w-full truncate text-left hover:text-primary" onClick={() => void showPr(pull.number)}>#{pull.number} [{pull.state}] {pull.title} — {pull.user}</button>)} />
-      <HistoryList title={`Tags (${tags.length})`} source="GET /repos/{owner}/{repo}/tags?per_page=100" empty="[]" rows={tags.map((tag) => <button key={tag.name} className="block font-mono hover:text-primary" onClick={() => void showCommit(tag.sha, true)}>{tag.name} · {tag.sha.slice(0, 7)}</button>)} />
-      <HistoryList title={`Releases (${releases.length})`} source="GET /repos/{owner}/{repo}/releases?per_page=50" empty="[]" rows={releases.map((release) => <a key={release.id} className="block truncate hover:text-primary" href={release.url} target="_blank" rel="noreferrer">{release.name} ({release.tag}) · {release.published || "unpublished"}</a>)} />
+      <HistoryList title={`Tags (${(tags ?? []).length})`} source="GET /repos/{owner}/{repo}/tags?per_page=100" empty="[]" rows={(tags ?? []).map((tag) => <button key={tag.name} className="block font-mono hover:text-primary" onClick={() => void showCommit(tag.sha, true)}>{tag.name} · {tag.sha.slice(0, 7)}</button>)} />
+      <HistoryList title={`Releases (${(releases ?? []).length})`} source="GET /repos/{owner}/{repo}/releases?per_page=50" empty="[]" rows={(releases ?? []).map((release) => <a key={release.id} className="block truncate hover:text-primary" href={release.url} target="_blank" rel="noreferrer">{release.name} ({release.tag}) · {release.published || "unpublished"}</a>)} />
     </div> : <div className="text-xs text-muted-foreground">Run the audit to inspect commit history, tags, releases, and pull requests independently.</div>}
     {commits ? <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-[11px]"><thead className="label-mono border-b border-border"><tr><th className="p-1">Phase 5 capability</th><th className="p-1">Status</th><th className="p-1">Live evidence</th></tr></thead><tbody>{[
       ["Commit history", `PASS — ${commits.length} response item(s)`],
@@ -92,8 +92,8 @@ export function AdminGithubHistory(props: { token: string; repo: string; branch:
       ["Commit patch", "PASS — select any commit patch link"],
       ["Branch comparison", "PASS — compare controls available"],
       ["Commit comparison", "PASS — compare controls available"],
-      ["Tags", `PASS — ${tags.length} response item(s)`],
-      ["Releases", `PASS — ${releases.length} response item(s)`],
+      ["Tags", `PASS — ${(tags ?? []).length} response item(s)`],
+      ["Releases", `PASS — ${(releases ?? []).length} response item(s)`],
       ["Pull requests", `PASS — ${pulls?.length ?? 0} response item(s)`],
       ["PR details", "PASS — select any pull request"],
       ["PR diff", "PASS — select any pull request"],
