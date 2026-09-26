@@ -35,6 +35,16 @@ export interface AdminRepoData {
   commits: Array<{ sha: string; message: string; author: string; date: string }>;
   pulls: Array<{ number: number; title: string; state: string; user: string; url: string }>;
   issues: Array<{ number: number; title: string; state: string; user: string; url: string }>;
+  headSha: string;
+  fileCount: number;
+  syncedAt: string;
+}
+
+/** Root build/config files Admin AI always reads when a repository is connected. */
+export const BUILD_CONFIG_RE = /^(package\.json|vite\.config\.(ts|js|mjs)|tsconfig(\.[\w-]+)?\.json|tailwind\.config\.(ts|js|cjs)|postcss\.config\.(js|cjs|mjs)|wrangler\.(toml|jsonc?)|components\.json|eslint\.config\.js|bunfig\.toml|supabase\/config\.toml|AGENTS\.md|README\.md)$/;
+
+export async function compareCommits(token: string, repo: string, base: string, head: string) {
+  return compareBranches(token, repo, base, head);
 }
 
 export async function loadRepo(token: string, repo: string, branch?: string): Promise<AdminRepoData> {
@@ -55,6 +65,9 @@ export async function loadRepo(token: string, repo: string, branch?: string): Pr
     commits: commits.map((c) => ({ sha: c.sha, message: c.commit.message, author: c.commit.author?.name ?? "unknown", date: c.commit.author?.date ?? "" })),
     pulls: pulls.map((p) => ({ number: p.number, title: p.title, state: p.state, user: p.user.login, url: p.html_url })),
     issues: issues.filter((i) => !i.pull_request).map((i) => ({ number: i.number, title: i.title, state: i.state, user: i.user.login, url: i.html_url })),
+    headSha: commits[0]?.sha ?? "",
+    fileCount: tree.tree.filter((t) => t.type === "blob").length,
+    syncedAt: new Date().toISOString(),
   };
 }
 
@@ -84,7 +97,8 @@ export type ReportKind = keyof typeof REPORT_KINDS;
 const RULES = `You are Admin AI (AI 3) for VPIP — the Vaigyanic Project Intelligence Platform.
 You improve VPIP ITSELF only: never customer projects, never user repositories.
 You are advisory and read-only. You cannot deploy, merge, push, commit or modify VPIP. Every change you propose needs explicit human approval.
-Base claims on the supplied evidence (repository tree, files, AI 1 build reports, AI 2 audits, user feedback, platform logs). Say "insufficient evidence" instead of guessing.`;
+Base claims on the supplied evidence (repository tree, files, AI 1 build reports, AI 2 audits, user feedback, platform logs). Say "insufficient evidence" instead of guessing.
+Repository access rule: only claim you can see the VPIP repository when the "Repository Status" section says "Connected: Yes". Use the verified numbers in that section (e.g. total files) exactly. If it says "Connected: No", say plainly that no repository is connected and you cannot read its files — never invent file names, counts or contents. For files not included below, tell the user to name the file path so it can be read.`;
 
 export function adminSystemPrompt(context: string) {
   return `${RULES}\n\n# Evidence\n${context}`;
@@ -106,6 +120,10 @@ export function reportInstruction(kind: ReportKind) {
 export function buildContext(opts: {
   repo: string;
   branch: string;
+  data: AdminRepoData | null;
+  error?: string;
+  configFiles: Array<{ path: string; content: string }>;
+  snapshots: Array<{ label: string; created_at: string; project: string; files: Array<{ path: string; content?: string }> }>;
   tree: TreeEntry[];
   pinned: Array<{ path: string; content: string }>;
   ai1: Array<{ created_at: string; report: string }>;
@@ -114,10 +132,28 @@ export function buildContext(opts: {
 }) {
   const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}\n…[truncated]` : s);
   const lines: string[] = [];
-  lines.push(`## VPIP repository: ${opts.repo || "not connected"} @ ${opts.branch || "—"}`);
-  if (opts.tree.length) {
-    lines.push("### File tree (source files)");
-    lines.push(opts.tree.filter((t) => t.type === "blob").map((t) => t.path).slice(0, 600).join("\n"));
+  const d = opts.data;
+  lines.push(`## Repository Status (verified by live GitHub read)
+- Connected: ${d ? "Yes" : "No"}${!d && opts.error ? ` (last error: ${opts.error})` : ""}
+- Repository: ${opts.repo || "none"}
+- Branch: ${d ? opts.branch : "—"}
+- Commit: ${d?.headSha || "—"}
+- Total files: ${d ? `${d.fileCount}${d.truncated ? " (GitHub truncated the tree; real count is higher)" : ""}` : "unknown"}
+- Directories: ${d ? d.tree.filter((t) => t.type === "tree").length : "unknown"}
+- Last sync: ${d?.syncedAt ?? "never"}`);
+  if (d) {
+    lines.push(`### Branches (${d.branches.length})\n${d.branches.join(", ")}`);
+    lines.push(`### Recent commits\n${d.commits.slice(0, 20).map((c) => `- ${c.sha.slice(0, 7)} ${c.date} ${c.author}: ${c.message.split("\n")[0]}`).join("\n")}`);
+    lines.push("### Full file list");
+    lines.push(opts.tree.filter((t) => t.type === "blob").map((t) => t.path).slice(0, 1500).join("\n"));
+    for (const f of opts.configFiles) lines.push(`### Build/config file: ${f.path}\n\`\`\`\n${cut(f.content, 8000)}\n\`\`\``);
+  }
+  if (opts.snapshots.length) {
+    lines.push(`## VPIP snapshots (latest ${opts.snapshots.length})`);
+    for (const sn of opts.snapshots) {
+      const pkg = sn.files.find((f) => f.path === "package.json")?.content;
+      lines.push(`### ${sn.label} · ${sn.project} · ${sn.created_at} · ${sn.files.length} files\n${sn.files.map((f) => f.path).slice(0, 200).join("\n")}${pkg ? `\npackage.json:\n\`\`\`\n${cut(pkg, 3000)}\n\`\`\`` : ""}`);
+    }
   }
   for (const f of opts.pinned) lines.push(`### File: ${f.path}\n\`\`\`\n${cut(f.content, 12000)}\n\`\`\``);
   lines.push(`## AI 1 build reports (latest ${opts.ai1.length})`);
