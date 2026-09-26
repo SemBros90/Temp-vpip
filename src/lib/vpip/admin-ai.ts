@@ -26,6 +26,7 @@ async function gh<T>(token: string, path: string): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+export interface TreeEntry { path: string; type: "blob" | "tree"; sha?: string; size?: number }
 export interface TreeEntry { path: string; type: "blob" | "tree"; size?: number }
 export interface AdminBranch { name: string; sha: string; headCommittedAt: string }
 export interface AdminRepoMetadata {
@@ -57,6 +58,51 @@ export interface VisibilityAuditItem {
   status: "PASS" | "FAIL";
   evidence: string;
   source: string;
+
+}
+
+export interface RepositoryFileRead {
+  path: string;
+  size: number;
+  sha: string;
+  kind: "text" | "binary";
+  content: string | null;
+  source: string;
+}
+
+function decodeBase64(content: string) {
+  const binary = atob(content.replace(/\n/g, ""));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function isBinary(bytes: Uint8Array) {
+  const sample = bytes.subarray(0, Math.min(bytes.length, 8_000));
+  return sample.some((byte) => byte === 0 || (byte < 7 || (byte > 14 && byte < 32)));
+}
+
+/**
+ * Independently reads an exact repository path. The Contents endpoint supplies
+ * normal files; its Git Blob fallback supports large files up to GitHub's blob
+ * response limit while still exposing binary files as metadata only.
+ */
+export async function readRepositoryFile(token: string, repo: string, ref: string, path: string): Promise<RepositoryFileRead> {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const file = await gh<{ path: string; size: number; sha: string; type: string; content?: string; encoding?: string }>(token, `/repos/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`);
+  if (file.type !== "file") throw new Error(`${path} is not a file.`);
+  let content = file.content;
+  let encoding = file.encoding;
+  let source = "GET /repos/{owner}/{repo}/contents/{path}?ref={branch}";
+  if (encoding !== "base64" || !content) {
+    const blob = await gh<{ content?: string; encoding?: string }>(token, `/repos/${repo}/git/blobs/${file.sha}`);
+    content = blob.content;
+    encoding = blob.encoding;
+    source = "GET /repos/{owner}/{repo}/contents/{path}?ref={branch} + GET /repos/{owner}/{repo}/git/blobs/{sha}";
+  }
+  if (encoding !== "base64" || !content) throw new Error(`GitHub returned metadata but no readable blob content for ${path}.`);
+  const bytes = decodeBase64(content);
+  if (isBinary(bytes)) return { path: file.path, size: file.size, sha: file.sha, kind: "binary", content: null, source };
+  return { path: file.path, size: file.size, sha: file.sha, kind: "text", content: new TextDecoder().decode(bytes), source };
+
 }
 
 /** Root build/config files Admin AI always reads when a repository is connected. */
@@ -142,10 +188,7 @@ export function repositoryVisibilityAudit(data: AdminRepoData | null): Visibilit
 }
 
 export async function readFile(token: string, repo: string, ref: string, path: string): Promise<string> {
-  const f = await gh<{ content?: string; encoding?: string }>(token, `/repos/${repo}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(ref)}`);
-  if (f.encoding !== "base64" || !f.content) return "";
-  const bin = atob(f.content.replace(/\n/g, ""));
-  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+  return (await readRepositoryFile(token, repo, ref, path)).content ?? "";
 }
 
 export async function compareBranches(token: string, repo: string, base: string, head: string) {
