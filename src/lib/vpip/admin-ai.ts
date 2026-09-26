@@ -26,10 +26,20 @@ async function gh<T>(token: string, path: string): Promise<T> {
   return JSON.parse(text) as T;
 }
 
-export interface TreeEntry { path: string; type: "blob" | "tree"; size?: number }
+export interface TreeEntry { path: string; type: "blob" | "tree"; sha?: string; size?: number }
+export interface AdminBranch { name: string; sha: string; headCommittedAt: string }
+export interface AdminRepoMetadata {
+  owner: string;
+  name: string;
+  fullName: string;
+  description: string;
+  visibility: "public" | "private";
+  htmlUrl: string;
+}
 export interface AdminRepoData {
+  metadata: AdminRepoMetadata;
   defaultBranch: string;
-  branches: string[];
+  branches: AdminBranch[];
   tree: TreeEntry[];
   truncated: boolean;
   commits: Array<{ sha: string; message: string; author: string; date: string }>;
@@ -37,7 +47,59 @@ export interface AdminRepoData {
   issues: Array<{ number: number; title: string; state: string; user: string; url: string }>;
   headSha: string;
   fileCount: number;
+  folderCount: number;
   syncedAt: string;
+  syncStatus: "current";
+}
+
+export interface VisibilityAuditItem {
+  capability: string;
+  status: "PASS" | "FAIL";
+  evidence: string;
+  source: string;
+}
+
+export interface RepositoryFileRead {
+  path: string;
+  size: number;
+  sha: string;
+  kind: "text" | "binary";
+  content: string | null;
+  source: string;
+}
+
+function decodeBase64(content: string) {
+  const binary = atob(content.replace(/\n/g, ""));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function isBinary(bytes: Uint8Array) {
+  const sample = bytes.subarray(0, Math.min(bytes.length, 8_000));
+  return sample.some((byte) => byte === 0 || (byte < 7 || (byte > 14 && byte < 32)));
+}
+
+/**
+ * Independently reads an exact repository path. The Contents endpoint supplies
+ * normal files; its Git Blob fallback supports large files up to GitHub's blob
+ * response limit while still exposing binary files as metadata only.
+ */
+export async function readRepositoryFile(token: string, repo: string, ref: string, path: string): Promise<RepositoryFileRead> {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const file = await gh<{ path: string; size: number; sha: string; type: string; content?: string; encoding?: string }>(token, `/repos/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`);
+  if (file.type !== "file") throw new Error(`${path} is not a file.`);
+  let content = file.content;
+  let encoding = file.encoding;
+  let source = "GET /repos/{owner}/{repo}/contents/{path}?ref={branch}";
+  if (encoding !== "base64" || !content) {
+    const blob = await gh<{ content?: string; encoding?: string }>(token, `/repos/${repo}/git/blobs/${file.sha}`);
+    content = blob.content;
+    encoding = blob.encoding;
+    source = "GET /repos/{owner}/{repo}/contents/{path}?ref={branch} + GET /repos/{owner}/{repo}/git/blobs/{sha}";
+  }
+  if (encoding !== "base64" || !content) throw new Error(`GitHub returned metadata but no readable blob content for ${path}.`);
+  const bytes = decodeBase64(content);
+  if (isBinary(bytes)) return { path: file.path, size: file.size, sha: file.sha, kind: "binary", content: null, source };
+  return { path: file.path, size: file.size, sha: file.sha, kind: "text", content: new TextDecoder().decode(bytes), source };
 }
 
 /** Root build/config files Admin AI always reads when a repository is connected. */
@@ -48,18 +110,41 @@ export async function compareCommits(token: string, repo: string, base: string, 
 }
 
 export async function loadRepo(token: string, repo: string, branch?: string): Promise<AdminRepoData> {
-  const info = await gh<{ default_branch: string }>(token, `/repos/${repo}`);
+  const info = await gh<{
+    name: string; full_name: string; description: string | null; private: boolean;
+    default_branch: string; html_url: string; owner: { login: string };
+  }>(token, `/repos/${repo}`);
   const ref = branch || info.default_branch;
   const [branches, tree, commits, pulls, issues] = await Promise.all([
-    gh<Array<{ name: string }>>(token, `/repos/${repo}/branches?per_page=100`),
+    gh<Array<{ name: string; commit: { sha: string } }>>(token, `/repos/${repo}/branches?per_page=100`),
     gh<{ tree: TreeEntry[]; truncated: boolean }>(token, `/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`),
     gh<Array<{ sha: string; commit: { message: string; author?: { name?: string; date?: string } } }>>(token, `/repos/${repo}/commits?sha=${encodeURIComponent(ref)}&per_page=30`),
     gh<Array<{ number: number; title: string; state: string; user: { login: string }; html_url: string }>>(token, `/repos/${repo}/pulls?state=all&per_page=30`),
     gh<Array<{ number: number; title: string; state: string; user: { login: string }; html_url: string; pull_request?: unknown }>>(token, `/repos/${repo}/issues?state=all&per_page=30`),
   ]);
+  // GitHub's branch-list response has no timestamp. Read every returned branch
+  // head so the audit can truthfully show the five most recently committed heads.
+  const branchHeads: AdminBranch[] = [];
+  const pending = [...branches];
+  // Limit detail reads to avoid flooding GitHub while retaining an auditable
+  // timestamp for every returned branch head.
+  await Promise.all(Array.from({ length: Math.min(8, pending.length) }, async () => {
+    for (let branchHead = pending.shift(); branchHead; branchHead = pending.shift()) {
+      const detail = await gh<{ commit: { author?: { date?: string }; committer?: { date?: string } } }>(token, `/repos/${repo}/commits/${encodeURIComponent(branchHead.commit.sha)}`);
+      branchHeads.push({ name: branchHead.name, sha: branchHead.commit.sha, headCommittedAt: detail.commit.author?.date ?? detail.commit.committer?.date ?? "" });
+    }
+  }));
   return {
+    metadata: {
+      owner: info.owner.login,
+      name: info.name,
+      fullName: info.full_name,
+      description: info.description ?? "",
+      visibility: info.private ? "private" : "public",
+      htmlUrl: info.html_url,
+    },
     defaultBranch: info.default_branch,
-    branches: branches.map((b) => b.name),
+    branches: branchHeads.sort((a, b) => b.headCommittedAt.localeCompare(a.headCommittedAt)),
     tree: tree.tree.filter((t) => t.type === "blob" || t.type === "tree"),
     truncated: tree.truncated,
     commits: commits.map((c) => ({ sha: c.sha, message: c.commit.message, author: c.commit.author?.name ?? "unknown", date: c.commit.author?.date ?? "" })),
@@ -67,15 +152,40 @@ export async function loadRepo(token: string, repo: string, branch?: string): Pr
     issues: issues.filter((i) => !i.pull_request).map((i) => ({ number: i.number, title: i.title, state: i.state, user: i.user.login, url: i.html_url })),
     headSha: commits[0]?.sha ?? "",
     fileCount: tree.tree.filter((t) => t.type === "blob").length,
+    folderCount: tree.tree.filter((t) => t.type === "tree").length,
     syncedAt: new Date().toISOString(),
+    syncStatus: "current",
   };
 }
 
+/**
+ * Phase 1 audit generated strictly from the successful live GitHub responses
+ * stored in AdminRepoData. A truncated tree cannot verify an exact inventory.
+ */
+export function repositoryVisibilityAudit(data: AdminRepoData | null): VisibilityAuditItem[] {
+  if (!data) {
+    return [{ capability: "Repository connection", status: "FAIL", evidence: "No successful GitHub response is available.", source: "GitHub REST API" }];
+  }
+  const treeStatus = data.truncated ? "FAIL" : "PASS";
+  const treeEvidence = data.truncated
+    ? "GitHub marked the recursive tree response as truncated; exact file and folder totals are unavailable."
+    : `${data.fileCount} files and ${data.folderCount} folders were returned in the recursive tree.`;
+  return [
+    { capability: "Repository connection", status: "PASS", evidence: `Connected to ${data.metadata.fullName} at ${data.syncedAt}.`, source: "GET /repos/{owner}/{repo}" },
+    { capability: "Repository metadata", status: "PASS", evidence: `Owner: ${data.metadata.owner}; name: ${data.metadata.name}; visibility: ${data.metadata.visibility}.`, source: "GET /repos/{owner}/{repo}" },
+    { capability: "Default branch detection", status: "PASS", evidence: `Default branch: ${data.defaultBranch}.`, source: "GET /repos/{owner}/{repo}" },
+    { capability: "Branch list", status: "PASS", evidence: `${data.branches.length} branches returned; latest five by branch-head commit: ${data.branches.slice(0, 5).map((b) => `${b.name} (${b.sha.slice(0, 7)}, ${b.headCommittedAt || "undated"})`).join(", ") || "none"}.`, source: "GET /repos/{owner}/{repo}/branches?per_page=100 + GET /repos/{owner}/{repo}/commits/{sha}" },
+    { capability: "Commit list", status: "PASS", evidence: `${data.commits.length} commits returned; latest ten: ${data.commits.slice(0, 10).map((c) => c.sha.slice(0, 7)).join(", ") || "none"}.`, source: "GET /repos/{owner}/{repo}/commits?sha={branch}&per_page=30" },
+    { capability: "Commit details", status: data.headSha ? "PASS" : "FAIL", evidence: data.headSha ? `Latest commit ${data.headSha} is available for detail retrieval.` : "No commit SHA was returned.", source: "GET /repos/{owner}/{repo}/commits/{sha}" },
+    { capability: "File tree", status: treeStatus, evidence: treeEvidence, source: "GET /repos/{owner}/{repo}/git/trees/{branch}?recursive=1" },
+    { capability: "Folder tree", status: treeStatus, evidence: treeEvidence, source: "GET /repos/{owner}/{repo}/git/trees/{branch}?recursive=1" },
+    { capability: "Repository statistics", status: treeStatus, evidence: treeEvidence, source: "GET /repos/{owner}/{repo}/git/trees/{branch}?recursive=1" },
+    { capability: "Repository synchronization status", status: "PASS", evidence: `Live read completed at ${data.syncedAt}; head SHA ${data.headSha || "not returned"}; status ${data.syncStatus}.`, source: "Live GitHub REST read" },
+  ];
+}
+
 export async function readFile(token: string, repo: string, ref: string, path: string): Promise<string> {
-  const f = await gh<{ content?: string; encoding?: string }>(token, `/repos/${repo}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(ref)}`);
-  if (f.encoding !== "base64" || !f.content) return "";
-  const bin = atob(f.content.replace(/\n/g, ""));
-  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+  return (await readRepositoryFile(token, repo, ref, path)).content ?? "";
 }
 
 export async function compareBranches(token: string, repo: string, base: string, head: string) {
@@ -181,7 +291,7 @@ export function buildContext(opts: {
 - Directories: ${d ? d.tree.filter((t) => t.type === "tree").length : "unknown"}
 - Last sync: ${d?.syncedAt ?? "never"}`);
   if (d) {
-    lines.push(`### Branches (${d.branches.length})\n${d.branches.join(", ")}`);
+    lines.push(`### Branches (${d.branches.length}, newest branch heads first)\n${d.branches.map((b) => `${b.name} (${b.sha.slice(0, 7)}, ${b.headCommittedAt || "undated"})`).join(", ")}`);
     lines.push(`### Recent commits\n${d.commits.slice(0, 20).map((c) => `- ${c.sha.slice(0, 7)} ${c.date} ${c.author}: ${c.message.split("\n")[0]}`).join("\n")}`);
     lines.push("### Full file list");
     lines.push(opts.tree.filter((t) => t.type === "blob").map((t) => t.path).slice(0, 1500).join("\n"));

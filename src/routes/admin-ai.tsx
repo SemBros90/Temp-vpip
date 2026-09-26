@@ -28,9 +28,12 @@ import {
   getCommit,
   getPull,
   filesDiffMarkdown,
+  repositoryVisibilityAudit,
+  readRepositoryFile,
   REPORT_KINDS,
   reportInstruction,
   type AdminRepoData,
+  type RepositoryFileRead,
   type ReportKind,
 } from "@/lib/vpip/admin-ai";
 
@@ -56,6 +59,7 @@ type Engine = "lovable" | ProviderId;
 
 interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string }
 interface Report { id: string; kind: string; title: string; content: string; status: string; engine: string | null; created_at: string }
+interface FileAuditItem { label: string; status: "PASS" | "FAIL"; result?: RepositoryFileRead; error?: string }
 
 function AdminAiPage() {
   const { ws } = useVpip();
@@ -68,13 +72,15 @@ function AdminAiPage() {
   const [loadingRepo, setLoadingRepo] = useState(false);
   const [repoError, setRepoError] = useState("");
   const [filter, setFilter] = useState("");
-  const [openFile, setOpenFile] = useState<{ path: string; content: string } | null>(null);
+  const [openFile, setOpenFile] = useState<RepositoryFileRead | null>(null);
   const [pinned, setPinned] = useState<Array<{ path: string; content: string }>>([]);
   const [configFiles, setConfigFiles] = useState<Array<{ path: string; content: string }>>([]);
   const [snapshots, setSnapshots] = useState<Array<{ label: string; created_at: string; project: string; files: Array<{ path: string; content?: string }> }>>([]);
   const [shaCmp, setShaCmp] = useState({ base: "", head: "", out: "" });
   const autoTried = useRef(false);
   const [cmp, setCmp] = useState<{ base: string; head: string; out: string }>({ base: "", head: "", out: "" });
+  const [fileAudit, setFileAudit] = useState<FileAuditItem[]>([]);
+  const [auditingFiles, setAuditingFiles] = useState(false);
 
   const [ai1, setAi1] = useState<Array<{ created_at: string; report: string; project_id: string }>>([]);
   const [ai2, setAi2] = useState<Array<{ created_at: string; kind: string; score: number | null; report: string; project_id: string }>>([]);
@@ -193,9 +199,36 @@ function AdminAiPage() {
 
   async function open(path: string) {
     try {
-      setOpenFile({ path, content: await readFile(token, repo, branch, path) });
+      setOpenFile(await readRepositoryFile(token, repo, branch, path));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not read file.");
+    }
+  }
+
+  async function runFileAccessAudit() {
+    if (!data) return;
+    const select = (label: string, match: (path: string) => boolean) => ({ label, path: data.tree.find((entry) => entry.type === "blob" && match(entry.path))?.path });
+    const targets = [
+      select("package.json", (path) => path === "package.json"),
+      select("README.md", (path) => /^README\.md$/i.test(path)),
+      select("React component", (path) => /(^|\/)components\/.+\.tsx$/i.test(path)),
+      select("VPIP file", (path) => /(^|\/)vpip\/.+\.(ts|tsx)$/i.test(path)),
+      select("Migration file", (path) => /(^|\/)(migrations?)\/.+\.(sql|ts)$/i.test(path)),
+    ];
+    setAuditingFiles(true);
+    try {
+      const results = await Promise.all(targets.map(async ({ label, path }) => {
+        if (!path) return { label, status: "FAIL" as const, error: "No matching repository file was found in the live tree." };
+        try {
+          const result = await readRepositoryFile(token, repo, branch, path);
+          return { label, status: result.kind === "text" ? "PASS" as const : "FAIL" as const, result, error: result.kind === "binary" ? "The selected audit file is binary; text-line evidence is unavailable." : undefined };
+        } catch (error) {
+          return { label, status: "FAIL" as const, error: error instanceof Error ? error.message : String(error) };
+        }
+      }));
+      setFileAudit(results);
+    } finally {
+      setAuditingFiles(false);
     }
   }
 
@@ -326,6 +359,7 @@ function AdminAiPage() {
   }
 
   const files = (data?.tree ?? []).filter((t) => t.type === "blob" && t.path.toLowerCase().includes(filter.toLowerCase())).slice(0, 400);
+  const phaseOneAudit = useMemo(() => repositoryVisibilityAudit(data), [data]);
   const projName = (id: string) => ws.projects.find((p) => p.id === id)?.name ?? "project";
 
   return (
@@ -384,10 +418,14 @@ function AdminAiPage() {
               <div className="grid gap-2 rounded-md border border-border bg-surface p-4 text-xs sm:grid-cols-3 lg:grid-cols-6">
                 <div className="sm:col-span-3 lg:col-span-6 text-sm font-semibold">Repository Status</div>
                 <Stat k="Repository Connected" v={loadingRepo ? "Checking…" : data ? "Yes" : "No"} />
-                <Stat k="Repository Name" v={data ? repo : "—"} />
+                <Stat k="Repository Name" v={data?.metadata.name ?? "—"} />
+                <Stat k="Repository Owner" v={data?.metadata.owner ?? "—"} />
+                <Stat k="Default Branch" v={data?.defaultBranch ?? "—"} />
                 <Stat k="Branch" v={data ? branch : "—"} />
                 <Stat k="Commit" v={data?.headSha ? data.headSha.slice(0, 7) : "—"} />
                 <Stat k="Total Files" v={data ? `${data.fileCount}${data.truncated ? "+" : ""}` : "—"} />
+                <Stat k="Total Folders" v={data ? `${data.folderCount}${data.truncated ? "+" : ""}` : "—"} />
+                <Stat k="Sync Status" v={data?.syncStatus ?? "Not connected"} />
                 <Stat k="Last Sync Time" v={data ? new Date(data.syncedAt).toLocaleString() : "Never"} />
                 {data ? <div className="label-mono sm:col-span-3 lg:col-span-6">Admin AI reads: file list, {configFiles.length} build/config files ({configFiles.map((f) => f.path).join(", ") || "none found"}), branches, commits, {snapshots.length} latest snapshots, and any file you name in chat.</div> : null}
               </div>
@@ -397,7 +435,7 @@ function AdminAiPage() {
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="label-mono">Branch</span>
                     <select className="rounded border border-border bg-background px-2 py-1" value={branch} onChange={(e) => void connect(e.target.value)}>
-                      {data.branches.map((b) => <option key={b}>{b}</option>)}
+                      {data.branches.map((b) => <option key={b.name}>{b.name}</option>)}
                     </select>
                     <Tag>{data.tree.filter((t) => t.type === "blob").length} files{data.truncated ? " (truncated)" : ""}</Tag>
                     <Tag>{pinned.length} files pinned for Admin AI</Tag>
@@ -418,11 +456,12 @@ function AdminAiPage() {
                         <>
                           <div className="flex items-center justify-between border-b border-border px-3 py-2">
                             <span className="truncate font-mono text-xs">{openFile.path}</span>
-                            <Button size="sm" variant="outline" onClick={() => setPinned((p) => (p.some((x) => x.path === openFile.path) ? p.filter((x) => x.path !== openFile.path) : [...p, openFile]))}>
+                            <Button size="sm" variant="outline" disabled={openFile.kind === "binary"} onClick={() => openFile.content !== null && setPinned((p) => (p.some((x) => x.path === openFile.path) ? p.filter((x) => x.path !== openFile.path) : [...p, { path: openFile.path, content: openFile.content }]))}>
                               {pinned.some((p) => p.path === openFile.path) ? "Unpin" : "Pin for Admin AI"}
                             </Button>
                           </div>
-                          <pre className="max-h-[480px] overflow-auto p-3 text-[11px] leading-relaxed">{openFile.content}</pre>
+                          <div className="border-b border-border px-3 py-1 font-mono text-[10px] text-muted-foreground">{openFile.kind} · {openFile.size.toLocaleString()} bytes · {openFile.sha.slice(0, 12)} · {openFile.source}</div>
+                          {openFile.kind === "binary" ? <div className="p-3 text-xs text-muted-foreground">Binary file detected. VPIP retrieved its path, size, SHA, and type without attempting to render binary content.</div> : <pre className="max-h-[480px] overflow-auto p-3 text-[11px] leading-relaxed">{openFile.content}</pre>}
                         </>
                       ) : (
                         <div className="p-6 text-sm text-muted-foreground">Pick a file to read it. Pinned files are given to Admin AI in full.</div>
@@ -441,12 +480,34 @@ function AdminAiPage() {
                   </div>
 
                   <div className="rounded-md border border-border bg-surface p-4">
+                    <div className="mb-1 text-sm font-semibold">Phase 1 — Repository Visibility Audit</div>
+                    <p className="mb-3 text-xs text-muted-foreground">Evidence is generated only from the live GitHub responses from the most recent connection. A truncated tree fails exact file and folder verification.</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[760px] text-left text-xs">
+                        <thead className="border-b border-border text-muted-foreground"><tr><th className="p-2">Capability</th><th className="p-2">Status</th><th className="p-2">Evidence</th><th className="p-2">Source</th></tr></thead>
+                        <tbody>{phaseOneAudit.map((item) => <tr key={item.capability} className="border-b border-border/60 align-top"><td className="p-2 font-medium">{item.capability}</td><td className={`p-2 font-semibold ${item.status === "PASS" ? "text-primary" : "text-destructive"}`}>{item.status}</td><td className="p-2">{item.evidence}</td><td className="p-2 font-mono text-[10px]">{item.source}</td></tr>)}</tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border bg-surface p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div>
+                        <div className="text-sm font-semibold">Phase 2 — File Access Audit</div>
+                        <p className="text-xs text-muted-foreground">Reads each required file directly from the connected repository. No manually supplied content is used.</p>
+                      </div>
+                      <Button className="ml-auto" size="sm" variant="outline" disabled={auditingFiles} onClick={() => void runFileAccessAudit()}>{auditingFiles ? "Reading files…" : "Run live file audit"}</Button>
+                    </div>
+                    {fileAudit.length ? <div className="mt-3 space-y-3">{fileAudit.map((item) => <FileAuditCard key={item.label} item={item} />)}</div> : <div className="mt-3 text-xs text-muted-foreground">Run the audit to produce live PASS/FAIL evidence for the five required repository files.</div>}
+                  </div>
+
+                  <div className="rounded-md border border-border bg-surface p-4">
                     <div className="mb-2 text-sm font-semibold">Compare branches</div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       {(["base", "head"] as const).map((k) => (
                         <select key={k} className="rounded border border-border bg-background px-2 py-1" value={cmp[k]} onChange={(e) => setCmp((c) => ({ ...c, [k]: e.target.value }))}>
                           <option value="">{k}…</option>
-                          {data.branches.map((b) => <option key={b}>{b}</option>)}
+                          {data.branches.map((b) => <option key={b.name}>{b.name}</option>)}
                         </select>
                       ))}
                       <Button size="sm" variant="outline" disabled={!cmp.base || !cmp.head} onClick={async () => {
@@ -633,5 +694,28 @@ function ListCard({ title, rows }: { title: string; rows: string[] }) {
         {rows.length ? rows.map((r, i) => <div key={i} className="truncate">{r}</div>) : <div className="text-muted-foreground">None</div>}
       </div>
     </div>
+  );
+}
+
+function FileAuditCard({ item }: { item: FileAuditItem }) {
+  const lines = item.result?.content?.split("\n") ?? [];
+  const first = lines.slice(0, 20).join("\n");
+  const last = lines.slice(-20).join("\n");
+  return (
+    <details className="rounded border border-border p-3 text-xs" open>
+      <summary className="cursor-pointer font-medium"><span className={item.status === "PASS" ? "text-primary" : "text-destructive"}>{item.status}</span> · {item.label}</summary>
+      {item.result ? (
+        <div className="mt-2 space-y-2">
+          <div><span className="label-mono">File path</span> <span className="font-mono">{item.result.path}</span></div>
+          <div><span className="label-mono">File size</span> {item.result.size.toLocaleString()} bytes · <span className="label-mono">Kind</span> {item.result.kind}</div>
+          <div><span className="label-mono">Source used</span> <span className="font-mono text-[10px]">{item.result.source}</span></div>
+          {item.result.kind === "text" ? <>
+            <div><div className="label-mono">First 20 lines</div><pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-[10px]">{first}</pre></div>
+            <div><div className="label-mono">Last 20 lines</div><pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-[10px]">{last}</pre></div>
+          </> : null}
+          {item.error ? <div className="text-destructive">{item.error}</div> : null}
+        </div>
+      ) : <div className="mt-2 text-destructive">{item.error}</div>}
+    </details>
   );
 }
