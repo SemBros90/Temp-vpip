@@ -179,7 +179,7 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
     filter === "all" ? true : filter === "latest" ? s.id === latestId || snaps.indexOf(s) >= snaps.length - 10 : filter === "stable" ? !!s.metadata.stable : filter === "failed" ? !!s.metadata.failed : (s.metadata.tags ?? []).length > 0,
   );
   const stable = snaps.filter((s) => s.metadata.stable);
-  const recovery = snaps.filter((s) => s.metadata.kind === "pre-restore" || typeof s.metadata.restoredFrom === "string");
+  const recovery = snaps.filter((s) => s.metadata.kind === "pre-restore" || typeof s.metadata["restoredFrom"] === "string");
   const audit = useMemo(() => recoveryAudit(snaps, verification), [snaps, verification]);
   const status = (s: SnapRow) => (s.metadata.failed ? "Failed" : s.metadata.stable ? `Stable ${s.metadata.stable}` : s.id === latestId ? "Latest" : s.is_zero ? "Rollback Point Zero" : "Snapshot");
 
@@ -298,7 +298,7 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
           <div className="space-y-2 rounded-md border border-border bg-surface p-3 text-xs">
             <div className="text-sm font-semibold">Restore Preview &amp; Recovery Chain</div>
             {preview ? <DiffEvidence title="Previewed changes required to restore selected snapshot" diff={preview} /> : <div className="text-muted-foreground">Select a snapshot, then choose Restore preview. This is read-only and makes no file changes.</div>}
-            <div className="border-t border-border pt-2"><div className="font-semibold">Recovery history ({recovery.length})</div>{recovery.length ? recovery.map((s) => <div key={s.id} className="mt-1"><span className="font-mono">{code.get(s.id)}</span> · {s.label} · {new Date(s.created_at).toLocaleString()} · restores from <span className="font-mono">{String(s.metadata.restoredFrom ?? "—")}</span></div>) : <div className="text-muted-foreground">Live recovery history response: []</div>}</div>
+            <div className="border-t border-border pt-2"><div className="font-semibold">Recovery history ({recovery.length})</div>{recovery.length ? recovery.map((s) => <div key={s.id} className="mt-1"><span className="font-mono">{code.get(s.id)}</span> · {s.label} · {new Date(s.created_at).toLocaleString()} · restores from <span className="font-mono">{String(s.metadata["restoredFrom"] ?? "—")}</span></div>) : <div className="text-muted-foreground">Live recovery history response: []</div>}</div>
             {verification ? <div className={`border-t border-border pt-2 font-medium ${verification.status === "PASS" ? "text-primary" : "text-destructive"}`}>Snapshot verification: {verification.status} — {verification.evidence}</div> : null}
           </div>
         </div>

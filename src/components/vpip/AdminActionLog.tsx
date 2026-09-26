@@ -18,7 +18,7 @@ export function AdminActionLog() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    try { setActions(await listAdminActions(500, { action: action || undefined, status: status || undefined, query, from: from || undefined, to: to || undefined })); }
+    try { setActions(await listAdminActions(500, { query, ...(action ? { action } : {}), ...(status ? { status } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) })); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Could not read the action log."); }
     finally { setLoading(false); }
   }, [action, from, query, status, to]);

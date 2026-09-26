@@ -83,7 +83,7 @@ export function traceRootCause(args: {
       (firstSnapshot?.files ?? [])
         .filter(
           (file) =>
-            terms.has(file.path.split("/").pop()?.split(".")[0].toLowerCase() ?? "") ||
+            terms.has(file.path.split("/").pop()?.split(".")[0]?.toLowerCase() ?? "") ||
             [...terms].some((term) => file.path.toLowerCase().includes(term)),
         )
         .map((file) => file.path),
