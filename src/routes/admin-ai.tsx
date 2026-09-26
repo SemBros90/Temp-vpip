@@ -200,8 +200,12 @@ function AdminAiPage() {
   const engineLabel = engine === "lovable" ? "Lovable AI" : (PROVIDER_LABEL[engine] ?? engine);
 
   const context = useMemo(
-    () => buildContext({ repo, branch, data, error: repoError, configFiles, snapshots, tree: data?.tree ?? [], pinned, ai1, ai2, feedback }),
-    [repo, branch, data, repoError, configFiles, snapshots, pinned, ai1, ai2, feedback],
+    () => {
+      const base = buildContext({ repo, branch, data, error: repoError, configFiles, snapshots, tree: data?.tree ?? [], pinned, ai1, ai2, feedback });
+      const ev = Object.entries(evidence).map(([k, rows]) => `## ${k} (latest ${rows.length})\n${rows.length ? rows.map((r) => `- ${JSON.stringify(r).slice(0, 700)}`).join("\n") : "none recorded"}`).join("\n\n");
+      return `${base}\n\n# Connected VPIP evidence stores\n${ev}`;
+    },
+    [repo, branch, data, repoError, configFiles, snapshots, pinned, ai1, ai2, feedback, evidence],
   );
 
   async function run(userText: string, history: Msg[], kind?: ReportKind, extra?: { instruction: string; context: string }) {
@@ -487,6 +491,17 @@ function AdminAiPage() {
                     <Tag>{f.kind}</Tag> <span className="ml-1">{f.content}</span>
                   </div>
                 ))}
+              </div>
+              <div className="space-y-2 lg:col-span-3">
+                <div className="text-sm font-semibold">Other connected VPIP evidence (read by Admin AI)</div>
+                <div className="grid gap-2 md:grid-cols-3">
+                  {Object.entries(evidence).map(([k, rows]) => (
+                    <details key={k} className="rounded border border-border bg-surface p-2 text-xs">
+                      <summary className="cursor-pointer">{k} ({rows.length})</summary>
+                      <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap text-[11px]">{rows.length ? rows.map((r) => JSON.stringify(r, null, 1).slice(0, 600)).join("\n\n") : "None recorded yet."}</pre>
+                    </details>
+                  ))}
+                </div>
               </div>
             </div>
           ) : null}
