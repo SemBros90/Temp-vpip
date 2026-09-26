@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useVpip, useVpipActions } from "@/lib/vpip/store";
 import { coderTrace } from "@/lib/vpip/coder";
 import { createSnapshot } from "@/lib/vpip/safe-repair";
+import { logAdminAction } from "@/lib/vpip/admin-log";
 import {
   diffFiles,
   diffSummary,
@@ -103,8 +104,10 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
         if (build.files?.find((f) => f.path === path)?.content !== content) { actions.writeCoderFile(build.id, path, content, { note: `Admin AI restore ${code.get(s.id)}`, trace }); n++; }
       }
       toast.success(`Restored ${code.get(s.id)}: ${n} files changed`);
+      void logAdminAction({ action: "snapshot_restore", files: [...want.keys()], detail: { snapshot: s.id, label: s.label, build: build.code, changed: n } });
       await refresh();
     } catch (e) {
+      void logAdminAction({ action: "snapshot_restore", status: "failed", detail: { snapshot: s.id, error: e instanceof Error ? e.message : String(e) } });
       toast.error(e instanceof Error ? e.message : "Restore failed.");
     } finally {
       setBusy("");
