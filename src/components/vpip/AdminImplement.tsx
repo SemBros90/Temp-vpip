@@ -78,7 +78,35 @@ export function AdminImplement({ report, token, repo, base, tree, runAi, onRepor
       // 2–4. Branch → commit → pull request (never main).
       const res = await applyChangeSet(token, repo, base, cs);
       void logAdminAction({ action: "implement_pr", report_id: report.id, snapshot_id: snapRow.id, branch: cs.branch, commit_sha: res.commitSha, pr_number: res.prNumber, pr_url: res.prUrl, files: cs.changes.map((c) => c.path), detail: { base, approved_status: report.status } });
-...
+      const stats = changeStats(cs, orig);
+      const add = stats.reduce((n, s) => n + s.added, 0);
+      const rem = stats.reduce((n, s) => n + s.removed, 0);
+      const content = `# Implementation Report — ${cs.title}
+
+**Pull request:** [#${res.prNumber}](${res.prUrl}) · **Branch:** \`${cs.branch}\` → \`${base}\` (not merged)
+
+## Files Changed
+| op | file | + | − |
+|---|---|---|---|
+${stats.map((s) => `| ${s.op} | ${s.path} | ${s.added} | ${s.removed} |`).join("\n")}
+
+**Lines added:** ${add} · **Lines removed:** ${rem}
+
+## Build Impact
+Not built by Admin AI. Review the PR checks on GitHub before merging.
+
+## Recovery Plan
+- Before merge: "Undo this change" closes the PR and deletes the branch.
+- After merge: revert the PR on GitHub. Original files are stored in snapshot "${snapRow.title}".
+
+## Pull Request Summary
+${cs.summary}
+
+<!--admin-meta ${JSON.stringify({ ...res, branch: cs.branch, snapshot: snapRow.id })}-->`;
+      const { data: row } = await db.from("vpip_admin_ai_reports").insert({ kind: "implementation", title: `Implementation: ${cs.title}`, status: "PR open", content }).select("*").single();
+      if (row) onReport(row);
+      await onStatus(report, `Implemented (PR #${res.prNumber})`);
+      setCs(null);
       toast.success(`Pull request #${res.prNumber} opened`);
     } catch (e) {
       void logAdminAction({ action: "implement_pr", status: "failed", report_id: report.id, snapshot_id: snapRow.id, branch: cs.branch, files: cs.changes.map((c) => c.path), detail: { error: e instanceof Error ? e.message : String(e) } });
