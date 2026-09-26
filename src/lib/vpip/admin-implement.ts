@@ -14,7 +14,7 @@ async function gh<T>(token: string, path: string, init?: { method?: string; body
       Authorization: `Bearer ${token.trim()}`,
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
     },
-    body: init?.body ? JSON.stringify(init.body) : undefined,
+    body: init?.body ? JSON.stringify(init.body) : null,
   });
   const text = await res.text();
   if (!res.ok) {
