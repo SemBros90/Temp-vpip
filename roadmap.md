@@ -28,3 +28,8 @@
 - [ ] Phase 2: AI Message Center
 - [ ] Phase 3: Separate AI settings per AI (provider, model, temperature, tokens, system prompt)
 - [ ] Phase 4: Fill AI 2 gaps (extra report sections, runtime logs, Git status inputs)
+
+## Admin AI Final Accessibility (staged)
+- [x] Stage A: action log, GitHub tags/releases/commit+PR diffs, live read-only tests
+- [ ] Stage B: Message Center (AI1/AI2 <-> Admin AI), shared findings & recommendations boards
+- [ ] Stage C: Admin AI knowledge base + root-cause finder
