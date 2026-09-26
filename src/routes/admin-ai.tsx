@@ -117,12 +117,12 @@ function AdminAiPage() {
     void loadAll();
   }, [loadAll]);
 
-  async function saveSettings(next?: Partial<{ repo: string; branch: string; engine: Engine }>) {
+  async function saveSettings(next?: Partial<{ repo: string; branch: string; engine: Engine; token: string }>) {
     const { error } = await db.from("vpip_admin_ai_settings").upsert({
       id: "default",
       repo_full_name: (next?.repo ?? repo).trim(),
       branch: next?.branch ?? branch,
-      token,
+      token: next?.token ?? token,
       engine: next?.engine ?? engine,
       updated_at: new Date().toISOString(),
     });
@@ -144,7 +144,7 @@ function AdminAiPage() {
       setData(d);
       setBranch(b);
       setRepo(name);
-      await saveSettings({ repo: name, branch: b });
+      await saveSettings({ repo: name, branch: b, token: tk });
     } catch (e) {
       setData(null);
       setRepoError(e instanceof Error ? e.message : "Could not reach GitHub.");
