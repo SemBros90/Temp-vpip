@@ -88,7 +88,7 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
 
   async function restore(s: SnapRow): Promise<void> {
     const build = builds.find((b) => b.id === s.build_session_id);
-    if (!build) return toast.error("The build this snapshot belongs to no longer exists.");
+    if (!build) { toast.error("The build this snapshot belongs to no longer exists."); return; }
     if (!window.confirm(`Restore ${code.get(s.id)} "${s.label}" into build ${build.code}?\n\nFiles are copied back exactly as stored. The current files are snapshotted first so this can be undone.`)) return;
     setBusy("Restoring…");
     try {
