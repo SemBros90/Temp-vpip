@@ -6,6 +6,9 @@ import { AdminRecovery } from "@/components/vpip/AdminRecovery";
 import { AdminCodeSearch } from "@/components/vpip/AdminCodeSearch";
 import { AdminImplement } from "@/components/vpip/AdminImplement";
 import { AdminGithubHistory } from "@/components/vpip/AdminGithubHistory";
+import { AdminActionLog } from "@/components/vpip/AdminActionLog";
+import { AdminAiAccessibility } from "@/components/vpip/AdminAiAccessibility";
+import { AdminKnowledgeBase } from "@/components/vpip/AdminKnowledgeBase";
 import { logAdminAction, listAdminActions } from "@/lib/vpip/admin-log";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
@@ -56,7 +59,7 @@ export const Route = createFileRoute("/admin-ai")({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
 const LOVABLE_MODEL = "openai/gpt-6-astra";
-type Tab = "repository" | "recovery" | "inputs" | "chat" | "reports";
+type Tab = "repository" | "recovery" | "audit" | "resources" | "knowledge" | "inputs" | "chat" | "reports";
 type Engine = "lovable" | ProviderId;
 
 interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string }
@@ -395,13 +398,13 @@ function AdminAiPage() {
     >
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 gap-1 border-b border-border px-6 pt-2">
-          {(["repository", "recovery", "inputs", "chat", "reports"] as Tab[]).map((t) => (
+          {(["repository", "recovery", "audit", "resources", "knowledge", "inputs", "chat", "reports"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`rounded-t px-3 py-1.5 text-xs font-medium capitalize ${tab === t ? "bg-surface text-foreground border border-b-0 border-border" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {t === "recovery" ? "Snapshots & Recovery" : t === "inputs" ? "Inputs & Feedback" : t === "reports" ? "Improvement Reports" : t}
+              {t === "recovery" ? "Snapshots & Recovery" : t === "audit" ? "Action Log" : t === "resources" ? "AI Resources" : t === "knowledge" ? "Knowledge Base" : t === "inputs" ? "Inputs & Feedback" : t === "reports" ? "Improvement Reports" : t}
             </button>
           ))}
         </div>
@@ -473,7 +476,7 @@ function AdminAiPage() {
 
                   <AdminCodeSearch token={token} repo={repo} branch={branch} tree={data.tree} onOpen={(p) => void open(p)} onAsk={(md) => setInput(`${md}\n\nUsing this impact analysis, explain what breaks if this file is modified and the risk.`)} />
 
-                  <AdminGithubHistory token={token} repo={repo} onAsk={(md) => { setInput(md); setTab("chat"); }} />
+                  <AdminGithubHistory token={token} repo={repo} branch={branch} onAsk={(md) => { setInput(md); setTab("chat"); }} />
 
                   <div className="grid gap-4 lg:grid-cols-3">
                     <ListCard title="Recent commits" rows={data.commits.map((c) => `${c.sha.slice(0, 7)} · ${c.message.split("\n")[0]} — ${c.author}`)} />
@@ -548,6 +551,12 @@ function AdminAiPage() {
           ) : null}
 
           {tab === "recovery" ? <AdminRecovery runAi={runRecovery} streaming={stream !== null} /> : null}
+
+          {tab === "audit" ? <AdminActionLog /> : null}
+
+          {tab === "resources" ? <AdminAiAccessibility /> : null}
+
+          {tab === "knowledge" ? <AdminKnowledgeBase /> : null}
 
           {tab === "inputs" ? (
             <div className="grid gap-4 lg:grid-cols-3">
