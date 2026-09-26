@@ -6,7 +6,7 @@ import { AdminRecovery } from "@/components/vpip/AdminRecovery";
 import { AdminCodeSearch } from "@/components/vpip/AdminCodeSearch";
 import { AdminImplement } from "@/components/vpip/AdminImplement";
 import { AdminGithubHistory } from "@/components/vpip/AdminGithubHistory";
-import { logAdminAction } from "@/lib/vpip/admin-log";
+import { logAdminAction, listAdminActions } from "@/lib/vpip/admin-log";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,11 @@ import {
   compareBranches,
   loadRepo,
   readFile,
+  listTags,
+  listReleases,
+  getCommit,
+  getPull,
+  filesDiffMarkdown,
   REPORT_KINDS,
   reportInstruction,
   type AdminRepoData,
@@ -246,6 +251,23 @@ function AdminAiPage() {
           const c = await readFile(token, repo, branch, f.path).catch((e) => `[read failed: ${e instanceof Error ? e.message : e}]`);
           prompt += `\n\n### File read live from repository: ${f.path}\n\`\`\`\n${c.slice(0, 15000)}\n\`\`\``;
         }
+        // Live tool results so Admin AI answers from real reads, not assumptions.
+        const safe = async (label: string, fn: () => Promise<string>) => { try { return `### ${label}\n${await fn()}`; } catch (e) { return `### ${label}\nFAILED: ${e instanceof Error ? e.message : e}`; } };
+        const parts = await Promise.all([
+          safe("Tags (GET /tags)", async () => { const t = await listTags(token, repo); return t.length ? t.map((x) => `- ${x.name} ${x.sha.slice(0, 7)}`).join("\n") : "API returned [] — the repository has 0 tags."; }),
+          safe("Releases (GET /releases)", async () => { const r = await listReleases(token, repo); return r.length ? r.map((x) => `- ${x.name} (${x.tag}) ${x.published}`).join("\n") : "API returned [] — the repository has 0 releases."; }),
+          safe("Pull requests (GET /pulls?state=all)", async () => data.pulls.length ? data.pulls.map((p) => `- #${p.number} [${p.state}] ${p.title}`).join("\n") : "API returned [] — the repository has 0 pull requests, so no PR diff can be shown."),
+          safe(`Latest commit diff (GET /commits/${data.headSha.slice(0, 7)})`, async () => { const c = await getCommit(token, repo, data.headSha); return `${c.message.split("\n")[0]} · ${c.author} · +${c.stats?.additions ?? 0} −${c.stats?.deletions ?? 0}\n${filesDiffMarkdown(c.files, 6000)}`; }),
+          ...[...new Set(text.match(/\b[0-9a-f]{7,40}\b/g) ?? [])].filter((s) => s !== data.headSha).slice(0, 2).map((sha) => safe(`Commit diff ${sha}`, async () => { const c = await getCommit(token, repo, sha); return `${c.message.split("\n")[0]}\n${filesDiffMarkdown(c.files, 6000)}`; })),
+          ...[...new Set((text.match(/#(\d+)/g) ?? []).map((x) => Number(x.slice(1))))].slice(0, 2).map((n) => safe(`PR #${n} diff`, async () => { const p = await getPull(token, repo, n); return `${p.title} [${p.state}] ${p.head} → ${p.base}\n${filesDiffMarkdown(p.files, 6000)}`; })),
+          safe("Admin AI action log (latest 20, append-only table vpip_admin_ai_actions)", async () => { const a = await listAdminActions(20); return a.length ? a.map((x) => `- ${x.created_at} ${x.action} [${x.status}]${x.pr_number ? ` PR #${x.pr_number}` : ""}${x.branch ? ` ${x.branch}` : ""}`).join("\n") : "0 entries."; }),
+          safe("Filename search for words in the question", async () => {
+            const words = [...new Set(text.toLowerCase().match(/[a-z][\w.-]{3,}/g) ?? [])].slice(0, 8);
+            const hits = data.tree.filter((t) => t.type === "blob" && words.some((w) => t.path.toLowerCase().includes(w))).slice(0, 40);
+            return hits.length ? hits.map((h) => `- ${h.path}`).join("\n") : "no file names matched";
+          }),
+        ]);
+        prompt += `\n\n## Live tool results (executed just now)\n${parts.join("\n\n")}\n\nNote: full-text / symbol / import search runs in Repository tab → Code Search (reads every source file). Answer only from these results.`;
       }
       const full = await run(prompt, history);
       setMsgs((m) => [...m, { role: "assistant", content: full }]);
