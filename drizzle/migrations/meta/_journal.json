@@ -127,6 +127,13 @@
       "when": 1790355432377,
       "tag": "0017_ai1_reports_ai2_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790398467639,
+      "tag": "0018_admin_ai",
+      "breakpoints": true
     }
   ]
 }

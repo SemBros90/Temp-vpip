@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminAiRouteImport } from './routes/admin-ai'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as RuntimeAuditRouteImport } from './routes/runtime-audit'
 import { Route as RuntimeDashboardRouteImport } from './routes/runtime-dashboard'
@@ -53,6 +54,11 @@ import { Route as ProjectsProjectIdDiscussionsDiscussionIdRouteImport } from './
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAiRoute = AdminAiRouteImport.update({
+  id: '/admin-ai',
+  path: '/admin-ai',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntelligenceRoute = IntelligenceRouteImport.update({
@@ -271,6 +277,7 @@ const ProjectsProjectIdDiscussionsDiscussionIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin-ai': typeof AdminAiRoute
   '/intelligence': typeof IntelligenceRoute
   '/runtime-audit': typeof RuntimeAuditRoute
   '/runtime-dashboard': typeof RuntimeDashboardRoute
@@ -313,6 +320,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin-ai': typeof AdminAiRoute
   '/intelligence': typeof IntelligenceRoute
   '/runtime-audit': typeof RuntimeAuditRoute
   '/runtime-dashboard': typeof RuntimeDashboardRoute
@@ -355,6 +363,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin-ai': typeof AdminAiRoute
   '/intelligence': typeof IntelligenceRoute
   '/runtime-audit': typeof RuntimeAuditRoute
   '/runtime-dashboard': typeof RuntimeDashboardRoute
@@ -399,6 +408,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin-ai'
     | '/intelligence'
     | '/runtime-audit'
     | '/runtime-dashboard'
@@ -441,6 +451,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin-ai'
     | '/intelligence'
     | '/runtime-audit'
     | '/runtime-dashboard'
@@ -482,6 +493,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin-ai'
     | '/intelligence'
     | '/runtime-audit'
     | '/runtime-dashboard'
@@ -525,6 +537,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminAiRoute: typeof AdminAiRoute
   IntelligenceRoute: typeof IntelligenceRoute
   RuntimeAuditRoute: typeof RuntimeAuditRoute
   RuntimeDashboardRoute: typeof RuntimeDashboardRoute
@@ -550,6 +563,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-ai': {
+      id: '/admin-ai'
+      path: '/admin-ai'
+      fullPath: '/admin-ai'
+      preLoaderRoute: typeof AdminAiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/intelligence': {
@@ -889,6 +909,7 @@ const ProjectsProjectIdRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminAiRoute: AdminAiRoute,
   IntelligenceRoute: IntelligenceRoute,
   RuntimeAuditRoute: RuntimeAuditRoute,
   RuntimeDashboardRoute: RuntimeDashboardRoute,
