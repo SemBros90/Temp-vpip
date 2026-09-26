@@ -233,7 +233,7 @@ function AdminAiPage() {
           return { label, status: "FAIL" as const, error: error instanceof Error ? error.message : String(error) };
         }
       }));
-      setFileAudit(results);
+      setFileAudit(results as FileAuditItem[]);
     } finally {
       setAuditingFiles(false);
     }
@@ -479,7 +479,7 @@ function AdminAiPage() {
                         <>
                           <div className="flex items-center justify-between border-b border-border px-3 py-2">
                             <span className="truncate font-mono text-xs">{openFile.path}</span>
-                            <Button size="sm" variant="outline" disabled={openFile.kind === "binary"} onClick={() => openFile.content !== null && setPinned((p) => (p.some((x) => x.path === openFile.path) ? p.filter((x) => x.path !== openFile.path) : [...p, { path: openFile.path, content: openFile.content }]))}>
+                            <Button size="sm" variant="outline" disabled={openFile.kind === "binary"} onClick={() => { const c = openFile.content; if (c === null) return; setPinned((p) => (p.some((x) => x.path === openFile.path) ? p.filter((x) => x.path !== openFile.path) : [...p, { path: openFile.path, content: c }])); }}>
                               {pinned.some((p) => p.path === openFile.path) ? "Unpin" : "Pin for Admin AI"}
                             </Button>
                           </div>
