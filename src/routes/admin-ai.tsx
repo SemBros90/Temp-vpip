@@ -9,6 +9,7 @@ import { AdminGithubHistory } from "@/components/vpip/AdminGithubHistory";
 import { AdminActionLog } from "@/components/vpip/AdminActionLog";
 import { AdminAiAccessibility } from "@/components/vpip/AdminAiAccessibility";
 import { AdminKnowledgeBase } from "@/components/vpip/AdminKnowledgeBase";
+import { AdminRootCause } from "@/components/vpip/AdminRootCause";
 import { logAdminAction, listAdminActions } from "@/lib/vpip/admin-log";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,7 @@ export const Route = createFileRoute("/admin-ai")({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
 const LOVABLE_MODEL = "openai/gpt-6-astra";
-type Tab = "repository" | "recovery" | "audit" | "resources" | "knowledge" | "inputs" | "chat" | "reports";
+type Tab = "repository" | "recovery" | "audit" | "resources" | "knowledge" | "rootCause" | "inputs" | "chat" | "reports";
 type Engine = "lovable" | ProviderId;
 
 interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string }
@@ -398,13 +399,13 @@ function AdminAiPage() {
     >
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 gap-1 border-b border-border px-6 pt-2">
-          {(["repository", "recovery", "audit", "resources", "knowledge", "inputs", "chat", "reports"] as Tab[]).map((t) => (
+          {(["repository", "recovery", "audit", "resources", "knowledge", "rootCause", "inputs", "chat", "reports"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`rounded-t px-3 py-1.5 text-xs font-medium capitalize ${tab === t ? "bg-surface text-foreground border border-b-0 border-border" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {t === "recovery" ? "Snapshots & Recovery" : t === "audit" ? "Action Log" : t === "resources" ? "AI Resources" : t === "knowledge" ? "Knowledge Base" : t === "inputs" ? "Inputs & Feedback" : t === "reports" ? "Improvement Reports" : t}
+              {t === "recovery" ? "Snapshots & Recovery" : t === "audit" ? "Action Log" : t === "resources" ? "AI Resources" : t === "knowledge" ? "Knowledge Base" : t === "rootCause" ? "Root Cause" : t === "inputs" ? "Inputs & Feedback" : t === "reports" ? "Improvement Reports" : t}
             </button>
           ))}
         </div>
@@ -557,6 +558,8 @@ function AdminAiPage() {
           {tab === "resources" ? <AdminAiAccessibility /> : null}
 
           {tab === "knowledge" ? <AdminKnowledgeBase /> : null}
+
+          {tab === "rootCause" ? <AdminRootCause commits={data?.commits ?? []} branches={data?.branches ?? []} /> : null}
 
           {tab === "inputs" ? (
             <div className="grid gap-4 lg:grid-cols-3">
