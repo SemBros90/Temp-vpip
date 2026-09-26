@@ -30,7 +30,7 @@ export function AdminImplement({ report, token, repo, base, tree, runAi, onRepor
 
   if (report.kind === "implementation") {
     const m = report.content.match(META_RE);
-    const meta = m ? (JSON.parse(m[1]) as { prNumber: number; branch: string }) : null;
+    const meta = m ? (JSON.parse(m[1] ?? "{}") as { prNumber: number; branch: string }) : null;
     if (!meta || report.status === "Undone") return null;
     return (
       <Button size="sm" variant="outline" disabled={!!busy || !connected} onClick={async () => {
