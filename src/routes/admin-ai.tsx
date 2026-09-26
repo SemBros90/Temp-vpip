@@ -11,7 +11,7 @@ import { AdminAiAccessibility } from "@/components/vpip/AdminAiAccessibility";
 import { AdminKnowledgeBase } from "@/components/vpip/AdminKnowledgeBase";
 import { AdminRootCause } from "@/components/vpip/AdminRootCause";
 import { AdminAiControl } from "@/components/vpip/AdminAiControl";
-import { assertAdminAiAccess, type AdminModuleKey } from "@/lib/vpip/admin-ai-control";
+import { assertAdminAiAccess, getControlState, type AdminModuleKey } from "@/lib/vpip/admin-ai-control";
 import { logAdminAction, listAdminActions } from "@/lib/vpip/admin-log";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
@@ -76,6 +76,7 @@ interface FileAuditItem { label: string; status: "PASS" | "FAIL"; result?: Repos
 function AdminAiPage() {
   const { ws } = useVpip();
   const [tab, setTab] = useState<Tab>("control");
+  const [chatEnabled, setChatEnabled] = useState(false);
   const [repo, setRepo] = useState("");
   const [branch, setBranch] = useState("");
   const [token, setToken] = useState("");
@@ -260,6 +261,19 @@ function AdminAiPage() {
     [repo, branch, data, repoError, configFiles, snapshots, pinned, ai1, ai2, feedback, evidence],
   );
 
+  useEffect(() => {
+    const refreshAccess = async () => {
+      try {
+        const state = await getControlState();
+        const module = state.modules.find((entry) => entry.module_key === tab);
+        setChatEnabled(Boolean(state.control.enabled && !state.control.emergency_off && module?.enabled));
+      } catch { setChatEnabled(false); }
+    };
+    void refreshAccess();
+    const timer = window.setInterval(() => void refreshAccess(), 5000);
+    return () => window.clearInterval(timer);
+  }, [tab]);
+
   async function run(userText: string, history: Msg[], kind?: ReportKind, extra?: { instruction: string; context: string }) {
     // This check is the client-side gate; the route metadata below creates a durable
     // request record. No Admin screen calls a provider until Control authorizes it.
@@ -289,10 +303,10 @@ function AdminAiPage() {
 
   async function send() {
     const text = input.trim();
-    if (!text || stream !== null) return;
+    if (!text || stream !== null || !chatEnabled) return;
     setInput("");
     const history = msgs.slice(-20);
-    setMsgs((m) => [...m, { role: "user", content: text }]);
+    setMsgs((m) => [...m, { role: "user", content: text, created_at: new Date().toISOString() }]);
     await db.from("vpip_admin_ai_messages").insert({ role: "user", content: text });
     try {
       // Read any repository files the user names so the answer uses real contents.
@@ -323,7 +337,7 @@ function AdminAiPage() {
         prompt += `\n\n## Live tool results (executed just now)\n${parts.join("\n\n")}\n\nNote: full-text / symbol / import search runs in Repository tab → Code Search (reads every source file). Answer only from these results.`;
       }
       const full = await run(prompt, history);
-      setMsgs((m) => [...m, { role: "assistant", content: full }]);
+      setMsgs((m) => [...m, { role: "assistant", content: full, created_at: new Date().toISOString() }]);
       await db.from("vpip_admin_ai_messages").insert({ role: "assistant", content: full, engine: engineLabel, model: resolve().cfg.model });
     } catch (e) {
       if ((e as Error).name !== "AbortError") toast.error(e instanceof Error ? e.message : "Admin AI failed.");
@@ -433,18 +447,20 @@ function AdminAiPage() {
                 {msgs.map((m, i) => (
                   <div key={m.id ?? i} className={m.role === "user" ? "ml-auto max-w-[80%] rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground" : "text-sm"}>
                     {m.role === "user" ? m.content : <Markdown source={m.content} />}
+                    {m.created_at ? <div className={`mt-1 text-[10px] ${m.role === "user" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{new Date(m.created_at).toLocaleString()}</div> : null}
                   </div>
                 ))}
                 {stream !== null ? <div className="text-sm"><Markdown source={stream || "Thinking…"} /></div> : null}
               </div>
+              {!chatEnabled ? <div className="mt-4 rounded border border-destructive/40 bg-destructive/5 p-2 text-xs text-muted-foreground">Admin AI Control has this module disconnected or Emergency AI OFF is active. Chat is read-only until it is connected in Admin AI Control.</div> : null}
               <div className="sticky bottom-0 mt-4 flex gap-2 bg-background pt-2">
-                <Textarea rows={2} value={input} placeholder="Message Admin AI" onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => {
+                <Textarea rows={2} value={input} disabled={!chatEnabled} placeholder={chatEnabled ? "Message Admin AI" : "Admin AI Control has blocked chat"} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     void send();
                   }
                 }} />
-                <Button onClick={() => void send()} disabled={stream !== null || !input.trim()}>Send</Button>
+                <Button onClick={() => void send()} disabled={!chatEnabled || stream !== null || !input.trim()}>Send</Button>
               </div>
             </div>
 </div>) : null}
