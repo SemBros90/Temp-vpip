@@ -107,7 +107,7 @@ export function AdminHomeHealth() {
   const refresh = () => void load(true);
   const cardProps = (id: string, summary: string) => ({ onOpen: () => setOpen(id), onRefresh: refresh, onCopy: () => copy(summary), loading });
   const Empty = ({ text }: { text: string }) => <div role="status" className="rounded border border-dashed border-border p-4 text-center text-xs text-muted-foreground">{text}</div>;
-  const riskSummary = `Risks — Critical ${riskCounts.Critical}, High ${riskCounts.High}, Medium ${riskCounts.Medium}, Low ${riskCounts.Low}`;
+  const riskSummary = `Risks — Critical ${riskCounts["Critical"]}, High ${riskCounts["High"]}, Medium ${riskCounts["Medium"]}, Low ${riskCounts["Low"]}`;
   const details: Record<string, { title: string; desc: string; body: ReactNode }> = {
     repo: { title: "Repository Health Score", desc: `Score ${repoScore} (${levelOf(repoScore)})`, body: <Kv rows={[["Build success", `${buildRate}%`], ["Validation success", `${valRate}%`], ["Open failures", openFails.length], ["Runtime errors", rtErr.length], ["Audit findings", auditFindings]]} /> },
     risk: { title: "Risk list", desc: riskSummary, body: risks.length ? <ul className="max-h-[60vh] space-y-1 overflow-auto">{[...risks].sort((a, b) => (a.at < b.at ? 1 : -1)).map((r, i) => <li key={i} className="flex justify-between gap-2 rounded border border-border px-2 py-1 text-xs"><span>{bucket(r.sev)} <span className="text-muted-foreground">({r.sev})</span></span><span className="font-mono text-muted-foreground">{fmt(r.at)}</span></li>)}</ul> : <Empty text="No risks detected." /> },
