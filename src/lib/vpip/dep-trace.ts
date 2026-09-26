@@ -86,8 +86,8 @@ export function traceImpact(g: DepGraph, index: Map<string, string>, target: str
   const all = [...seen.keys()];
   const withSelf = [target, ...all];
   const content = index.get(target) ?? "";
-  const exports = [...content.matchAll(/^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function|const|let|class|interface|type|enum)\s+(\w+)/gm)].map((m) => m[1]);
-  const dbObjects = [...new Set(withSelf.flatMap((p) => [...(index.get(p) ?? "").matchAll(/\.from\(\s*["'`](\w+)["'`]\s*\)|\.rpc\(\s*["'`](\w+)["'`]/g)].map((m) => m[1] ?? m[2])))].filter(Boolean);
+  const exports = [...content.matchAll(/^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function|const|let|class|interface|type|enum)\s+(\w+)/gm)].map((m) => m[1]!);
+  const dbObjects = [...new Set(withSelf.flatMap((p) => [...(index.get(p) ?? "").matchAll(/\.from\(\s*["'`](\w+)["'`]\s*\)|\.rpc\(\s*["'`](\w+)["'`]/g)].map((m) => (m[1] ?? m[2])!)))].filter(Boolean);
   const routes = withSelf.filter(isRoute);
   const apis = withSelf.filter(isApi);
   const components = all.filter(isComponent);
