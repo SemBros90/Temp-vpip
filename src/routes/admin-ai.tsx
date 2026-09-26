@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/lib/vpip/markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { streamChat } from "@/lib/vpip/ai";
+import { AdminHomeHealth } from "@/components/vpip/AdminHomeHealth";
 import { useVpip } from "@/lib/vpip/store";
 import { PROVIDER_LABEL, type ProviderConfig, type ProviderId } from "@/lib/vpip/types";
 import {
@@ -407,6 +408,7 @@ function AdminAiPage() {
         </nav>
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
 {tab === "home" ? (<div className="space-y-4">
+              <AdminHomeHealth />
               <div className="grid gap-2 rounded-md border border-border bg-surface p-4 md:grid-cols-[1fr_1fr_auto]">
                 <Input placeholder="VPIP repository, e.g. SemBros90/vpip" value={repo} onChange={(e) => setRepo(e.target.value)} />
                 <Input type="password" placeholder="GitHub token (read access; optional for public repos)" value={token} onChange={(e) => setToken(e.target.value)} onBlur={() => void saveSettings({ token })} />
