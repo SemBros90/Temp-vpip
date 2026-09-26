@@ -17,6 +17,7 @@
 
 ## Three-AI collaboration (VPIP feature request)
 - [x] Phase 1: Admin AI page (separate page: GitHub read-only repo access, AI1/AI2 inputs, feedback, chat, improvement reports with approval)
+- [x] Admin AI Phase 2: snapshots before every AI 1 run, history, stable releases, compare, exact restore, failure trace + recovery
 - [ ] Phase 2: AI Message Center
 - [ ] Phase 3: Separate AI settings per AI (provider, model, temperature, tokens, system prompt)
 - [ ] Phase 4: Fill AI 2 gaps (extra report sections, runtime logs, Git status inputs)

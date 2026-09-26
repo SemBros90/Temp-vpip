@@ -115,6 +115,7 @@ import {
   validateBuild,
 } from "@/lib/vpip/orchestration";
 import { completeChat } from "@/lib/vpip/ai";
+import { createSnapshot as createAdminSnapshot } from "@/lib/vpip/safe-repair";
 import {
   BUILD_STATUSES,
   CODER_CHAT_MODES,
@@ -573,6 +574,21 @@ function CoderPage() {
       .join("\n");
 
     const userContent = `[${mode}] ${text}`;
+    /* Admin AI recovery layer: no AI 1 run without a snapshot of the exact files first. */
+    try {
+      await createAdminSnapshot({
+        projectId: session.projectId,
+        buildSessionId: session.id,
+        repositoryId: session.repositoryId ?? undefined,
+        label: `Before: ${text.slice(0, 80)}`,
+        isZero: false,
+        files: realFiles.map((f) => ({ path: f.path, content: f.content })),
+        metadata: { kind: "pre-ai1", prompt: text, mode, provider, model: cfg.model, commitSha: session.lastCommitSha ?? null, buildCode: session.code },
+      });
+    } catch (e) {
+      toast.error(`Snapshot failed, so the coding run was not started: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
     actions.appendCoderTurn(session.id, { role: "user", content: userContent, trace });
     setInput("");
     setBusy(true);
