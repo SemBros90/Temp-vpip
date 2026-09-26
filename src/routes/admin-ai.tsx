@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { AdminRecovery } from "@/components/vpip/AdminRecovery";
 import { AdminCodeSearch } from "@/components/vpip/AdminCodeSearch";
+import { AdminImplement } from "@/components/vpip/AdminImplement";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -271,7 +272,7 @@ function AdminAiPage() {
   return (
     <Shell
       title="Admin AI"
-      subtitle="Improves VPIP itself — advisory only. Nothing is committed, merged or deployed without your approval."
+      subtitle="Improves VPIP itself. Changes only after your approval — on a separate branch with a pull request, never main."
       scroll={false}
       actions={
         <div className="flex items-center gap-2">
@@ -515,13 +516,22 @@ function AdminAiPage() {
                           {openReport.kind === "proposal" ? (
                             <>
                               <Button size="sm" variant="outline" onClick={() => void setStatus(openReport, "Revision requested")}>Revise</Button>
-                              <Button size="sm" disabled title="Arrives in Stage 2: snapshot, then a separate branch and pull request">Implement</Button>
                             </>
                           ) : null}
                         </div>
                       </div>
                       <Markdown source={openReport.content} />
-                      <div className="label-mono mt-4">Approving only records your decision. Nothing is applied yet; in Stage 2, approved changes go to a separate branch and pull request — never straight to main.</div>
+                      <AdminImplement
+                        report={openReport}
+                        token={token}
+                        repo={repo}
+                        base={branch || data?.defaultBranch || ""}
+                        tree={(data?.tree ?? []).filter((t) => t.type === "blob").map((t) => t.path)}
+                        runAi={(instruction) => run("", [], undefined, { instruction, context: "" })}
+                        onReport={(row) => setReports((r) => [row, ...r])}
+                        onStatus={setStatus}
+                      />
+                      <div className="label-mono mt-4">Approved changes are applied only after you confirm: snapshot first, then a separate branch and pull request — never straight to main, never merged automatically.</div>
                     </>
                   ) : <div className="text-sm text-muted-foreground">Generate or pick a report.</div>}
                 </div>

@@ -1,6 +1,6 @@
 /**
  * Admin AI (AI 3) — VPIP platform improvement layer.
- * Read-only on GitHub: it never commits, pushes, merges or deploys.
+ * Reads GitHub; writes only via admin-implement.ts (approved, branch + PR, never main).
  * Proposed pull requests are text only and need human approval.
  */
 const API = "https://api.github.com";
