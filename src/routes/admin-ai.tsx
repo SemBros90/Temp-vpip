@@ -81,6 +81,7 @@ function AdminAiPage() {
   const abort = useRef<AbortController | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [openReport, setOpenReport] = useState<Report | null>(null);
+  const [evidence, setEvidence] = useState<Record<string, unknown[]>>({});
 
   const loadAll = useCallback(async () => {
     const [s, m, r, f, a1, a2, sn] = await Promise.all([
@@ -89,9 +90,38 @@ function AdminAiPage() {
       db.from("vpip_admin_ai_reports").select("*").order("created_at", { ascending: false }).limit(100),
       db.from("vpip_admin_ai_feedback").select("*").order("created_at", { ascending: false }).limit(100),
       db.from("vpip_ai1_reports").select("created_at,report,project_id").order("created_at", { ascending: false }).limit(15),
-      db.from("vpip_ai2_audits").select("created_at,kind,score,report,project_id").order("created_at", { ascending: false }).limit(15),
+      db.from("vpip_ai2_audits").select("created_at,kind,score,report,project_id,corrective_prompt,findings").order("created_at", { ascending: false }).limit(15),
       db.from("vpip_repo_snapshots").select("label,created_at,project_id,files").order("created_at", { ascending: false }).limit(3),
     ]);
+    // Existing VPIP stores that were implemented but not wired into Admin AI.
+    const q = (t: string, cols: string, order = "created_at", n = 15) => db.from(t).select(cols).order(order, { ascending: false }).limit(n);
+    const [ai2m, builds, rt, fails, repair, act, prompts, outs, intel, val, repoRep] = await Promise.all([
+      q("vpip_ai2_messages", "created_at,role,content,project_id", "created_at", 20),
+      q("vpip_build_records", "created_at,build_code,status,summary,provider,model,project_id,logs"),
+      q("vpip_runtime_audit", "created_at,action,status,error,project_id", "created_at", 30),
+      q("vpip_failures", "created_at,code,title,root_cause,resolution,status,project_id"),
+      q("vpip_repair_audit", "created_at,action,risk,note,project_id"),
+      q("vpip_activity", "created_at,subject_label,action,note,project_id", "created_at", 20),
+      q("vpip_prompts", "created_at,title,kind,version,status,markdown,project_id", "created_at", 10),
+      q("vpip_outcomes", "created_at,code,subject_label,result,lessons,project_id", "created_at", 10),
+      q("vpip_intelligence", "created_at,code,pattern_type,title,description", "created_at", 10),
+      q("vpip_validation_runs", "created_at,metrics", "created_at", 5),
+      q("vpip_repo_reports", "created_at,branch,health,unsupported,project_id", "created_at", 5),
+    ]);
+    setEvidence({
+      "AI 2 chat messages": ai2m.data ?? [],
+      "AI 2 corrective prompts": ((a2.data ?? []) as Array<{ created_at: string; corrective_prompt?: string; project_id: string }>).filter((x) => x.corrective_prompt?.trim()).map((x) => ({ created_at: x.created_at, project_id: x.project_id, corrective_prompt: x.corrective_prompt })),
+      "AI 1 prompts": prompts.data ?? [],
+      "Build results": ((builds.data ?? []) as Array<Record<string, unknown>>).map((b) => ({ ...b, logs: Array.isArray(b.logs) ? (b.logs as unknown[]).slice(-5) : [] })),
+      "Runtime & error events": rt.data ?? [],
+      "Failure records": fails.data ?? [],
+      "Safe Repair audit": repair.data ?? [],
+      "Activity log": act.data ?? [],
+      "Outcomes & lessons": outs.data ?? [],
+      "Cross-project intelligence": intel.data ?? [],
+      "Validation runs": val.data ?? [],
+      "Repository import reports": repoRep.data ?? [],
+    });
     setSnapshots(((sn.data ?? []) as Array<{ label: string; created_at: string; project_id: string; files: unknown }>).map((x) => ({
       label: x.label,
       created_at: x.created_at,
