@@ -7,11 +7,37 @@ import { buildGraph, traceImpact, impactMarkdown, type Impact } from "@/lib/vpip
 /** Read-only code search over the connected GitHub repository (Admin AI Stage 1). */
 const TEXT_RE = /\.(tsx?|jsx?|mjs|cjs|json|sql|css|md|toml|ya?ml|html)$/i;
 const SKIP_RE = /(^|\/)(node_modules|dist|build|\.git|\.lovable)\/|routeTree\.gen\.ts$|lock(file)?\.|bun\.lockb?$/;
-type Mode = "text" | "references" | "imports" | "exports" | "definitions" | "routes" | "filenames";
+type Mode = "text" | "references" | "imports" | "exports" | "definitions" | "functions" | "components" | "routes" | "tables" | "filenames" | "regex";
 interface Hit { path: string; line: number; text: string }
+interface SearchAudit { query: string; status: "PASS" | "FAIL"; hits: Hit[]; error?: string }
 
 function esc(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function makeSearchRegex(mode: Mode, term: string) {
+  if (mode === "regex") return new RegExp(term, "i");
+  if (mode === "references") return new RegExp(`\\b${esc(term)}\\b`);
+  if (mode === "imports") return new RegExp(`^\\s*import\\b.*(\\b${esc(term)}\\b|["'][^"']*${esc(term)}[^"']*["'])`);
+  if (mode === "definitions") return new RegExp(`^\\s*(export\\s+)?(default\\s+)?(async\\s+)?(function|const|let|class|interface|type|enum)\\s+${esc(term)}\\b`);
+  if (mode === "functions") return new RegExp(`^\\s*(export\\s+)?(default\\s+)?(async\\s+)?function\\s+${esc(term)}\\b|^\\s*(export\\s+)?(const|let)\\s+${esc(term)}\\s*=\\s*(async\\s*)?\\(`);
+  if (mode === "components") return new RegExp(`^\\s*(export\\s+)?(default\\s+)?(function|const)\\s+${esc(term)}\\b`);
+  if (mode === "routes") return new RegExp(`createFileRoute\\(\\s*["'][^"']*${esc(term)}[^"']*["']`, "i");
+  if (mode === "tables") return new RegExp(`\\b(create\\s+table|from|join|into|update)\\s+[^\\n]*${esc(term)}\\b`, "i");
+  if (mode === "exports") return new RegExp(`^\\s*export\\b.*\\b${esc(term)}\\b`);
+  return new RegExp(esc(term), "i");
+}
+
+function searchRepository(index: Map<string, string>, tree: TreeEntry[], mode: Mode, term: string): Hit[] {
+  if (mode === "filenames") return tree.filter((entry) => entry.type === "blob" && entry.path.toLowerCase().includes(term.toLowerCase())).slice(0, 1000).map((entry) => ({ path: entry.path, line: 1, text: "(file name match)" }));
+  const re = makeSearchRegex(mode, term);
+  const out: Hit[] = [];
+  for (const [path, content] of index) {
+    content.split("\n").forEach((line, index) => {
+      if (out.length < 1000 && re.test(line)) out.push({ path, line: index + 1, text: line.trim().slice(0, 200) });
+    });
+  }
+  return out;
 }
 
 export function AdminCodeSearch(props: {
@@ -29,6 +55,8 @@ export function AdminCodeSearch(props: {
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<Mode>("text");
   const [hits, setHits] = useState<Hit[] | null>(null);
+  const [searchError, setSearchError] = useState("");
+  const [audit, setAudit] = useState<SearchAudit[]>([]);
 
   const candidates = useMemo(
     () => props.tree.filter((t) => t.type === "blob" && TEXT_RE.test(t.path) && !SKIP_RE.test(t.path) && (t.size ?? 0) < 300_000),
@@ -59,26 +87,25 @@ export function AdminCodeSearch(props: {
   function search() {
     const term = q.trim();
     if (!term) return;
-    const re =
-      mode === "references" ? new RegExp(`\\b${esc(term)}\\b`) :
-      mode === "imports" ? new RegExp(`^\\s*import\\b.*(\\b${esc(term)}\\b|["'][^"']*${esc(term)}[^"']*["'])`) :
-      mode === "definitions" ? new RegExp(`^\\s*(export\\s+)?(default\\s+)?(async\\s+)?(function|const|let|class|interface|type|enum)\\s+${esc(term)}\\b`) :
-      mode === "routes" ? new RegExp(`createFileRoute\\(\\s*["'][^"']*${esc(term)}[^"']*["']`, "i") :
-      mode === "exports" ? new RegExp(`^\\s*export\\b.*\\b${esc(term)}\\b`) :
-      new RegExp(esc(term), "i");
-    const out: Hit[] = [];
-    if (mode === "filenames") {
-      for (const t of props.tree) if (t.type === "blob" && t.path.toLowerCase().includes(term.toLowerCase())) out.push({ path: t.path, line: 1, text: "(file name match)" });
-      setHits(out.slice(0, 1000));
-      return;
+    try {
+      setSearchError("");
+      setHits(searchRepository(index, props.tree, mode, term));
+    } catch (error) {
+      setHits([]);
+      setSearchError(error instanceof Error ? error.message : "Invalid search expression.");
     }
-    for (const [path, content] of index) {
-      const lines = content.split("\n");
-      lines.forEach((l, i) => {
-        if (out.length < 1000 && re.test(l)) out.push({ path, line: i + 1, text: l.trim().slice(0, 200) });
-      });
-    }
-    setHits(out);
+  }
+
+  function runSearchAudit() {
+    const queries = ["createFileRoute", "admin-ai", "buildContext", "useEffect"];
+    setAudit(queries.map((query) => {
+      try {
+        const found = searchRepository(index, props.tree, "text", query);
+        return { query, status: found.length ? "PASS" : "FAIL", hits: found, error: found.length ? undefined : "No live repository-content matches were returned." };
+      } catch (error) {
+        return { query, status: "FAIL", hits: [], error: error instanceof Error ? error.message : String(error) };
+      }
+    }));
   }
 
   const graph = useMemo(() => (index.size ? buildGraph(index) : null), [index]);
@@ -107,12 +134,17 @@ export function AdminCodeSearch(props: {
           <option value="imports">Find imports</option>
           <option value="exports">Find exports</option>
           <option value="definitions">Find symbol definitions</option>
+          <option value="functions">Find functions</option>
+          <option value="components">Find components</option>
           <option value="routes">Find route definitions</option>
+          <option value="tables">Find database tables</option>
           <option value="filenames">Search file names</option>
+          <option value="regex">Regex search</option>
         </select>
         <Input className="max-w-md" placeholder={ready ? "Name or text to find" : "Read source files first"} value={q} disabled={!ready} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} />
         <Button size="sm" disabled={!ready || !q.trim()} onClick={search}>Search</Button>
       </div>
+      {searchError ? <div className="text-xs text-destructive">Search failed: {searchError}</div> : null}
       {hits ? (
         <div className="max-h-[420px] overflow-y-auto font-mono text-[11px]">
           <div className="label-mono mb-1">{hits.length}{hits.length >= 1000 ? "+" : ""} matches in {new Set(hits.map((h) => h.path)).size} files</div>
@@ -123,6 +155,14 @@ export function AdminCodeSearch(props: {
           ))}
         </div>
       ) : null}
+      <div className="space-y-2 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center gap-2"><div className="text-sm font-semibold">Phase 3 — Search Audit</div><Button size="sm" variant="outline" className="ml-auto" disabled={!ready} onClick={runSearchAudit}>Run live search audit</Button></div>
+        <p className="text-xs text-muted-foreground">Runs the required queries against the repository files read into this VPIP search index. Results are not manually supplied.</p>
+        {audit.map((result) => <details key={result.query} className="rounded border border-border p-2 text-xs" open>
+          <summary className="cursor-pointer"><b className={result.status === "PASS" ? "text-primary" : "text-destructive"}>{result.status}</b> · Query: <code>{result.query}</code> · {result.hits.length}{result.hits.length >= 1000 ? "+" : ""} matches · {new Set(result.hits.map((hit) => hit.path)).size} files</summary>
+          {result.error ? <div className="mt-1 text-destructive">Evidence: {result.error}</div> : <div className="mt-1 max-h-48 overflow-auto font-mono text-[11px]">{result.hits.map((hit, index) => <button key={index} onClick={() => props.onOpen(hit.path)} className="block text-left hover:text-primary">{hit.path}:{hit.line} · {hit.text}</button>)}</div>}
+        </details>)}
+      </div>
       <div className="space-y-2 border-t border-border pt-3">
         <div className="text-sm font-semibold">Dependency Tracing — "If I change this file, what breaks?"</div>
         <div className="flex flex-wrap gap-2">
