@@ -36,8 +36,8 @@ export function AdminImplement({ report, token, repo, base, tree, runAi, onRepor
       <Button size="sm" variant="outline" disabled={!!busy || !connected} onClick={async () => {
         if (!confirm(`Undo this Admin AI change? This closes PR #${meta.prNumber} and deletes branch ${meta.branch}. Main is not touched.`)) return;
         setBusy("undo");
-        try { await undoChange(token, repo, meta.prNumber, meta.branch); await onStatus(report, "Undone"); toast.success("Change undone"); }
-        catch (e) { toast.error(e instanceof Error ? e.message : "Undo failed"); }
+        try { await undoChange(token, repo, meta.prNumber, meta.branch); await logAdminAction({ action: "rollback_pr", report_id: report.id, branch: meta.branch, pr_number: meta.prNumber }); await onStatus(report, "Undone"); toast.success("Change undone"); }
+        catch (e) { void logAdminAction({ action: "rollback_pr", status: "failed", report_id: report.id, branch: meta.branch, pr_number: meta.prNumber, detail: { error: e instanceof Error ? e.message : String(e) } }); toast.error(e instanceof Error ? e.message : "Undo failed"); }
         finally { setBusy(""); }
       }}>Undo this change</Button>
     );
@@ -68,44 +68,20 @@ export function AdminImplement({ report, token, repo, base, tree, runAi, onRepor
       .select("*").single();
     if (snapErr || !snapRow) {
       setBusy("");
+      void logAdminAction({ action: "snapshot_create", status: "failed", report_id: report.id, files: Object.keys(orig), detail: { error: snapErr?.message } });
       toast.error("Implementation blocked because snapshot creation failed.");
       return;
     }
+    void logAdminAction({ action: "snapshot_create", report_id: report.id, snapshot_id: snapRow.id, files: Object.keys(orig), detail: { base } });
     onReport(snapRow);
     try {
       // 2–4. Branch → commit → pull request (never main).
       const res = await applyChangeSet(token, repo, base, cs);
-      const stats = changeStats(cs, orig);
-      const add = stats.reduce((n, s) => n + s.added, 0);
-      const rem = stats.reduce((n, s) => n + s.removed, 0);
-      const content = `# Implementation Report — ${cs.title}
-
-**Pull request:** [#${res.prNumber}](${res.prUrl}) · **Branch:** \`${cs.branch}\` → \`${base}\` (not merged)
-
-## Files Changed
-| op | file | + | − |
-|---|---|---|---|
-${stats.map((s) => `| ${s.op} | ${s.path} | ${s.added} | ${s.removed} |`).join("\n")}
-
-**Lines added:** ${add} · **Lines removed:** ${rem}
-
-## Build Impact
-Not built by Admin AI. Review the PR checks on GitHub before merging.
-
-## Recovery Plan
-- Before merge: "Undo this change" closes the PR and deletes the branch.
-- After merge: revert the PR on GitHub. Original files are stored in snapshot "${snapRow.title}".
-
-## Pull Request Summary
-${cs.summary}
-
-<!--admin-meta ${JSON.stringify({ ...res, branch: cs.branch, snapshot: snapRow.id })}-->`;
-      const { data: row } = await db.from("vpip_admin_ai_reports").insert({ kind: "implementation", title: `Implementation: ${cs.title}`, status: "PR open", content }).select("*").single();
-      if (row) onReport(row);
-      await onStatus(report, `Implemented (PR #${res.prNumber})`);
-      setCs(null);
+      void logAdminAction({ action: "implement_pr", report_id: report.id, snapshot_id: snapRow.id, branch: cs.branch, commit_sha: res.commitSha, pr_number: res.prNumber, pr_url: res.prUrl, files: cs.changes.map((c) => c.path), detail: { base, approved_status: report.status } });
+...
       toast.success(`Pull request #${res.prNumber} opened`);
     } catch (e) {
+      void logAdminAction({ action: "implement_pr", status: "failed", report_id: report.id, snapshot_id: snapRow.id, branch: cs.branch, files: cs.changes.map((c) => c.path), detail: { error: e instanceof Error ? e.message : String(e) } });
       toast.error(e instanceof Error ? e.message : "Implementation failed");
     } finally { setBusy(""); }
   }
