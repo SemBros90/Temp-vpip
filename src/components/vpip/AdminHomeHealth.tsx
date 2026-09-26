@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
-type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Row = any;
+type Data = { builds: Row[]; val: Row[]; fails: Row[]; rt: Row[]; audits: Row[]; ai1: Row[]; snaps: Row[]; know: Row[]; reports: Row[]; repairs: Row[] };
 type Level = "Healthy" | "Warning" | "Critical";
 
 const levelOf = (s: number): Level => (s >= 75 ? "Healthy" : s >= 50 ? "Warning" : "Critical");
@@ -22,7 +24,7 @@ const ratio = (ok: number, total: number) => (total ? Math.round((ok / total) * 
 const arr = (v: unknown) => (Array.isArray(v) ? v : []);
 
 export function AdminHomeHealth() {
-  const [d, setD] = useState<Record<string, Row[]> | null>(null);
+  const [d, setD] = useState<Data | null>(null);
   useEffect(() => {
     const q = (t: string, cols: string, n = 50) => db.from(t).select(cols).order("created_at", { ascending: false }).limit(n);
     void Promise.all([
@@ -38,7 +40,7 @@ export function AdminHomeHealth() {
       q("vpip_repair_proposals", "created_at,risk,problem,status", 50),
     ]).then((r) => {
       const k = ["builds", "val", "fails", "rt", "audits", "ai1", "snaps", "know", "reports", "repairs"];
-      setD(Object.fromEntries(k.map((key, i) => [key, (r[i]?.data ?? []) as Row[]])));
+      setD(Object.fromEntries(k.map((key, i) => [key, (r[i]?.data ?? []) as Row[]])) as Data);
     });
   }, []);
   if (!d) return <div className="text-xs text-muted-foreground">Loading health data…</div>;
