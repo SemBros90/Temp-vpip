@@ -27,6 +27,7 @@ async function gh<T>(token: string, path: string): Promise<T> {
 }
 
 export interface TreeEntry { path: string; type: "blob" | "tree"; sha?: string; size?: number }
+export interface TreeEntry { path: string; type: "blob" | "tree"; size?: number }
 export interface AdminBranch { name: string; sha: string; headCommittedAt: string }
 export interface AdminRepoMetadata {
   owner: string;
@@ -57,6 +58,7 @@ export interface VisibilityAuditItem {
   status: "PASS" | "FAIL";
   evidence: string;
   source: string;
+
 }
 
 export interface RepositoryFileRead {
@@ -100,6 +102,7 @@ export async function readRepositoryFile(token: string, repo: string, ref: strin
   const bytes = decodeBase64(content);
   if (isBinary(bytes)) return { path: file.path, size: file.size, sha: file.sha, kind: "binary", content: null, source };
   return { path: file.path, size: file.size, sha: file.sha, kind: "text", content: new TextDecoder().decode(bytes), source };
+
 }
 
 /** Root build/config files Admin AI always reads when a repository is connected. */

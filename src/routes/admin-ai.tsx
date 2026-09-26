@@ -29,7 +29,9 @@ import {
   getPull,
   filesDiffMarkdown,
   repositoryVisibilityAudit,
+
   readRepositoryFile,
+
   REPORT_KINDS,
   reportInstruction,
   type AdminRepoData,
@@ -491,6 +493,7 @@ function AdminAiPage() {
                   </div>
 
                   <div className="rounded-md border border-border bg-surface p-4">
+
                     <div className="flex flex-wrap items-center gap-2">
                       <div>
                         <div className="text-sm font-semibold">Phase 2 — File Access Audit</div>
@@ -502,6 +505,7 @@ function AdminAiPage() {
                   </div>
 
                   <div className="rounded-md border border-border bg-surface p-4">
+
                     <div className="mb-2 text-sm font-semibold">Compare branches</div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       {(["base", "head"] as const).map((k) => (
