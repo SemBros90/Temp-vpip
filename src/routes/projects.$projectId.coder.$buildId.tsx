@@ -577,7 +577,7 @@ function CoderPage() {
     /* Admin AI recovery layer: no AI 1 run without a snapshot of the exact files first. */
     try {
       await createAdminSnapshot({
-        projectId: p.project.id,
+        projectId: session.projectId,
         buildSessionId: session.id,
         repositoryId: session.repositoryId ?? undefined,
         label: `Before: ${text.slice(0, 80)}`,
