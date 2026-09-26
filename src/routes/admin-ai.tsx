@@ -112,7 +112,7 @@ function AdminAiPage() {
       "AI 2 chat messages": ai2m.data ?? [],
       "AI 2 corrective prompts": ((a2.data ?? []) as Array<{ created_at: string; corrective_prompt?: string; project_id: string }>).filter((x) => x.corrective_prompt?.trim()).map((x) => ({ created_at: x.created_at, project_id: x.project_id, corrective_prompt: x.corrective_prompt })),
       "AI 1 prompts": prompts.data ?? [],
-      "Build results": ((builds.data ?? []) as Array<Record<string, unknown>>).map((b) => ({ ...b, logs: Array.isArray(b.logs) ? (b.logs as unknown[]).slice(-5) : [] })),
+      "Build results": ((builds.data ?? []) as Array<Record<string, unknown>>).map((b) => ({ ...b, logs: Array.isArray(b["logs"]) ? (b["logs"] as unknown[]).slice(-5) : [] })),
       "Runtime & error events": rt.data ?? [],
       "Failure records": fails.data ?? [],
       "Safe Repair audit": repair.data ?? [],
