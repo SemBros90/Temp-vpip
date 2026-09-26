@@ -19,6 +19,8 @@ export interface SnapMeta {
   stable?: string | null;
   failed?: boolean;
   tags?: string[];
+  snapshotManifest?: { algorithm: string; fileCount: number; treeHash: string; files: Array<{ path: string; bytes: number; sha256: string }> };
+  snapshotVerification?: { verified: boolean; verifiedAt: string; reason?: string };
   [k: string]: unknown;
 }
 export interface SnapRow {

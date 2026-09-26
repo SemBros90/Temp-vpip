@@ -118,6 +118,21 @@ export interface RepoSnapshot {
   createdAt: string;
 }
 
+/** A deterministic, content-addressed description of a stored snapshot. */
+export interface SnapshotManifest {
+  algorithm: "SHA-256";
+  fileCount: number;
+  treeHash: string;
+  files: Array<{ path: string; bytes: number; sha256: string }>;
+}
+
+export interface SnapshotVerification {
+  verified: boolean;
+  verifiedAt: string;
+  reason?: string;
+  manifest?: SnapshotManifest;
+}
+
 export interface AuditEntry {
   id: string;
   projectId: string;
@@ -137,6 +152,32 @@ export const LOW_CONFIDENCE = 70;
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 const nowIso = () => new Date().toISOString();
+
+const encoder = new TextEncoder();
+
+function hex(bytes: ArrayBuffer): string {
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function sha256(value: string): Promise<string> {
+  return hex(await crypto.subtle.digest("SHA-256", encoder.encode(value)));
+}
+
+/**
+ * Produces a canonical manifest independent of file ordering. Paths must be
+ * unique: allowing duplicates would make an exact restore ambiguous.
+ */
+export async function createSnapshotManifest(files: AnalyzerFile[]): Promise<SnapshotManifest> {
+  const paths = new Set<string>();
+  const entries: SnapshotManifest["files"] = [];
+  for (const file of files) {
+    if (!file.path || paths.has(file.path)) throw new Error(`Snapshot contains an invalid or duplicate path: ${file.path || "(empty)"}`);
+    paths.add(file.path);
+    entries.push({ path: file.path, bytes: encoder.encode(file.content).byteLength, sha256: await sha256(file.content) });
+  }
+  entries.sort((a, b) => a.path.localeCompare(b.path));
+  return { algorithm: "SHA-256", fileCount: entries.length, treeHash: await sha256(JSON.stringify(entries)), files: entries };
+}
 
 /* ------------------------------------------------ Stage 1: ingestion audit */
 
@@ -637,7 +678,14 @@ export async function listAudit(projectId: string): Promise<AuditEntry[]> {
 }
 
 export async function createSnapshot(s: Omit<RepoSnapshot, "id" | "createdAt" | "tree">): Promise<RepoSnapshot> {
-  const snap: RepoSnapshot = { ...s, id: uid(), createdAt: nowIso(), tree: s.files.map((f) => f.path).sort() };
+  const manifest = await createSnapshotManifest(s.files);
+  const snap: RepoSnapshot = {
+    ...s,
+    id: uid(),
+    createdAt: nowIso(),
+    tree: manifest.files.map((file) => file.path),
+    metadata: { ...s.metadata, snapshotManifest: manifest },
+  };
   await withFkRetry(() =>
     db.from(T.snap).insert({
       id: snap.id,
@@ -652,7 +700,41 @@ export async function createSnapshot(s: Omit<RepoSnapshot, "id" | "createdAt" | 
       created_at: snap.createdAt,
     }),
   );
+  const verification = await verifySnapshot(snap.id);
+  if (!verification.verified) throw new Error(`Snapshot verification failed: ${verification.reason ?? "unknown integrity error"}`);
   return snap;
+}
+
+/**
+ * Re-reads the persisted files and verifies them against the manifest captured
+ * at creation time. A snapshot without a manifest is intentionally rejected:
+ * it predates integrity protection and cannot prove exact restoration.
+ */
+export async function verifySnapshot(id: string): Promise<SnapshotVerification> {
+  const { data, error } = await db.from(T.snap).select("files,tree,metadata").eq("id", id).single();
+  if (error) throw new Error(error.message);
+  const metadata = (data?.metadata ?? {}) as Record<string, unknown>;
+  const expected = metadata.snapshotManifest as SnapshotManifest | undefined;
+  let verification: SnapshotVerification;
+  try {
+    if (!expected || expected.algorithm !== "SHA-256" || !Array.isArray(expected.files)) {
+      throw new Error("This legacy snapshot has no integrity manifest and cannot be verified.");
+    }
+    const actual = await createSnapshotManifest((data?.files ?? []) as AnalyzerFile[]);
+    const manifestMatches = expected.fileCount === actual.fileCount
+      && expected.treeHash === actual.treeHash
+      && expected.files.length === actual.files.length
+      && expected.files.every((file, index) => file.path === actual.files[index]?.path && file.bytes === actual.files[index]?.bytes && file.sha256 === actual.files[index]?.sha256);
+    const storedTree = Array.isArray(data?.tree) ? [...data.tree].sort() : [];
+    if (!manifestMatches) throw new Error("Stored file content does not match the snapshot manifest.");
+    if (JSON.stringify(storedTree) !== JSON.stringify(actual.files.map((file) => file.path))) throw new Error("Stored tree does not match the snapshot manifest.");
+    verification = { verified: true, verifiedAt: nowIso(), manifest: actual };
+  } catch (cause) {
+    verification = { verified: false, verifiedAt: nowIso(), reason: cause instanceof Error ? cause.message : "Unknown integrity error" };
+  }
+  const { error: updateError } = await db.from(T.snap).update({ metadata: { ...metadata, snapshotVerification: verification } }).eq("id", id);
+  if (updateError) throw new Error(updateError.message);
+  return verification;
 }
 
 export async function listSnapshots(projectId: string): Promise<Array<Omit<RepoSnapshot, "files">>> {
