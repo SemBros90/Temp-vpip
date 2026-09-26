@@ -19,6 +19,8 @@ import { Markdown } from "@/lib/vpip/markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { streamChat } from "@/lib/vpip/ai";
 import { AdminHomeHealth } from "@/components/vpip/AdminHomeHealth";
+import { AdminRepoInsights } from "@/components/vpip/AdminRepoInsights";
+import { classifyFile } from "@/lib/vpip/repo-map";
 import { useVpip } from "@/lib/vpip/store";
 import { PROVIDER_LABEL, type ProviderConfig, type ProviderId } from "@/lib/vpip/types";
 import {
@@ -471,7 +473,7 @@ function AdminAiPage() {
                       <div className="max-h-[520px] overflow-y-auto p-1 font-mono text-[11px]">
                         {files.map((f) => (
                           <button key={f.path} onClick={() => void open(f.path)} className={`block w-full truncate rounded px-2 py-0.5 text-left hover:bg-muted ${openFile?.path === f.path ? "bg-muted" : ""}`}>
-                            {pinned.some((p) => p.path === f.path) ? "● " : ""}{f.path}
+                            <span className="mr-1 inline-block w-[74px] text-[9px] uppercase text-muted-foreground">{classifyFile(f.path)}</span>{pinned.some((p) => p.path === f.path) ? "● " : ""}{f.path}
                           </button>
                         ))}
                       </div>
@@ -498,6 +500,7 @@ function AdminAiPage() {
                     <ListCard title="Pull requests" rows={data.pulls.map((p) => `#${p.number} [${p.state}] ${p.title} — ${p.user}`)} />
                     <ListCard title="Issues" rows={data.issues.map((i) => `#${i.number} [${i.state}] ${i.title} — ${i.user}`)} />
                   </div>
+                  <AdminRepoInsights token={token} repo={repo} branch={branch} tree={data.tree} selected={openFile?.path ?? null} onOpen={(p) => void open(p)} />
                   <div className="rounded-md border border-border bg-surface p-4">
                     <div className="mb-1 text-sm font-semibold">Phase 1 — Repository Visibility Audit</div>
                     <p className="mb-3 text-xs text-muted-foreground">Evidence is generated only from the live GitHub responses from the most recent connection. A truncated tree fails exact file and folder verification.</p>
