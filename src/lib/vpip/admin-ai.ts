@@ -86,7 +86,43 @@ export async function compareBranches(token: string, repo: string, base: string,
   return r;
 }
 
+export interface GhFile { filename: string; status: string; additions: number; deletions: number; patch?: string; previous_filename?: string }
+
+export async function listTags(token: string, repo: string) {
+  const r = await gh<Array<{ name: string; commit: { sha: string } }>>(token, `/repos/${repo}/tags?per_page=100`);
+  return r.map((t) => ({ name: t.name, sha: t.commit.sha }));
+}
+
+export async function listReleases(token: string, repo: string) {
+  const r = await gh<Array<{ id: number; tag_name: string; name: string | null; draft: boolean; prerelease: boolean; published_at: string | null; html_url: string; body: string | null }>>(token, `/repos/${repo}/releases?per_page=50`);
+  return r.map((x) => ({ id: x.id, tag: x.tag_name, name: x.name ?? x.tag_name, draft: x.draft, prerelease: x.prerelease, published: x.published_at ?? "", url: x.html_url, body: x.body ?? "" }));
+}
+
+export async function getCommit(token: string, repo: string, sha: string) {
+  const c = await gh<{ sha: string; html_url: string; commit: { message: string; author?: { name?: string; date?: string } }; parents: Array<{ sha: string }>; stats?: { additions: number; deletions: number; total: number }; files?: GhFile[] }>(token, `/repos/${repo}/commits/${encodeURIComponent(sha)}`);
+  return { sha: c.sha, url: c.html_url, message: c.commit.message, author: c.commit.author?.name ?? "unknown", date: c.commit.author?.date ?? "", parents: c.parents.map((p) => p.sha), stats: c.stats, files: c.files ?? [] };
+}
+
+export async function getPull(token: string, repo: string, n: number) {
+  const [p, files] = await Promise.all([
+    gh<{ number: number; title: string; state: string; merged: boolean; body: string | null; html_url: string; head: { ref: string; sha: string }; base: { ref: string }; user: { login: string }; additions: number; deletions: number; changed_files: number }>(token, `/repos/${repo}/pulls/${n}`),
+    gh<GhFile[]>(token, `/repos/${repo}/pulls/${n}/files?per_page=100`),
+  ]);
+  return { number: p.number, title: p.title, state: p.merged ? "merged" : p.state, body: p.body ?? "", url: p.html_url, head: p.head.ref, headSha: p.head.sha, base: p.base.ref, user: p.user.login, additions: p.additions, deletions: p.deletions, changedFiles: p.changed_files, files };
+}
+
+/** Markdown view of a file list with patches, for display and for Admin AI chat context. */
+export function filesDiffMarkdown(files: GhFile[], max = 20000) {
+  let out = "";
+  for (const f of files) {
+    out += `\n### ${f.status} ${f.previous_filename ? `${f.previous_filename} → ` : ""}${f.filename} (+${f.additions} −${f.deletions})\n\`\`\`diff\n${f.patch ?? "(binary or too large — no patch from GitHub)"}\n\`\`\`\n`;
+    if (out.length > max) return `${out.slice(0, max)}\n…[truncated]`;
+  }
+  return out;
+}
+
 export const REPORT_KINDS = {
+
   improvement: "VPIP Improvement Report",
   changes: "Recommended Platform Changes",
   pr: "Proposed Pull Request",

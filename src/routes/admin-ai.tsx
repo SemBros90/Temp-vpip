@@ -5,6 +5,8 @@ import { Shell } from "@/components/vpip/Shell";
 import { AdminRecovery } from "@/components/vpip/AdminRecovery";
 import { AdminCodeSearch } from "@/components/vpip/AdminCodeSearch";
 import { AdminImplement } from "@/components/vpip/AdminImplement";
+import { AdminGithubHistory } from "@/components/vpip/AdminGithubHistory";
+import { logAdminAction } from "@/lib/vpip/admin-log";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -288,6 +290,7 @@ function AdminAiPage() {
 
   async function setStatus(r: Report, status: string) {
     await db.from("vpip_admin_ai_reports").update({ status }).eq("id", r.id);
+    void logAdminAction({ action: `report_status:${status}`, report_id: r.id, detail: { kind: r.kind, title: r.title, from: r.status } });
     const upd = { ...r, status };
     setReports((all) => all.map((x) => (x.id === r.id ? upd : x)));
     setOpenReport(upd);
@@ -406,6 +409,8 @@ function AdminAiPage() {
                   </div>
 
                   <AdminCodeSearch token={token} repo={repo} branch={branch} tree={data.tree} onOpen={(p) => void open(p)} onAsk={(md) => setInput(`${md}\n\nUsing this impact analysis, explain what breaks if this file is modified and the risk.`)} />
+
+                  <AdminGithubHistory token={token} repo={repo} onAsk={(md) => { setInput(md); setTab("chat"); }} />
 
                   <div className="grid gap-4 lg:grid-cols-3">
                     <ListCard title="Recent commits" rows={data.commits.map((c) => `${c.sha.slice(0, 7)} · ${c.message.split("\n")[0]} — ${c.author}`)} />

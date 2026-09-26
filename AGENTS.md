@@ -13,3 +13,4 @@
 - "lovable" engine in /api/ai/chat routes to the Lovable AI Gateway Responses API with LOVABLE_API_KEY; why: works without user provider keys.
 - Admin AI (src/routes/admin-ai.tsx, src/lib/vpip/admin-ai.ts) may only change VPIP after explicit approval, and only via snapshot → separate branch → PR; never writes to main, merges or deploys by itself; why: VPIP upgrade request (full repository administration) with main-branch protection.
 - Admin AI recovery (src/lib/vpip/admin-recovery.ts, AdminRecovery.tsx) reuses vpip_repo_snapshots with labels in metadata; AI 1 send() refuses to run if the pre-run snapshot fails; why: deterministic exact-file restore, human-approved only.
+- Admin AI action log (vpip_admin_ai_actions, src/lib/vpip/admin-log.ts) is append-only: insert + select only, no update/delete; why: audit trail must be tamper-resistant.

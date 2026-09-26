@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { readFile } from "@/lib/vpip/admin-ai";
 import { affectedPaths, applyChangeSet, changeSetInstruction, changeStats, parseChangeSet, undoChange, type ChangeSet } from "@/lib/vpip/admin-implement";
+import { logAdminAction } from "@/lib/vpip/admin-log";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
@@ -36,8 +37,8 @@ export function AdminImplement({ report, token, repo, base, tree, runAi, onRepor
       <Button size="sm" variant="outline" disabled={!!busy || !connected} onClick={async () => {
         if (!confirm(`Undo this Admin AI change? This closes PR #${meta.prNumber} and deletes branch ${meta.branch}. Main is not touched.`)) return;
         setBusy("undo");
-        try { await undoChange(token, repo, meta.prNumber, meta.branch); await onStatus(report, "Undone"); toast.success("Change undone"); }
-        catch (e) { toast.error(e instanceof Error ? e.message : "Undo failed"); }
+        try { await undoChange(token, repo, meta.prNumber, meta.branch); await logAdminAction({ action: "rollback_pr", report_id: report.id, branch: meta.branch, pr_number: meta.prNumber }); await onStatus(report, "Undone"); toast.success("Change undone"); }
+        catch (e) { void logAdminAction({ action: "rollback_pr", status: "failed", report_id: report.id, branch: meta.branch, pr_number: meta.prNumber, detail: { error: e instanceof Error ? e.message : String(e) } }); toast.error(e instanceof Error ? e.message : "Undo failed"); }
         finally { setBusy(""); }
       }}>Undo this change</Button>
     );
@@ -68,13 +69,16 @@ export function AdminImplement({ report, token, repo, base, tree, runAi, onRepor
       .select("*").single();
     if (snapErr || !snapRow) {
       setBusy("");
+      void logAdminAction({ action: "snapshot_create", status: "failed", report_id: report.id, files: Object.keys(orig), detail: { error: snapErr?.message } });
       toast.error("Implementation blocked because snapshot creation failed.");
       return;
     }
+    void logAdminAction({ action: "snapshot_create", report_id: report.id, snapshot_id: snapRow.id, files: Object.keys(orig), detail: { base } });
     onReport(snapRow);
     try {
       // 2–4. Branch → commit → pull request (never main).
       const res = await applyChangeSet(token, repo, base, cs);
+      void logAdminAction({ action: "implement_pr", report_id: report.id, snapshot_id: snapRow.id, branch: cs.branch, commit_sha: res.commitSha, pr_number: res.prNumber, pr_url: res.prUrl, files: cs.changes.map((c) => c.path), detail: { base, approved_status: report.status } });
       const stats = changeStats(cs, orig);
       const add = stats.reduce((n, s) => n + s.added, 0);
       const rem = stats.reduce((n, s) => n + s.removed, 0);
@@ -106,6 +110,7 @@ ${cs.summary}
       setCs(null);
       toast.success(`Pull request #${res.prNumber} opened`);
     } catch (e) {
+      void logAdminAction({ action: "implement_pr", status: "failed", report_id: report.id, snapshot_id: snapRow.id, branch: cs.branch, files: cs.changes.map((c) => c.path), detail: { error: e instanceof Error ? e.message : String(e) } });
       toast.error(e instanceof Error ? e.message : "Implementation failed");
     } finally { setBusy(""); }
   }
