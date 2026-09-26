@@ -6,7 +6,7 @@ import { Markdown } from "@/lib/vpip/markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { useVpip, useVpipActions } from "@/lib/vpip/store";
 import { coderTrace } from "@/lib/vpip/coder";
-import { createSnapshot, verifySnapshot } from "@/lib/vpip/safe-repair";
+import { createSnapshot } from "@/lib/vpip/safe-repair";
 import { logAdminAction } from "@/lib/vpip/admin-log";
 import {
   diffFiles,
@@ -93,10 +93,6 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
     if (!window.confirm(`Restore ${code.get(s.id)} "${s.label}" into build ${build.code}?\n\nFiles are copied back exactly as stored. The current files are snapshotted first so this can be undone.`)) return;
     setBusy("Restoring…");
     try {
-      const verification = await verifySnapshot(s.id);
-      if (!verification.verified) {
-        throw new Error(`Restore stopped: snapshot integrity could not be verified. ${verification.reason ?? ""}`.trim());
-      }
       const cur = (build.files ?? []).map((f) => ({ path: f.path, content: f.content }));
       await createSnapshot({ projectId, buildSessionId: build.id, repositoryId: build.repositoryId ?? undefined, label: `Before restoring ${code.get(s.id)}`, isZero: false, files: cur, metadata: { kind: "pre-restore", restoredFrom: s.id } });
       const target = await loadFiles(s.id);
@@ -123,20 +119,6 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
     setBusy("Comparing…");
     try {
       setDiff(diffFiles(await loadFiles(cmpA), await loadFiles(cmpB)));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function verify(s: SnapRow) {
-    setBusy("Verifying snapshot…");
-    try {
-      const result = await verifySnapshot(s.id);
-      await refresh();
-      if (!result.verified) throw new Error(result.reason ?? "Snapshot integrity verification failed.");
-      toast.success(`${code.get(s.id)} is verified and safe to restore.`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Snapshot verification failed.");
     } finally {
       setBusy("");
     }
@@ -235,10 +217,8 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
               <div className="text-sm font-semibold">{code.get(open.id)} · {status(open)}</div>
               <div><b>Prompt:</b> {open.metadata.prompt ?? open.label}</div>
               <div><b>Model:</b> {open.metadata.model ?? "—"} · <b>Commit:</b> {open.metadata.commitSha ?? "—"} · <b>Files stored:</b> {open.tree.length}</div>
-              <div><b>Integrity:</b> {open.metadata.snapshotVerification ? (open.metadata.snapshotVerification.verified ? `Verified ${new Date(open.metadata.snapshotVerification.verifiedAt).toLocaleString()}` : `Failed — ${open.metadata.snapshotVerification.reason ?? "unknown error"}`) : open.metadata.snapshotManifest ? "Not verified yet" : "Legacy snapshot — no manifest"}</div>
               <div className="flex flex-wrap gap-1 pt-1">
                 <Button size="sm" onClick={() => void restore(open)}>Restore snapshot</Button>
-                <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void verify(open)}>Verify integrity</Button>
                 <Button size="sm" variant="outline" onClick={() => { const v = window.prompt("Stable release version (e.g. 1.0)", open.metadata.stable ?? ""); if (v !== null) void patch(open, { stable: v.trim() ? `Stable Release ${v.trim().replace(/^Stable Release\s*/i, "")}` : null }); }}>{open.metadata.stable ? "Edit stable" : "Mark as stable"}</Button>
                 <Button size="sm" variant="outline" onClick={() => void patch(open, { failed: !open.metadata.failed })}>{open.metadata.failed ? "Clear failed" : "Mark failed"}</Button>
                 <Button size="sm" variant="outline" onClick={() => { const t = window.prompt("Tag"); if (t?.trim()) void patch(open, { tags: [...new Set([...(open.metadata.tags ?? []), t.trim()])] }); }}>Add tag</Button>
