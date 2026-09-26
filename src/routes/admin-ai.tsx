@@ -318,7 +318,7 @@ function AdminAiPage() {
                 <Input type="password" placeholder="GitHub token (read access; optional for public repos)" value={token} onChange={(e) => setToken(e.target.value)} />
                 <Button onClick={() => void connect()} disabled={loadingRepo}>{loadingRepo ? "Connecting…" : data ? "Reload" : "Connect"}</Button>
                 {repoError ? <div className="text-xs text-destructive md:col-span-3">{repoError}</div> : null}
-                <div className="label-mono md:col-span-3">Read-only access: tree, files, branches, commits, pull requests, issues. Admin AI never writes to GitHub.</div>
+                <div className="label-mono md:col-span-3">Read-only access: tree, files, branches, commits, pull requests, issues. Admin AI never writes to GitHub on its own.</div>
               </div>
 
               <div className="grid gap-2 rounded-md border border-border bg-surface p-4 text-xs sm:grid-cols-3 lg:grid-cols-6">
