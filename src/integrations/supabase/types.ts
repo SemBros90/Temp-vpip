@@ -64,6 +64,51 @@ export type Database = {
           },
         ]
       }
+      vpip_admin_ai_actions: {
+        Row: {
+          action: string
+          branch: string | null
+          commit_sha: string | null
+          created_at: string
+          detail: Json
+          files: Json
+          id: string
+          pr_number: number | null
+          pr_url: string | null
+          report_id: string | null
+          snapshot_id: string | null
+          status: string
+        }
+        Insert: {
+          action: string
+          branch?: string | null
+          commit_sha?: string | null
+          created_at?: string
+          detail?: Json
+          files?: Json
+          id?: string
+          pr_number?: number | null
+          pr_url?: string | null
+          report_id?: string | null
+          snapshot_id?: string | null
+          status?: string
+        }
+        Update: {
+          action?: string
+          branch?: string | null
+          commit_sha?: string | null
+          created_at?: string
+          detail?: Json
+          files?: Json
+          id?: string
+          pr_number?: number | null
+          pr_url?: string | null
+          report_id?: string | null
+          snapshot_id?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       vpip_admin_ai_feedback: {
         Row: {
           content: string
