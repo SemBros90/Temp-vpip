@@ -2439,6 +2439,45 @@ export type Database = {
           },
         ]
       }
+      vpip_search_history: {
+        Row: {
+          branch: string
+          created_at: string
+          duration_ms: number
+          files_matched: number
+          id: string
+          repository: string
+          result_count: number
+          search_type: string
+          term: string
+          user_label: string
+        }
+        Insert: {
+          branch?: string
+          created_at?: string
+          duration_ms?: number
+          files_matched?: number
+          id?: string
+          repository?: string
+          result_count?: number
+          search_type: string
+          term: string
+          user_label?: string
+        }
+        Update: {
+          branch?: string
+          created_at?: string
+          duration_ms?: number
+          files_matched?: number
+          id?: string
+          repository?: string
+          result_count?: number
+          search_type?: string
+          term?: string
+          user_label?: string
+        }
+        Relationships: []
+      }
       vpip_settings: {
         Row: {
           author: string
