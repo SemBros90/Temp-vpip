@@ -71,6 +71,12 @@ function sseFrame(text: string) {
   return `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`;
 }
 
+function streamText(frame: string) {
+  const match = frame.match(/^data:\s*(.+)$/m);
+  if (!match || match[1] === "[DONE]") return "";
+  try { return (JSON.parse(match[1]) as { choices?: Array<{ delta?: { content?: string } }> }).choices?.[0]?.delta?.content ?? ""; } catch { return ""; }
+}
+
 /** Re-shapes Anthropic's SSE stream into the chunk shape the app already reads. */
 function anthropicToOpenAiStream(body: ReadableStream<Uint8Array>) {
   const decoder = new TextDecoder();
@@ -146,6 +152,21 @@ export const Route = createFileRoute("/api/ai/chat")({
         const body = (await request.json().catch(() => ({}))) as Body;
         const adminModule = request.headers.get("X-VPIP-Admin-Module");
         const started = Date.now();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let controlDb: any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let execution: any;
+        let providerTokens: number | null = null;
+        const recordAction = async (action: string, status: string, detail: Record<string, unknown>) => {
+          if (controlDb) await controlDb.from("vpip_admin_ai_actions").insert({ action, status, files: [], detail: { ...detail, actor: request.headers.get("X-VPIP-Admin-Actor") ?? "Platform owner" } });
+        };
+        const finishExecution = async (status: string, responseText: string) => {
+          if (!execution || !controlDb) return;
+          const duration = Date.now() - started;
+          await controlDb.from("vpip_admin_ai_request_history").update({ status, response_ms: duration, response_size: responseText.length, token_count: providerTokens }).eq("id", execution.id);
+          await controlDb.from("vpip_admin_ai_response_history").insert({ request_id: execution.id, origin_module: adminModule, response_summary: responseText.slice(0, 500) || null, duration_ms: duration, status });
+          await recordAction(status === "completed" ? "admin_ai_response_received" : "admin_ai_response_failed", status, { module: adminModule, request_id: execution.id, duration_ms: duration, response_size: responseText.length });
+        };
         // Admin calls cannot bypass the Control registry. Other product AI flows
         // intentionally remain independent of this Admin-only policy boundary.
         if (adminModule) {
@@ -153,7 +174,7 @@ export const Route = createFileRoute("/api/ai/chat")({
           // Migrations are deployed independently of generated client database types.
           // Keep the route compatible while the generated types catch up.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const controlDb = supabaseAdmin as unknown as { from: (table: string) => any };
+          controlDb = supabaseAdmin as unknown as { from: (table: string) => any };
           const [{ data: control }, { data: module }] = await Promise.all([
             controlDb.from("vpip_admin_ai_control").select("enabled,emergency_off,provider,model").eq("id", "default").maybeSingle(),
             controlDb.from("vpip_admin_ai_modules").select("enabled,access_level").eq("module_key", adminModule).maybeSingle(),
@@ -161,15 +182,21 @@ export const Route = createFileRoute("/api/ai/chat")({
           const allowed = control?.enabled && !control.emergency_off && module?.enabled && module.access_level !== "disconnected";
           if (!allowed) return json({ error: "Admin AI Control has disconnected this module or activated the emergency kill switch." }, 403);
           if (control.provider !== body.provider || control.model !== body.model) return json({ error: "Request provider/model does not match Admin AI Control configuration." }, 403);
-          await controlDb.from("vpip_admin_ai_routes").insert({ origin_module: adminModule, actor: request.headers.get("X-VPIP-Admin-Actor") ?? "Platform owner", provider: body.provider, model: body.model, status: "started", prompt_preview: body.messages?.at(-1)?.content?.slice(0, 500) ?? null, response_ms: Date.now() - started, token_count: 0 });
+          const prompt = body.messages?.at(-1)?.content ?? "";
+          const { data, error } = await controlDb.from("vpip_admin_ai_request_history").insert({ origin_module: adminModule, actor: request.headers.get("X-VPIP-Admin-Actor") ?? "Platform owner", provider: body.provider, model: body.model, status: "started", prompt_preview: prompt.slice(0, 500), prompt_size: prompt.length }).select("id").single();
+          if (error) return json({ error: "Admin AI Control could not record this request." }, 503);
+          execution = data;
+          await recordAction("admin_ai_prompt_executed", "started", { module: adminModule, request_id: execution.id, provider: body.provider, model: body.model, prompt_size: prompt.length });
         }
         const provider = body.provider;
         if (!provider || !(provider in PROVIDERS)) {
+          await finishExecution("failed", "Unknown AI engine.");
           return json({ error: "Unknown AI engine." }, 400);
         }
         const conf = PROVIDERS[provider];
         const key = body.apiKey?.trim() || process.env[conf.env];
         if (!key) {
+          await finishExecution("failed", "Provider key is not configured.");
           return json(
             {
               error: `No ${conf.label} API key is configured. Add one in Settings, or ask for ${conf.env} to be stored on the server.`,
@@ -178,6 +205,7 @@ export const Route = createFileRoute("/api/ai/chat")({
           );
         }
         if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) {
+          await finishExecution("failed", "Invalid AI request.");
           return json({ error: "A model and at least one message are required." }, 400);
         }
 
@@ -237,6 +265,7 @@ export const Route = createFileRoute("/api/ai/chat")({
             signal: request.signal,
           });
         } catch (err) {
+          await finishExecution("failed", err instanceof Error ? err.message : "Provider could not be reached.");
           return json(
             { error: err instanceof Error ? err.message : `${conf.label} could not be reached.` },
             502,
@@ -269,6 +298,7 @@ export const Route = createFileRoute("/api/ai/chat")({
           // Keep the provider's client-side status (4xx) so it isn't reported as a server crash.
           const status =
             upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502;
+          await finishExecution("failed", message);
           return json({ error: message }, status);
         }
 
@@ -276,34 +306,45 @@ export const Route = createFileRoute("/api/ai/chat")({
           if (anthropic) {
             const data = (await upstream.json()) as {
               content?: Array<{ text?: string }>;
+              usage?: { input_tokens?: number; output_tokens?: number };
             };
-            return json({
-              content: (data.content ?? []).map((c) => c.text ?? "").join(""),
-            });
+            providerTokens = (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0) || null; const content = (data.content ?? []).map((c) => c.text ?? "").join("");
+            await finishExecution("completed", content); return json({ content });
           }
           if (responses) {
             const data = (await upstream.json()) as {
               output?: Array<{ content?: Array<{ text?: string }> }>;
+              usage?: { total_tokens?: number };
             };
-            return json({
-              content: (data.output ?? [])
+            providerTokens = data.usage?.total_tokens ?? null;
+            const content = (data.output ?? [])
                 .flatMap((o) => o.content ?? [])
                 .map((c) => c.text ?? "")
-                .join(""),
-            });
+                .join("");
+            await finishExecution("completed", content); return json({ content });
           }
           const data = (await upstream.json()) as {
             choices?: Array<{ message?: { content?: string } }>;
+            usage?: { total_tokens?: number };
           };
-          return json({ content: data.choices?.[0]?.message?.content ?? "" });
+          providerTokens = data.usage?.total_tokens ?? null;
+          const content = data.choices?.[0]?.message?.content ?? "";
+          await finishExecution("completed", content); return json({ content });
         }
 
+        const [providerBody, telemetryBody] = upstream.body.tee();
+        const telemetry = telemetryBody.pipeTo(new WritableStream<Uint8Array>({
+          write(chunk) { const raw = new TextDecoder().decode(chunk); const matches = [...raw.matchAll(/"total_tokens"\s*:\s*(\d+)/g)]; if (matches.length) providerTokens = Number(matches.at(-1)?.[1]); },
+        }));
+        const normalized = anthropic ? anthropicToOpenAiStream(providerBody) : responses ? responsesToOpenAiStream(providerBody) : providerBody;
+        const decoder = new TextDecoder(); let streamedText = ""; let streamBuffer = "";
+        const recorded = normalized.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+          transform(chunk, controller) { streamBuffer += decoder.decode(chunk, { stream: true }); const frames = streamBuffer.split("\n\n"); streamBuffer = frames.pop() ?? ""; streamedText += frames.map(streamText).join(""); controller.enqueue(chunk); },
+          async flush() { streamBuffer += decoder.decode(); streamedText += streamText(streamBuffer); await telemetry; await finishExecution("completed", streamedText); },
+        }));
+
         return new Response(
-          anthropic
-            ? anthropicToOpenAiStream(upstream.body)
-            : responses
-              ? responsesToOpenAiStream(upstream.body)
-              : upstream.body,
+          recorded,
           {
             headers: {
               "Content-Type": "text/event-stream",

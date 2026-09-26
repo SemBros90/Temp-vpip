@@ -19,16 +19,17 @@ export const ACCESS_LABEL: Record<AccessLevel, string> = { disconnected: "Discon
 export interface ControlState { enabled: boolean; emergency_off: boolean; provider: string; model: string }
 export interface ModuleState { module_key: AdminModuleKey; enabled: boolean; access_level: AccessLevel; updated_at?: string }
 
-export async function getControlState(): Promise<{ control: ControlState; modules: ModuleState[]; routes: any[] }> {
-  const [controlResult, moduleResult, routeResult] = await Promise.all([
+export async function getControlState(): Promise<{ control: ControlState; modules: ModuleState[]; requests: any[]; responses: any[] }> {
+  const [controlResult, moduleResult, requestResult, responseResult] = await Promise.all([
     db.from("vpip_admin_ai_control").select("*").eq("id", "default").maybeSingle(),
     db.from("vpip_admin_ai_modules").select("*").order("module_key"),
-    db.from("vpip_admin_ai_routes").select("*").order("created_at", { ascending: false }).limit(100),
+    db.from("vpip_admin_ai_request_history").select("*").order("created_at", { ascending: false }).limit(100),
+    db.from("vpip_admin_ai_response_history").select("*").order("created_at", { ascending: false }).limit(100),
   ]);
   const control = controlResult.data ?? { enabled: false, emergency_off: false, provider: "lovable", model: "openai/gpt-6-astra" };
   const loaded = new Map((moduleResult.data ?? []).map((row: ModuleState) => [row.module_key, row]));
   const modules = ADMIN_MODULES.map(([module_key]) => loaded.get(module_key) ?? { module_key, enabled: false, access_level: "disconnected" as AccessLevel });
-  return { control, modules, routes: routeResult.data ?? [] };
+  return { control, modules, requests: requestResult.data ?? [], responses: responseResult.data ?? [] };
 }
 
 export async function setModuleAccess(module_key: AdminModuleKey, access_level: AccessLevel, actor = "Platform owner") {
@@ -39,11 +40,13 @@ export async function setModuleAccess(module_key: AdminModuleKey, access_level: 
 }
 
 export async function setEntirePanel(connect: boolean, actor = "Platform owner") {
+  const { data: previous } = await db.from("vpip_admin_ai_control").select("emergency_off").eq("id", "default").maybeSingle();
   const rows = ADMIN_MODULES.map(([module_key]) => ({ module_key, enabled: connect, access_level: connect ? "read_analyze_recommend" : "disconnected", updated_at: new Date().toISOString() }));
   const { error } = await db.from("vpip_admin_ai_modules").upsert(rows);
   if (error) throw new Error(error.message);
   await db.from("vpip_admin_ai_control").upsert({ id: "default", enabled: connect, emergency_off: false, updated_at: new Date().toISOString() });
   await logAdminAction({ action: connect ? "admin_ai_panel_connect" : "admin_ai_panel_disconnect", actor, status: "ok", detail: { modules: rows.map((row) => row.module_key), result: `${rows.length} modules ${connect ? "connected" : "disconnected"}` } });
+  if (connect && previous?.emergency_off) await logAdminAction({ action: "admin_ai_emergency_off_disabled", actor, status: "ok", detail: { scope: "entire Admin Panel", reason: "panel reconnected" } });
 }
 
 /** Provider choice is data, not a module binding: VPIP can add adapters without changing module permissions. */
