@@ -10,6 +10,8 @@ import { AdminActionLog } from "@/components/vpip/AdminActionLog";
 import { AdminAiAccessibility } from "@/components/vpip/AdminAiAccessibility";
 import { AdminKnowledgeBase } from "@/components/vpip/AdminKnowledgeBase";
 import { AdminRootCause } from "@/components/vpip/AdminRootCause";
+import { AdminAiControl } from "@/components/vpip/AdminAiControl";
+import { assertAdminAiAccess, type AdminModuleKey } from "@/lib/vpip/admin-ai-control";
 import { logAdminAction, listAdminActions } from "@/lib/vpip/admin-log";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
@@ -63,8 +65,8 @@ export const Route = createFileRoute("/admin-ai")({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
 const LOVABLE_MODEL = "openai/gpt-6-astra";
-type Tab = "home" | "explorer" | "search" | "dependency" | "github" | "snapshots" | "actionLog" | "ai1" | "ai2" | "knowledge" | "rootCause" | "runtime" | "proposals" | "accessibility";
-const SECTIONS: Array<[Tab, string]> = [["home", "Home"], ["explorer", "Repository Explorer"], ["search", "Search Center"], ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"], ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"], ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"], ["proposals", "Change Proposal Center"], ["accessibility", "Accessibility Center"]];
+type Tab = "control" | "home" | "explorer" | "search" | "dependency" | "github" | "snapshots" | "actionLog" | "ai1" | "ai2" | "knowledge" | "rootCause" | "runtime" | "proposals" | "accessibility";
+const SECTIONS: Array<[Tab, string]> = [["control", "Admin AI Control"], ["home", "Home"], ["explorer", "Repository Explorer"], ["search", "Search Center"], ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"], ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"], ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"], ["proposals", "Change Proposal Center"], ["accessibility", "Accessibility Center"]];
 type Engine = "lovable" | ProviderId;
 
 interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string }
@@ -73,7 +75,7 @@ interface FileAuditItem { label: string; status: "PASS" | "FAIL"; result?: Repos
 
 function AdminAiPage() {
   const { ws } = useVpip();
-  const [tab, setTab] = useState<Tab>("home");
+  const [tab, setTab] = useState<Tab>("control");
   const [repo, setRepo] = useState("");
   const [branch, setBranch] = useState("");
   const [token, setToken] = useState("");
@@ -242,10 +244,10 @@ function AdminAiPage() {
     }
   }
 
-  function resolve(): { provider: ProviderId; cfg: ProviderConfig } {
+  function resolve(selected: Engine = engine): { provider: ProviderId; cfg: ProviderConfig } {
     const base = ws.settings.providers[ws.settings.defaultProvider];
-    if (engine === "lovable") return { provider: "lovable" as ProviderId, cfg: { ...base, model: LOVABLE_MODEL, apiKey: "" } };
-    return { provider: engine, cfg: ws.settings.providers[engine] ?? base };
+    if (selected === "lovable") return { provider: "lovable" as ProviderId, cfg: { ...base, model: LOVABLE_MODEL, apiKey: "" } };
+    return { provider: selected, cfg: ws.settings.providers[selected] ?? base };
   }
   const engineLabel = engine === "lovable" ? "Lovable AI" : (PROVIDER_LABEL[engine] ?? engine);
 
@@ -259,18 +261,26 @@ function AdminAiPage() {
   );
 
   async function run(userText: string, history: Msg[], kind?: ReportKind, extra?: { instruction: string; context: string }) {
-    const { provider, cfg } = resolve();
+    // This check is the client-side gate; the route metadata below creates a durable
+    // request record. No Admin screen calls a provider until Control authorizes it.
+    const access = await assertAdminAiAccess(tab as AdminModuleKey);
+    if (access.provider !== "lovable" && !(access.provider in ws.settings.providers)) throw new Error(`${access.provider} is selected in Admin AI Control but no VPIP provider adapter is configured yet.`);
+    const resolved = resolve(access.provider as Engine);
+    const provider = resolved.provider;
+    const cfg = { ...resolved.cfg, model: access.model || resolved.cfg.model };
     const ctrl = new AbortController();
     abort.current = ctrl;
     setStream("");
     try {
-      return await streamChat(
+      const answer = await streamChat(
         provider,
         cfg,
         [{ role: "system", content: adminSystemPrompt(extra ? `${context}\n\n# Recovery evidence\n${extra.context}` : context) }, ...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: extra ? extra.instruction : kind ? reportInstruction(kind) : userText }],
         (d) => setStream((s) => (s ?? "") + d),
         ctrl.signal,
+        { originModule: tab, actor: "Platform owner" },
       );
+      return answer;
     } finally {
       setStream(null);
       abort.current = null;
@@ -377,29 +387,9 @@ function AdminAiPage() {
       title="Admin AI"
       subtitle="Improves VPIP itself. Changes only after your approval — on a separate branch with a pull request, never main."
       scroll={false}
-      actions={
-        <div className="flex items-center gap-2">
-          <select
-            className="rounded border border-border bg-background px-2 py-1 text-xs"
-            value={engine}
-            onChange={(e) => {
-              const v = e.target.value as Engine;
-              setEngine(v);
-              void saveSettings({ engine: v });
-            }}
-          >
-            <option value="lovable">Lovable AI · {LOVABLE_MODEL}</option>
-            {(Object.keys(ws.settings.providers) as ProviderId[]).map((id) => (
-              <option key={id} value={id}>
-                {PROVIDER_LABEL[id] ?? id} · {ws.settings.providers[id]?.model}
-              </option>
-            ))}
-          </select>
-          {stream !== null ? (
+      actions={stream !== null ? (
             <Button size="sm" variant="outline" onClick={() => abort.current?.abort()}>Stop</Button>
           ) : null}
-        </div>
-      }
     >
         <div className="flex h-full min-h-0">
         <nav className="w-52 shrink-0 space-y-0.5 overflow-y-auto border-r border-border p-2">
@@ -409,6 +399,7 @@ function AdminAiPage() {
           ))}
         </nav>
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
+{tab === "control" ? <AdminAiControl /> : null}
 {tab === "home" ? (<div className="space-y-4">
               <AdminHomeHealth />
               <div className="grid gap-2 rounded-md border border-border bg-surface p-4 md:grid-cols-[1fr_1fr_auto]">

@@ -144,6 +144,25 @@ export const Route = createFileRoute("/api/ai/chat")({
     handlers: {
       POST: async ({ request }) => {
         const body = (await request.json().catch(() => ({}))) as Body;
+        const adminModule = request.headers.get("X-VPIP-Admin-Module");
+        const started = Date.now();
+        // Admin calls cannot bypass the Control registry. Other product AI flows
+        // intentionally remain independent of this Admin-only policy boundary.
+        if (adminModule) {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          // Migrations are deployed independently of generated client database types.
+          // Keep the route compatible while the generated types catch up.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const controlDb = supabaseAdmin as unknown as { from: (table: string) => any };
+          const [{ data: control }, { data: module }] = await Promise.all([
+            controlDb.from("vpip_admin_ai_control").select("enabled,emergency_off,provider,model").eq("id", "default").maybeSingle(),
+            controlDb.from("vpip_admin_ai_modules").select("enabled,access_level").eq("module_key", adminModule).maybeSingle(),
+          ]);
+          const allowed = control?.enabled && !control.emergency_off && module?.enabled && module.access_level !== "disconnected";
+          if (!allowed) return json({ error: "Admin AI Control has disconnected this module or activated the emergency kill switch." }, 403);
+          if (control.provider !== body.provider || control.model !== body.model) return json({ error: "Request provider/model does not match Admin AI Control configuration." }, 403);
+          await controlDb.from("vpip_admin_ai_routes").insert({ origin_module: adminModule, actor: request.headers.get("X-VPIP-Admin-Actor") ?? "Platform owner", provider: body.provider, model: body.model, status: "started", prompt_preview: body.messages?.at(-1)?.content?.slice(0, 500) ?? null, response_ms: Date.now() - started, token_count: 0 });
+        }
         const provider = body.provider;
         if (!provider || !(provider in PROVIDERS)) {
           return json({ error: "Unknown AI engine." }, 400);

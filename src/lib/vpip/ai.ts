@@ -29,10 +29,11 @@ export async function streamChat(
   messages: ChatMessage[],
   onDelta: (chunk: string) => void,
   signal?: AbortSignal,
+  route?: { originModule: string; actor?: string },
 ): Promise<string> {
   const res = await fetch(CHAT_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(route ? { "X-VPIP-Admin-Module": route.originModule, "X-VPIP-Admin-Actor": route.actor ?? "Platform owner" } : {}) },
     body: JSON.stringify({
       provider,
       model: cfg.model,
