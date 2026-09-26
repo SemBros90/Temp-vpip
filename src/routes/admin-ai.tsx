@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
+import { AdminRecovery } from "@/components/vpip/AdminRecovery";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ export const Route = createFileRoute("/admin-ai")({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
 const LOVABLE_MODEL = "openai/gpt-6-astra";
-type Tab = "repository" | "inputs" | "chat" | "reports";
+type Tab = "repository" | "recovery" | "inputs" | "chat" | "reports";
 type Engine = "lovable" | ProviderId;
 
 interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string }
@@ -150,7 +151,7 @@ function AdminAiPage() {
     [repo, branch, data, pinned, ai1, ai2, feedback],
   );
 
-  async function run(userText: string, history: Msg[], kind?: ReportKind) {
+  async function run(userText: string, history: Msg[], kind?: ReportKind, extra?: { instruction: string; context: string }) {
     const { provider, cfg } = resolve();
     const ctrl = new AbortController();
     abort.current = ctrl;
@@ -159,7 +160,7 @@ function AdminAiPage() {
       return await streamChat(
         provider,
         cfg,
-        [{ role: "system", content: adminSystemPrompt(context) }, ...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: kind ? reportInstruction(kind) : userText }],
+        [{ role: "system", content: adminSystemPrompt(extra ? `${context}\n\n# Recovery evidence\n${extra.context}` : context) }, ...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: extra ? extra.instruction : kind ? reportInstruction(kind) : userText }],
         (d) => setStream((s) => (s ?? "") + d),
         ctrl.signal,
       );
@@ -201,6 +202,20 @@ function AdminAiPage() {
       setOpenReport(row);
     } catch (e) {
       if ((e as Error).name !== "AbortError") toast.error(e instanceof Error ? e.message : "Report failed.");
+    }
+  }
+
+  async function runRecovery(instruction: string, ctx: string, title: string) {
+    setTab("reports");
+    try {
+      const full = await run("", [], undefined, { instruction, context: ctx });
+      if (!full.trim()) return;
+      const { data: row, error } = await db.from("vpip_admin_ai_reports").insert({ kind: "recovery", title, content: full, engine: engineLabel, model: resolve().cfg.model }).select("*").single();
+      if (error) throw new Error(error.message);
+      setReports((r) => [row, ...r]);
+      setOpenReport(row);
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") toast.error(e instanceof Error ? e.message : "Recovery analysis failed.");
     }
   }
 
@@ -252,13 +267,13 @@ function AdminAiPage() {
     >
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 gap-1 border-b border-border px-6 pt-2">
-          {(["repository", "inputs", "chat", "reports"] as Tab[]).map((t) => (
+          {(["repository", "recovery", "inputs", "chat", "reports"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`rounded-t px-3 py-1.5 text-xs font-medium capitalize ${tab === t ? "bg-surface text-foreground border border-b-0 border-border" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {t === "inputs" ? "Inputs & Feedback" : t === "reports" ? "Improvement Reports" : t}
+              {t === "recovery" ? "Snapshots & Recovery" : t === "inputs" ? "Inputs & Feedback" : t === "reports" ? "Improvement Reports" : t}
             </button>
           ))}
         </div>
@@ -342,6 +357,8 @@ function AdminAiPage() {
               ) : null}
             </div>
           ) : null}
+
+          {tab === "recovery" ? <AdminRecovery runAi={runRecovery} streaming={stream !== null} /> : null}
 
           {tab === "inputs" ? (
             <div className="grid gap-4 lg:grid-cols-3">
