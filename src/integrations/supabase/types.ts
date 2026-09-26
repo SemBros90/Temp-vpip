@@ -64,6 +64,114 @@ export type Database = {
           },
         ]
       }
+      vpip_admin_ai_feedback: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          kind: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          kind: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          kind?: string
+        }
+        Relationships: []
+      }
+      vpip_admin_ai_messages: {
+        Row: {
+          content: string
+          created_at: string
+          engine: string | null
+          id: string
+          model: string | null
+          role: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          model?: string | null
+          role: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          model?: string | null
+          role?: string
+        }
+        Relationships: []
+      }
+      vpip_admin_ai_reports: {
+        Row: {
+          content: string
+          created_at: string
+          engine: string | null
+          id: string
+          kind: string
+          model: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          kind: string
+          model?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          kind?: string
+          model?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      vpip_admin_ai_settings: {
+        Row: {
+          branch: string
+          engine: string
+          id: string
+          repo_full_name: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          branch?: string
+          engine?: string
+          id?: string
+          repo_full_name?: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          branch?: string
+          engine?: string
+          id?: string
+          repo_full_name?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vpip_ai1_reports: {
         Row: {
           build_session_id: string
