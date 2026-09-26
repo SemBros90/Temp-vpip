@@ -615,7 +615,7 @@ function AdminAiPage() {
                     <Tag>{f.kind}</Tag> <span className="ml-1">{f.content}</span>
                   </div>
                 ))}
-              </div></div>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {(Object.keys(REPORT_KINDS) as ReportKind[]).map((k) => (
                   <Button key={k} size="sm" variant="outline" disabled={stream !== null} onClick={() => void generate(k)}>Generate {REPORT_KINDS[k]}</Button>
