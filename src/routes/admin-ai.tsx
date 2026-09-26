@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
 import { AdminRecovery } from "@/components/vpip/AdminRecovery";
+import { AdminCodeSearch } from "@/components/vpip/AdminCodeSearch";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -369,6 +370,8 @@ function AdminAiPage() {
                     </div>
                   </div>
 
+                  <AdminCodeSearch token={token} repo={repo} branch={branch} tree={data.tree} onOpen={(p) => void open(p)} />
+
                   <div className="grid gap-4 lg:grid-cols-3">
                     <ListCard title="Recent commits" rows={data.commits.map((c) => `${c.sha.slice(0, 7)} · ${c.message.split("\n")[0]} — ${c.author}`)} />
                     <ListCard title="Pull requests" rows={data.pulls.map((p) => `#${p.number} [${p.state}] ${p.title} — ${p.user}`)} />
@@ -509,10 +512,16 @@ function AdminAiPage() {
                           <Button size="sm" variant="outline" onClick={() => void navigator.clipboard.writeText(openReport.content).then(() => toast.success("Copied"))}>Copy</Button>
                           <Button size="sm" variant="outline" onClick={() => void setStatus(openReport, "Approved")}>Approve</Button>
                           <Button size="sm" variant="outline" onClick={() => void setStatus(openReport, "Rejected")}>Reject</Button>
+                          {openReport.kind === "proposal" ? (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => void setStatus(openReport, "Revision requested")}>Revise</Button>
+                              <Button size="sm" disabled title="Arrives in Stage 2: snapshot, then a separate branch and pull request">Implement</Button>
+                            </>
+                          ) : null}
                         </div>
                       </div>
                       <Markdown source={openReport.content} />
-                      <div className="label-mono mt-4">Approving only records your decision. Admin AI does not apply, commit or deploy anything.</div>
+                      <div className="label-mono mt-4">Approving only records your decision. Nothing is applied yet; in Stage 2, approved changes go to a separate branch and pull request — never straight to main.</div>
                     </>
                   ) : <div className="text-sm text-muted-foreground">Generate or pick a report.</div>}
                 </div>
