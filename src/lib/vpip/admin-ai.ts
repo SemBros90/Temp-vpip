@@ -27,7 +27,6 @@ async function gh<T>(token: string, path: string): Promise<T> {
 }
 
 export interface TreeEntry { path: string; type: "blob" | "tree"; sha?: string; size?: number }
-export interface TreeEntry { path: string; type: "blob" | "tree"; size?: number }
 export interface AdminBranch { name: string; sha: string; headCommittedAt: string }
 export interface AdminRepoMetadata {
   owner: string;
@@ -199,6 +198,23 @@ export async function compareBranches(token: string, repo: string, base: string,
   return r;
 }
 
+/** Commit history is deliberately fetched independently of the repository overview. */
+export async function listCommitHistory(token: string, repo: string, ref?: string) {
+  const query = new URLSearchParams({ per_page: "100" });
+  if (ref?.trim()) query.set("sha", ref.trim());
+  const commits = await gh<Array<{
+    sha: string; html_url: string;
+    commit: { message: string; author?: { name?: string; date?: string } };
+  }>>(token, `/repos/${repo}/commits?${query.toString()}`);
+  return commits.map((commit) => ({
+    sha: commit.sha,
+    url: commit.html_url,
+    message: commit.commit.message,
+    author: commit.commit.author?.name ?? "unknown",
+    date: commit.commit.author?.date ?? "",
+  }));
+}
+
 export interface GhFile { filename: string; status: string; additions: number; deletions: number; patch?: string; previous_filename?: string }
 
 export async function listTags(token: string, repo: string) {
@@ -211,9 +227,32 @@ export async function listReleases(token: string, repo: string) {
   return r.map((x) => ({ id: x.id, tag: x.tag_name, name: x.name ?? x.tag_name, draft: x.draft, prerelease: x.prerelease, published: x.published_at ?? "", url: x.html_url, body: x.body ?? "" }));
 }
 
+export async function listPullRequests(token: string, repo: string) {
+  const pulls = await gh<Array<{ number: number; title: string; state: string; user: { login: string }; html_url: string }>>(
+    token, `/repos/${repo}/pulls?state=all&per_page=100`,
+  );
+  return pulls.map((pull) => ({ number: pull.number, title: pull.title, state: pull.state, user: pull.user.login, url: pull.html_url }));
+}
+
 export async function getCommit(token: string, repo: string, sha: string) {
   const c = await gh<{ sha: string; html_url: string; commit: { message: string; author?: { name?: string; date?: string } }; parents: Array<{ sha: string }>; stats?: { additions: number; deletions: number; total: number }; files?: GhFile[] }>(token, `/repos/${repo}/commits/${encodeURIComponent(sha)}`);
   return { sha: c.sha, url: c.html_url, message: c.commit.message, author: c.commit.author?.name ?? "unknown", date: c.commit.author?.date ?? "", parents: c.parents.map((p) => p.sha), stats: c.stats, files: c.files ?? [] };
+}
+
+/** GitHub's diff media type returns the exact unified patch for one commit. */
+export async function getCommitPatch(token: string, repo: string, sha: string) {
+  const res = await fetch(`${API}/repos/${repo}/commits/${encodeURIComponent(sha)}`, {
+    headers: {
+      ...{
+        Accept: "application/vnd.github.v3.diff",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      ...(token.trim() ? { Authorization: `Bearer ${token.trim()}` } : {}),
+    },
+  });
+  const patch = await res.text();
+  if (!res.ok) throw new Error(`GitHub ${res.status}: ${patch}`);
+  return patch;
 }
 
 export async function getPull(token: string, repo: string, n: number) {

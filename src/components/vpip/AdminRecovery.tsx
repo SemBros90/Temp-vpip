@@ -13,11 +13,14 @@ import {
   diffSummary,
   listProjectSnapshots,
   loadFiles,
+  recoveryAudit,
   snapCode,
   TRACE_INSTRUCTION,
   updateMeta,
+  verifySnapshot,
   type SnapDiff,
   type SnapRow,
+  type SnapshotVerification,
 } from "@/lib/vpip/admin-recovery";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,6 +39,8 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
   const [cmpA, setCmpA] = useState("");
   const [cmpB, setCmpB] = useState("");
   const [diff, setDiff] = useState<SnapDiff | null>(null);
+  const [preview, setPreview] = useState<SnapDiff | null>(null);
+  const [verification, setVerification] = useState<SnapshotVerification | null>(null);
   const [open, setOpen] = useState<SnapRow | null>(null);
   const [busy, setBusy] = useState("");
 
@@ -93,9 +98,12 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
     if (!window.confirm(`Restore ${code.get(s.id)} "${s.label}" into build ${build.code}?\n\nFiles are copied back exactly as stored. The current files are snapshotted first so this can be undone.`)) return;
     setBusy("Restoring…");
     try {
+      const target = await loadFiles(s.id);
+      const check = verifySnapshot(s, target);
+      setVerification(check);
+      if (check.status === "FAIL") throw new Error(`Restore stopped: ${check.evidence}`);
       const cur = (build.files ?? []).map((f) => ({ path: f.path, content: f.content }));
       await createSnapshot({ projectId, buildSessionId: build.id, repositoryId: build.repositoryId ?? undefined, label: `Before restoring ${code.get(s.id)}`, isZero: false, files: cur, metadata: { kind: "pre-restore", restoredFrom: s.id } });
-      const target = await loadFiles(s.id);
       const want = new Map(target.map((f) => [f.path, f.content]));
       const trace = coderTrace(build, [], []);
       let n = 0;
@@ -122,6 +130,25 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
     } finally {
       setBusy("");
     }
+  }
+
+  /** Calculates restore effects only; it never writes a build or creates a snapshot. */
+  async function previewRestore(s: SnapRow) {
+    setBusy("Preparing restore preview…");
+    try {
+      setPreview(diffFiles(await currentOrNext(s), await loadFiles(s.id)));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not prepare restore preview.");
+    } finally { setBusy(""); }
+  }
+
+  async function verify(s: SnapRow) {
+    setBusy("Verifying snapshot…");
+    try {
+      setVerification(verifySnapshot(s, await loadFiles(s.id)));
+    } catch (e) {
+      setVerification({ status: "FAIL", evidence: e instanceof Error ? e.message : "Could not read stored snapshot files.", files: 0 });
+    } finally { setBusy(""); }
   }
 
   async function trace() {
@@ -152,6 +179,8 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
     filter === "all" ? true : filter === "latest" ? s.id === latestId || snaps.indexOf(s) >= snaps.length - 10 : filter === "stable" ? !!s.metadata.stable : filter === "failed" ? !!s.metadata.failed : (s.metadata.tags ?? []).length > 0,
   );
   const stable = snaps.filter((s) => s.metadata.stable);
+  const recovery = snaps.filter((s) => s.metadata.kind === "pre-restore" || typeof s.metadata.restoredFrom === "string");
+  const audit = useMemo(() => recoveryAudit(snaps, verification), [snaps, verification]);
   const status = (s: SnapRow) => (s.metadata.failed ? "Failed" : s.metadata.stable ? `Stable ${s.metadata.stable}` : s.id === latestId ? "Latest" : s.is_zero ? "Rollback Point Zero" : "Snapshot");
 
   return (
@@ -168,6 +197,11 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
         {busy ? <span className="text-muted-foreground">{busy}</span> : null}
       </div>
       <div className="label-mono">A snapshot is taken automatically before every AI 1 coding run. Nothing is ever restored automatically — Restore always asks you first.</div>
+
+      <div className="rounded-md border border-border bg-surface p-3 text-xs">
+        <div className="mb-2 text-sm font-semibold">Phase 6 — Snapshot &amp; Recovery Audit</div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left"><thead className="label-mono border-b border-border"><tr><th className="p-1">Capability</th><th className="p-1">Status</th><th className="p-1">Live evidence</th></tr></thead><tbody>{audit.map((item) => <tr key={item.capability} className="border-b border-border/60"><td className="p-1">{item.capability}</td><td className={`p-1 font-semibold ${item.status === "PASS" ? "text-primary" : "text-destructive"}`}>{item.status}</td><td className="p-1">{item.evidence}</td></tr>)}</tbody></table></div>
+      </div>
 
       {stable.length ? (
         <div className="rounded-md border border-border bg-surface p-3">
@@ -196,7 +230,7 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
               <thead className="text-left text-muted-foreground"><tr><th className="p-2">ID</th><th>Date</th><th>Prompt</th><th>Model</th><th>Files changed</th><th>Status</th></tr></thead>
               <tbody>
                 {shown.map((s) => (
-                  <tr key={s.id} onClick={() => { setOpen(s); if (changed[s.id] === undefined) void countChanged(s); }} className={`cursor-pointer border-t border-border hover:bg-muted ${open?.id === s.id ? "bg-muted" : ""}`}>
+                  <tr key={s.id} onClick={() => { setOpen(s); setPreview(null); setVerification(null); if (changed[s.id] === undefined) void countChanged(s); }} className={`cursor-pointer border-t border-border hover:bg-muted ${open?.id === s.id ? "bg-muted" : ""}`}>
                     <td className="p-2 font-mono">{code.get(s.id)}</td>
                     <td>{new Date(s.created_at).toLocaleString()}</td>
                     <td className="max-w-[260px] truncate">{s.metadata.prompt ?? s.label}</td>
@@ -217,7 +251,10 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
               <div className="text-sm font-semibold">{code.get(open.id)} · {status(open)}</div>
               <div><b>Prompt:</b> {open.metadata.prompt ?? open.label}</div>
               <div><b>Model:</b> {open.metadata.model ?? "—"} · <b>Commit:</b> {open.metadata.commitSha ?? "—"} · <b>Files stored:</b> {open.tree.length}</div>
+              <div><b>Snapshot ID:</b> <span className="font-mono">{open.id}</span> · <b>Build:</b> {open.metadata.buildCode ?? open.build_session_id ?? "—"}</div>
               <div className="flex flex-wrap gap-1 pt-1">
+                <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void previewRestore(open)}>Restore preview</Button>
+                <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void verify(open)}>Verify snapshot</Button>
                 <Button size="sm" onClick={() => void restore(open)}>Restore snapshot</Button>
                 <Button size="sm" variant="outline" onClick={() => { const v = window.prompt("Stable release version (e.g. 1.0)", open.metadata.stable ?? ""); if (v !== null) void patch(open, { stable: v.trim() ? `Stable Release ${v.trim().replace(/^Stable Release\s*/i, "")}` : null }); }}>{open.metadata.stable ? "Edit stable" : "Mark as stable"}</Button>
                 <Button size="sm" variant="outline" onClick={() => void patch(open, { failed: !open.metadata.failed })}>{open.metadata.failed ? "Clear failed" : "Mark failed"}</Button>
@@ -235,6 +272,7 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
                   </div>
                 );
               })()}
+              <details className="pt-2"><summary className="cursor-pointer font-semibold">Stored file inventory ({open.tree.length})</summary><pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px]">{open.tree.join("\n") || "GitHub/Supabase response: []"}</pre></details>
             </div>
           ) : null}
 
@@ -256,8 +294,19 @@ export function AdminRecovery({ runAi, streaming }: { runAi: (instruction: strin
               </div>
             ) : null}
           </div>
+
+          <div className="space-y-2 rounded-md border border-border bg-surface p-3 text-xs">
+            <div className="text-sm font-semibold">Restore Preview &amp; Recovery Chain</div>
+            {preview ? <DiffEvidence title="Previewed changes required to restore selected snapshot" diff={preview} /> : <div className="text-muted-foreground">Select a snapshot, then choose Restore preview. This is read-only and makes no file changes.</div>}
+            <div className="border-t border-border pt-2"><div className="font-semibold">Recovery history ({recovery.length})</div>{recovery.length ? recovery.map((s) => <div key={s.id} className="mt-1"><span className="font-mono">{code.get(s.id)}</span> · {s.label} · {new Date(s.created_at).toLocaleString()} · restores from <span className="font-mono">{String(s.metadata.restoredFrom ?? "—")}</span></div>) : <div className="text-muted-foreground">Live recovery history response: []</div>}</div>
+            {verification ? <div className={`border-t border-border pt-2 font-medium ${verification.status === "PASS" ? "text-primary" : "text-destructive"}`}>Snapshot verification: {verification.status} — {verification.evidence}</div> : null}
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function DiffEvidence({ title, diff }: { title: string; diff: SnapDiff }) {
+  return <div><div className="font-semibold">{title}</div><div>{diffSummary(diff)}</div>{([['Add', diff.added], ['Delete', diff.deleted], ['Modify', diff.modified], ['Dependency', diff.deps], ['Route', diff.routes]] as const).map(([label, rows]) => <details key={label}><summary className="cursor-pointer">{label} ({rows.length})</summary><pre className="max-h-28 overflow-auto whitespace-pre-wrap">{rows.join("\n") || "None"}</pre></details>)}</div>;
 }

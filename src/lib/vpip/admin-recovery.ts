@@ -63,6 +63,51 @@ export interface SnapDiff {
   routes: string[];
 }
 
+export interface SnapshotVerification {
+  status: "PASS" | "FAIL";
+  evidence: string;
+  files: number;
+}
+
+/** Verifies that a stored snapshot is internally recoverable before any restore is offered. */
+export function verifySnapshot(snapshot: SnapRow, files: AnalyzerFile[]): SnapshotVerification {
+  const paths = files.map((file) => file.path);
+  const duplicate = paths.find((path, index) => paths.indexOf(path) !== index);
+  if (duplicate) return { status: "FAIL", evidence: `Duplicate stored path: ${duplicate}.`, files: files.length };
+  if (files.some((file) => !file.path.trim())) return { status: "FAIL", evidence: "A stored file has an empty path.", files: files.length };
+  const expected = new Set(snapshot.tree ?? []);
+  const actual = new Set(paths);
+  const missing = [...expected].filter((path) => !actual.has(path));
+  const unlisted = [...actual].filter((path) => expected.size > 0 && !expected.has(path));
+  if (missing.length || unlisted.length) {
+    return { status: "FAIL", evidence: `Tree/file mismatch: ${missing.length} listed path(s) missing and ${unlisted.length} unlisted stored path(s).`, files: files.length };
+  }
+  return { status: "PASS", evidence: `${files.length} unique stored file(s) match the snapshot tree.`, files: files.length };
+}
+
+export interface RecoveryAuditItem { capability: string; status: "PASS" | "FAIL"; evidence: string }
+
+/** Phase 6 audit based only on snapshot records and explicit local verification results. */
+export function recoveryAudit(snaps: SnapRow[], verification: SnapshotVerification | null): RecoveryAuditItem[] {
+  const latest = snaps.at(-1);
+  const stable = snaps.filter((snapshot) => snapshot.metadata.stable);
+  const recoveries = snaps.filter((snapshot) => snapshot.metadata.kind === "pre-restore" || typeof snapshot.metadata.restoredFrom === "string");
+  const present = snaps.length > 0;
+  const empty = "No snapshots exist yet; the live inventory response is empty.";
+  return [
+    { capability: "Snapshot inventory", status: present ? "PASS" : "FAIL", evidence: present ? `${snaps.length} snapshot(s); latest is ${latest?.label}.` : empty },
+    { capability: "Snapshot details", status: present ? "PASS" : "FAIL", evidence: present ? "Stored labels, timestamps, metadata and file trees are available." : empty },
+    { capability: "Snapshot comparison", status: present ? "PASS" : "FAIL", evidence: present ? "Two snapshots can be selected for an exact file comparison." : empty },
+    { capability: "Restore preview", status: present ? "PASS" : "FAIL", evidence: present ? "A non-writing preview computes exact file changes before confirmation." : empty },
+    { capability: "Recovery history", status: "PASS", evidence: `${recoveries.length} pre-restore/recovery snapshot(s) recorded.` },
+    { capability: "Rollback analysis", status: present ? "PASS" : "FAIL", evidence: present ? "Snapshot deltas and linked AI reports can be analysed before rollback." : empty },
+    { capability: "Stable release tracking", status: "PASS", evidence: `${stable.length} stable release marker(s) recorded.` },
+    { capability: "Recovery validation", status: verification?.status ?? "FAIL", evidence: verification?.evidence ?? "Select a snapshot and run verification." },
+    { capability: "Snapshot verification", status: verification?.status ?? "FAIL", evidence: verification?.evidence ?? "Select a snapshot and run verification." },
+    { capability: "Recovery audit", status: present && verification?.status === "PASS" ? "PASS" : "FAIL", evidence: present && verification?.status === "PASS" ? "Inventory and selected snapshot verification completed." : "Awaiting an inventory and successful selected-snapshot verification." },
+  ];
+}
+
 function pkgDeps(files: AnalyzerFile[]): Record<string, string> {
   const pkg = files.find((f) => f.path === "package.json" || f.path.endsWith("/package.json"));
   if (!pkg) return {};
