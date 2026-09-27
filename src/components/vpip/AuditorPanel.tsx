@@ -147,7 +147,7 @@ export function AuditorPanel(props: {
           ? { role: "user" as const, content: `AI 1 BUILD COMPLETION REPORT (claims to verify):\n${m.content}` }
           : { role: m.role as "user" | "assistant", content: m.content },
       );
-      const full = await streamChat(provider, cfg, [{ role: "system", content: auditorChatSystemPrompt(ctx) }, ...history, { role: "user", content: text }], (d) => setChatStream((s) => (s ?? "") + d), ctrl.signal);
+      const full = await streamChat(provider, cfg, [{ role: "system", content: auditorChatSystemPrompt(ctx) }, ...history, { role: "user", content: text }], (d) => setChatStream((s) => (s ?? "") + d), ctrl.signal, { coderModule: "ai2" });
       if (!full.trim()) throw new Error("The AI returned an empty answer.");
       await addMsg("assistant", full, { engine: engine === "lovable" ? "Lovable AI" : provider, model: cfg.model });
     } catch (e) {
@@ -239,6 +239,7 @@ export function AuditorPanel(props: {
           ],
           (d) => setStream((s) => s + d),
           ctrl.signal,
+          { coderModule: "ai2" },
         );
         if (!full.trim()) throw new Error("The AI returned an empty answer.");
         const { report, prompt } = splitReport(full);
