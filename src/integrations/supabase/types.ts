@@ -109,6 +109,33 @@ export type Database = {
         }
         Relationships: []
       }
+      vpip_admin_ai_control: {
+        Row: {
+          emergency_off: boolean
+          enabled: boolean
+          id: string
+          model: string
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          emergency_off?: boolean
+          enabled?: boolean
+          id?: string
+          model?: string
+          provider?: string
+          updated_at?: string
+        }
+        Update: {
+          emergency_off?: boolean
+          enabled?: boolean
+          id?: string
+          model?: string
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vpip_admin_ai_feedback: {
         Row: {
           content: string
@@ -157,6 +184,27 @@ export type Database = {
         }
         Relationships: []
       }
+      vpip_admin_ai_modules: {
+        Row: {
+          access_level: string
+          enabled: boolean
+          module_key: string
+          updated_at: string
+        }
+        Insert: {
+          access_level?: string
+          enabled?: boolean
+          module_key: string
+          updated_at?: string
+        }
+        Update: {
+          access_level?: string
+          enabled?: boolean
+          module_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vpip_admin_ai_reports: {
         Row: {
           content: string
@@ -187,6 +235,128 @@ export type Database = {
           model?: string | null
           status?: string
           title?: string
+        }
+        Relationships: []
+      }
+      vpip_admin_ai_request_history: {
+        Row: {
+          actor: string
+          created_at: string
+          id: string
+          model: string
+          origin_module: string
+          prompt_preview: string | null
+          prompt_size: number
+          provider: string
+          response_ms: number | null
+          response_size: number | null
+          status: string
+          token_count: number | null
+        }
+        Insert: {
+          actor?: string
+          created_at?: string
+          id?: string
+          model: string
+          origin_module: string
+          prompt_preview?: string | null
+          prompt_size: number
+          provider: string
+          response_ms?: number | null
+          response_size?: number | null
+          status: string
+          token_count?: number | null
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          id?: string
+          model?: string
+          origin_module?: string
+          prompt_preview?: string | null
+          prompt_size?: number
+          provider?: string
+          response_ms?: number | null
+          response_size?: number | null
+          status?: string
+          token_count?: number | null
+        }
+        Relationships: []
+      }
+      vpip_admin_ai_response_history: {
+        Row: {
+          created_at: string
+          duration_ms: number
+          id: string
+          origin_module: string
+          request_id: string | null
+          response_summary: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms: number
+          id?: string
+          origin_module: string
+          request_id?: string | null
+          response_summary?: string | null
+          status: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number
+          id?: string
+          origin_module?: string
+          request_id?: string | null
+          response_summary?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vpip_admin_ai_response_history_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "vpip_admin_ai_request_history"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vpip_admin_ai_routes: {
+        Row: {
+          actor: string
+          created_at: string
+          id: string
+          model: string
+          origin_module: string
+          prompt_preview: string | null
+          provider: string
+          response_ms: number | null
+          status: string
+          token_count: number
+        }
+        Insert: {
+          actor?: string
+          created_at?: string
+          id?: string
+          model: string
+          origin_module: string
+          prompt_preview?: string | null
+          provider: string
+          response_ms?: number | null
+          status: string
+          token_count?: number
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          id?: string
+          model?: string
+          origin_module?: string
+          prompt_preview?: string | null
+          provider?: string
+          response_ms?: number | null
+          status?: string
+          token_count?: number
         }
         Relationships: []
       }
