@@ -73,7 +73,7 @@ export async function runCoderTurn(
     ...history.slice(-16).map((t) => ({ role: t.role, content: t.content })),
     { role: "user", content: userContent },
   ];
-  return streamChat(provider, cfg, messages, onDelta, signal);
+  return streamChat(provider, cfg, messages, onDelta, signal, { coderModule: "ai1" });
 }
 
 /* ------------------------------------------- Module 12 — modes & files */

@@ -284,5 +284,5 @@ export async function runAgent(
     { role: "system", content: system },
     { role: "user", content: user },
   ];
-  return streamChat(provider, cfg, messages, onDelta, signal);
+  return streamChat(provider, cfg, messages, onDelta, signal, { coderModule: "ai1" });
 }

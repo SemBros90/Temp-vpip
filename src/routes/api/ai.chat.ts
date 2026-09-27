@@ -167,8 +167,21 @@ export const Route = createFileRoute("/api/ai/chat")({
           await controlDb.from("vpip_admin_ai_response_history").insert({ request_id: execution.id, origin_module: adminModule, response_summary: responseText.slice(0, 500) || null, duration_ms: duration, status });
           await recordAction(status === "completed" ? "admin_ai_response_received" : "admin_ai_response_failed", status, { module: adminModule, request_id: execution.id, duration_ms: duration, response_size: responseText.length });
         };
-        // Admin calls cannot bypass the Control registry. Other product AI flows
-        // intentionally remain independent of this Admin-only policy boundary.
+        // Coder AI 1 / AI 2 obey the Control on/off switch, emergency stop and their module row.
+        const coderModule = request.headers.get("X-VPIP-Coder-Module");
+        if (coderModule === "ai1" || coderModule === "ai2") {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cdb = supabaseAdmin as unknown as { from: (table: string) => any };
+          const [{ data: control }, { data: module }] = await Promise.all([
+            cdb.from("vpip_admin_ai_control").select("enabled,emergency_off").eq("id", "default").maybeSingle(),
+            cdb.from("vpip_admin_ai_modules").select("enabled,access_level").eq("module_key", coderModule).maybeSingle(),
+          ]);
+          const label = coderModule === "ai1" ? "AI 1" : "AI 2";
+          if (control?.emergency_off) return json({ error: `${label} is blocked: Emergency AI OFF is active in Admin AI Control.` }, 403);
+          if (!control?.enabled || !module?.enabled || module.access_level === "disconnected") return json({ error: `${label} is blocked: connect it in Admin AI Control.` }, 403);
+        }
+        // Admin calls cannot bypass the Control registry.
         if (adminModule) {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           // Migrations are deployed independently of generated client database types.
