@@ -64,6 +64,17 @@ export async function setEmergencyOff(actor = "Platform owner") {
   await logAdminAction({ action: "admin_ai_emergency_off", actor, status: "ok", detail: { scope: "entire Admin Panel" } });
 }
 
+/** Live updates: fires on any change to control, modules or request/response history. */
+let channelSeq = 0;
+export function subscribeControl(onChange: () => void): () => void {
+  const channel = supabase.channel(`admin-ai-control-${++channelSeq}`);
+  for (const table of ["vpip_admin_ai_control", "vpip_admin_ai_modules", "vpip_admin_ai_request_history", "vpip_admin_ai_response_history"]) {
+    channel.on("postgres_changes" as never, { event: "*", schema: "public", table } as never, onChange);
+  }
+  channel.subscribe();
+  return () => { void supabase.removeChannel(channel); };
+}
+
 export async function assertAdminAiAccess(module: AdminModuleKey) {
   const { control, modules } = await getControlState();
   const entry = modules.find((item) => item.module_key === module);

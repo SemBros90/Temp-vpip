@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ACCESS_LABEL, ADMIN_MODULES, getControlState, setControlProvider, setEmergencyOff, setEntirePanel, setModuleAccess, type AccessLevel, type ModuleState, type ControlState } from "@/lib/vpip/admin-ai-control";
+import { ACCESS_LABEL, ADMIN_MODULES, getControlState, setControlProvider, setEmergencyOff, setEntirePanel, setModuleAccess, subscribeControl, type AccessLevel, type ModuleState, type ControlState } from "@/lib/vpip/admin-ai-control";
 
 const PROVIDERS = ["lovable", "openai", "deepseek", "Claude", "Gemini", "grok", "ollama", "local"];
 export function AdminAiControl() {
   const [control, setControl] = useState<ControlState | null>(null); const [modules, setModules] = useState<ModuleState[]>([]); const [requests, setRequests] = useState<any[]>([]); const [responses, setResponses] = useState<any[]>([]); const [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => { try { const next = await getControlState(); setControl(next.control); setModules(next.modules); setRequests(next.requests); setResponses(next.responses); } catch (e) { toast.error(e instanceof Error ? e.message : "Could not load Admin AI Control."); } }, []);
-  useEffect(() => { void refresh(); const timer = window.setInterval(() => void refresh(), 5000); return () => window.clearInterval(timer); }, [refresh]);
+  useEffect(() => { void refresh(); return subscribeControl(() => void refresh()); }, [refresh]);
   const active = modules.filter((module) => module.enabled).length;
   const today = useMemo(() => requests.filter((request) => new Date(request.created_at).toDateString() === new Date().toDateString()), [requests]);
   const tokensToday = today.filter((request) => request.token_count != null).reduce((total, request) => total + Number(request.token_count), 0);
