@@ -3,6 +3,7 @@ import type { ProviderConfig, ProviderId } from "./types";
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
+  attachments?: Array<{ mediaType: string; dataUrl: string }>;
 }
 
 export class AIError extends Error {}
