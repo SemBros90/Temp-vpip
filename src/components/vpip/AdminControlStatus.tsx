@@ -1,6 +1,6 @@
 /** Home — live read-only Admin AI Control status. */
 import { useCallback, useEffect, useState } from "react";
-import { ADMIN_MODULES, getControlState, subscribeControl, type ControlState, type ModuleState } from "@/lib/vpip/admin-ai-control";
+import { getControlState, subscribeControl, type ControlState, type ModuleState } from "@/lib/vpip/admin-ai-control";
 import { cn } from "@/lib/utils";
 
 export function AdminControlStatus() {
@@ -26,7 +26,7 @@ export function AdminControlStatus() {
         <div className="grid gap-2 text-xs sm:grid-cols-4">
           <div><div className="text-muted-foreground">Provider</div><div className="font-mono">{control?.provider ?? "—"}</div></div>
           <div><div className="text-muted-foreground">Model</div><div className="truncate font-mono" title={control?.model}>{control?.model ?? "—"}</div></div>
-          <div><div className="text-muted-foreground">Active modules</div><div className="font-mono">{active} / {ADMIN_MODULES.length}</div></div>
+          <div><div className="text-muted-foreground">Active modules</div><div className="font-mono">{active} / {modules.length}</div></div>
           <div><div className="text-muted-foreground">Last AI activity</div><div className="font-mono">{last ? new Date(last).toLocaleString() : "Never"}</div></div>
         </div>
       )}
