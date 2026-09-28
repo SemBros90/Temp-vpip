@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ACCESS_LABEL, ADMIN_MODULES, getControlState, setControlProvider, setEmergencyOff, setEntirePanel, setModuleAccess, subscribeControl, type AccessLevel, type ModuleState, type ControlState } from "@/lib/vpip/admin-ai-control";
+import { PROVIDER_LABEL, PROVIDER_MODELS, type ProviderId } from "@/lib/vpip/types";
 
-const PROVIDERS = ["lovable", "openai", "deepseek", "Claude", "Gemini", "grok", "ollama", "local"];
+const PROVIDERS = Object.keys(PROVIDER_LABEL) as ProviderId[];
 export function AdminAiControl() {
   const [control, setControl] = useState<ControlState | null>(null); const [modules, setModules] = useState<ModuleState[]>([]); const [requests, setRequests] = useState<any[]>([]); const [responses, setResponses] = useState<any[]>([]); const [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => { try { const next = await getControlState(); setControl(next.control); setModules(next.modules); setRequests(next.requests); setResponses(next.responses); } catch (e) { toast.error(e instanceof Error ? e.message : "Could not load Admin AI Control."); } }, []);
