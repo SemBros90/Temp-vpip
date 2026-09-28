@@ -66,8 +66,8 @@ export const Route = createFileRoute("/admin-ai")({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
 const LOVABLE_MODEL = "openai/gpt-6-astra";
-type Tab = "control" | "home" | "explorer" | "search" | "dependency" | "github" | "snapshots" | "actionLog" | "ai1" | "ai2" | "knowledge" | "rootCause" | "runtime" | "proposals" | "accessibility";
-const SECTIONS: Array<[Tab, string]> = [["control", "Admin AI Control"], ["home", "Home"], ["explorer", "Repository Explorer"], ["search", "Search Center"], ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"], ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"], ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"], ["proposals", "Change Proposal Center"], ["accessibility", "Accessibility Center"]];
+type Tab = "control" | "home" | "chat" | "explorer" | "search" | "dependency" | "github" | "snapshots" | "actionLog" | "ai1" | "ai2" | "knowledge" | "rootCause" | "runtime" | "proposals" | "accessibility";
+const SECTIONS: Array<[Tab, string]> = [["control", "Admin AI Control"], ["home", "Home"], ["chat", "Chat"], ["explorer", "Repository Explorer"], ["search", "Search Center"], ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"], ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"], ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"], ["proposals", "Change Proposal Center"], ["accessibility", "Accessibility Center"]];
 type Engine = "lovable" | ProviderId;
 
 interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string }
@@ -440,9 +440,12 @@ function AdminAiPage() {
                 <Stat k="Last Sync Time" v={data ? new Date(data.syncedAt).toLocaleString() : "Never"} />
                 {data ? <div className="label-mono sm:col-span-3 lg:col-span-6">Admin AI reads: file list, {configFiles.length} build/config files ({configFiles.map((f) => f.path).join(", ") || "none found"}), branches, commits, {snapshots.length} latest snapshots, and any file you name in chat.</div> : null}
               </div>
-            <div className="mx-auto flex max-w-3xl flex-col rounded-md border border-border bg-surface p-4">
+</div>) : null}
+
+{tab === "chat" ? (
+            <div className="mx-auto flex h-full max-w-3xl flex-col rounded-md border border-border bg-surface p-4">
               <div className="text-sm font-semibold">Admin AI Chat</div>
-<div className="flex-1 space-y-3">
+<div className="flex-1 space-y-3 overflow-y-auto py-2">
                 {msgs.length === 0 && stream === null ? (
                   <div className="text-sm text-muted-foreground">Ask Admin AI about VPIP — e.g. "Why do AI 1 builds keep failing on routes?" It sees the connected repository, pinned files, AI 1/AI 2 reports and your feedback.</div>
                 ) : null}
@@ -465,7 +468,7 @@ function AdminAiPage() {
                 <Button onClick={() => void send()} disabled={!chatEnabled || stream !== null || !input.trim()}>Send</Button>
               </div>
             </div>
-</div>) : null}
+) : null}
 
 {tab === "explorer" ? (<div className="space-y-4">{data ? (<>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
