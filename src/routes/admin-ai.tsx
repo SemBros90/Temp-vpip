@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, Paperclip, X } from "lucide-react";
-import { Paperclip, X } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
