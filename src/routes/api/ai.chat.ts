@@ -55,7 +55,7 @@ const PROVIDERS: Record<ProviderId, ProviderDef> = {
 interface Body {
   provider?: ProviderId;
   model?: string;
-  messages?: Array<{ role: string; content: string }>;
+  messages?: Array<{ role: string; content: string; attachments?: Array<{ mediaType: string; dataUrl: string }> }>;
   stream?: boolean;
   apiKey?: string;
 }
@@ -222,6 +222,11 @@ export const Route = createFileRoute("/api/ai/chat")({
           await finishExecution("failed", "Invalid AI request.");
           return json({ error: "A model and at least one message are required." }, 400);
         }
+        const imageAttachments = body.messages.flatMap((message) => message.attachments ?? []);
+        if (imageAttachments.length > 3 || imageAttachments.some((attachment) => !/^image\/(png|jpe?g|gif|webp)$/.test(attachment.mediaType) || !attachment.dataUrl.startsWith(`data:${attachment.mediaType};base64,`) || attachment.dataUrl.length > 6 * 1024 * 1024)) {
+          await finishExecution("failed", "Invalid image attachment.");
+          return json({ error: "Attach up to 3 PNG, JPEG, GIF, or WebP images of 4 MB or less." }, 400);
+        }
 
         const stream = body.stream !== false;
         const anthropic = conf.dialect === "anthropic";
@@ -232,6 +237,16 @@ export const Route = createFileRoute("/api/ai/chat")({
           .map((m) => m.content)
           .join("\n\n");
         const turns = body.messages.filter((m) => m.role !== "system");
+        const anthropicContent = (message: { content: string; attachments?: Array<{ mediaType: string; dataUrl: string }> }) =>
+          message.attachments?.length
+            ? [{ type: "text", text: message.content }, ...message.attachments.map((attachment) => ({ type: "image", source: { type: "base64", media_type: attachment.mediaType, data: attachment.dataUrl.split(",")[1] ?? "" } }))]
+            : message.content;
+        const openAiContent = (message: { content: string; attachments?: Array<{ mediaType: string; dataUrl: string }> }) =>
+          message.attachments?.length
+            ? [{ type: "text", text: message.content }, ...message.attachments.map((attachment) => ({ type: "image_url", image_url: { url: attachment.dataUrl } }))]
+            : message.content;
+        const responseContent = (message: { content: string; attachments?: Array<{ mediaType: string; dataUrl: string }> }) =>
+          [{ type: "input_text", text: message.content }, ...(message.attachments ?? []).map((attachment) => ({ type: "input_image", image_url: attachment.dataUrl }))];
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (anthropic) {
@@ -254,7 +269,7 @@ export const Route = createFileRoute("/api/ai/chat")({
               ...(systemText ? { system: systemText } : {}),
               messages: turns.map((m) => ({
                 role: m.role === "assistant" ? "assistant" : "user",
-                content: m.content,
+                content: anthropicContent(m),
               })),
             }
           : responses
@@ -265,10 +280,10 @@ export const Route = createFileRoute("/api/ai/chat")({
                 ...(systemText ? { instructions: systemText } : {}),
                 input: turns.map((m) => ({
                   role: m.role === "assistant" ? "assistant" : "user",
-                  content: m.content,
+                  content: responseContent(m),
                 })),
               }
-            : { model: body.model, messages: body.messages, stream };
+            : { model: body.model, messages: body.messages.map((message) => ({ ...message, content: openAiContent(message) })), stream };
 
         let upstream: Response;
         try {

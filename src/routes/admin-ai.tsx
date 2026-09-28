@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, Paperclip, X } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
@@ -70,7 +71,8 @@ type Tab = "control" | "home" | "chat" | "explorer" | "search" | "dependency" | 
 const SECTIONS: Array<[Tab, string]> = [["control", "Admin AI Control"], ["home", "Home"], ["chat", "Chat"], ["explorer", "Repository Explorer"], ["search", "Search Center"], ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"], ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"], ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"], ["proposals", "Change Proposal Center"], ["accessibility", "Accessibility Center"]];
 type Engine = "lovable" | ProviderId;
 
-interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string }
+interface ChatImageAttachment { id: string; name: string; mediaType: string; dataUrl: string }
+interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string; attachments?: ChatImageAttachment[] }
 interface Report { id: string; kind: string; title: string; content: string; status: string; engine: string | null; created_at: string }
 interface FileAuditItem { label: string; status: "PASS" | "FAIL"; result?: RepositoryFileRead; error?: string }
 
@@ -104,11 +106,20 @@ function AdminAiPage() {
 
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
+  const attachmentInput = useRef<HTMLInputElement | null>(null);
+  const chatScroll = useRef<HTMLDivElement | null>(null);
+  const [showGoToBottom, setShowGoToBottom] = useState(false);
   const [stream, setStream] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [openReport, setOpenReport] = useState<Report | null>(null);
   const [evidence, setEvidence] = useState<Record<string, unknown[]>>({});
+
+  const scrollToChatBottom = useCallback(() => {
+    chatScroll.current?.scrollTo({ top: chatScroll.current.scrollHeight, behavior: "smooth" });
+    setShowGoToBottom(false);
+  }, []);
 
   const loadAll = useCallback(async () => {
     const [s, m, r, f, a1, a2, sn] = await Promise.all([
@@ -275,7 +286,7 @@ function AdminAiPage() {
     return () => window.clearInterval(timer);
   }, [tab]);
 
-  async function run(userText: string, history: Msg[], kind?: ReportKind, extra?: { instruction: string; context: string }) {
+  async function run(userText: string, history: Msg[], kind?: ReportKind, extra?: { instruction: string; context: string }, imageAttachments: ChatImageAttachment[] = []) {
     // This check is the client-side gate; the route metadata below creates a durable
     // request record. No Admin screen calls a provider until Control authorizes it.
     const access = await assertAdminAiAccess(tab as AdminModuleKey);
@@ -290,7 +301,7 @@ function AdminAiPage() {
       const answer = await streamChat(
         provider,
         cfg,
-        [{ role: "system", content: adminSystemPrompt(extra ? `${context}\n\n# Recovery evidence\n${extra.context}` : context) }, ...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: extra ? extra.instruction : kind ? reportInstruction(kind) : userText }],
+        [{ role: "system", content: adminSystemPrompt(extra ? `${context}\n\n# Recovery evidence\n${extra.context}` : context) }, ...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: extra ? extra.instruction : kind ? reportInstruction(kind) : userText, ...(imageAttachments.length ? { attachments: imageAttachments.map(({ mediaType, dataUrl }) => ({ mediaType, dataUrl })) } : {}) }],
         (d) => setStream((s) => (s ?? "") + d),
         ctrl.signal,
         { originModule: tab, actor: "Platform owner" },
@@ -302,13 +313,36 @@ function AdminAiPage() {
     }
   }
 
+  async function addImages(files: File[]) {
+    const candidates = files.filter((file) => /^image\/(png|jpe?g|gif|webp)$/.test(file.type));
+    if (candidates.length !== files.length) toast.error("Admin AI Chat supports PNG, JPEG, GIF, and WebP images.");
+    const available = 3 - attachments.length;
+    if (available <= 0) return toast.error("You can attach up to 3 images per message.");
+    const accepted = candidates.slice(0, available).filter((file) => file.size <= 4 * 1024 * 1024);
+    if (accepted.length !== candidates.slice(0, available).length) toast.error("Each image must be 4 MB or smaller.");
+    const read = (file: File) => new Promise<ChatImageAttachment>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`, name: file.name, mediaType: file.type, dataUrl: String(reader.result) });
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    try {
+      const images = await Promise.all(accepted.map(read));
+      setAttachments((current) => [...current, ...images].slice(0, 3));
+    } catch {
+      toast.error("One or more images could not be attached.");
+    }
+  }
+
   async function send() {
     const text = input.trim();
-    if (!text || stream !== null || !chatEnabled) return;
+    if ((!text && attachments.length === 0) || stream !== null || !chatEnabled) return;
+    const sentAttachments = attachments;
     setInput("");
+    setAttachments([]);
     const history = msgs.slice(-20);
-    setMsgs((m) => [...m, { role: "user", content: text, created_at: new Date().toISOString() }]);
-    await db.from("vpip_admin_ai_messages").insert({ role: "user", content: text });
+    setMsgs((m) => [...m, { role: "user", content: text, attachments: sentAttachments, created_at: new Date().toISOString() }]);
+    await db.from("vpip_admin_ai_messages").insert({ role: "user", content: text || `[${sentAttachments.length} image attachment${sentAttachments.length === 1 ? "" : "s"}]` });
     try {
       // Read any repository files the user names so the answer uses real contents.
       let prompt = text;
@@ -337,7 +371,7 @@ function AdminAiPage() {
         ]);
         prompt += `\n\n## Live tool results (executed just now)\n${parts.join("\n\n")}\n\nNote: full-text / symbol / import search runs in Repository tab → Code Search (reads every source file). Answer only from these results.`;
       }
-      const full = await run(prompt, history);
+      const full = await run(prompt, history, undefined, undefined, sentAttachments);
       setMsgs((m) => [...m, { role: "assistant", content: full, created_at: new Date().toISOString() }]);
       await db.from("vpip_admin_ai_messages").insert({ role: "assistant", content: full, engine: engineLabel, model: resolve().cfg.model });
     } catch (e) {
@@ -445,27 +479,33 @@ function AdminAiPage() {
 {tab === "chat" ? (
             <div className="mx-auto flex h-full max-w-3xl flex-col rounded-md border border-border bg-surface p-4">
               <div className="text-sm font-semibold">Admin AI Chat</div>
-<div className="flex-1 space-y-3 overflow-y-auto py-2">
+<div ref={chatScroll} className="flex-1 space-y-3 overflow-y-auto py-2" onScroll={(event) => { const element = event.currentTarget; setShowGoToBottom(element.scrollHeight - element.scrollTop - element.clientHeight > 80); }}>
                 {msgs.length === 0 && stream === null ? (
                   <div className="text-sm text-muted-foreground">Ask Admin AI about VPIP — e.g. "Why do AI 1 builds keep failing on routes?" It sees the connected repository, pinned files, AI 1/AI 2 reports and your feedback.</div>
                 ) : null}
                 {msgs.map((m, i) => (
                   <div key={m.id ?? i} className={m.role === "user" ? "ml-auto max-w-[80%] rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground" : "text-sm"}>
-                    {m.role === "user" ? m.content : <Markdown source={m.content} />}
+                    {m.role === "user" ? <><div>{m.content}</div>{m.attachments?.length ? <div className="mt-2 flex flex-wrap gap-2">{m.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} className="max-h-40 rounded border border-primary-foreground/20" />)}</div> : null}</> : <Markdown source={m.content} />}
                     {m.created_at ? <div className={`mt-1 text-[10px] ${m.role === "user" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{new Date(m.created_at).toLocaleString()}</div> : null}
                   </div>
                 ))}
                 {stream !== null ? <div className="text-sm"><Markdown source={stream || "Thinking…"} /></div> : null}
               </div>
+              {showGoToBottom ? <Button type="button" size="sm" variant="secondary" className="mx-auto mt-2 gap-1" onClick={scrollToChatBottom}><ArrowDown className="size-3.5" />Go to bottom</Button> : null}
               {!chatEnabled ? <div className="mt-4 rounded border border-destructive/40 bg-destructive/5 p-2 text-xs text-muted-foreground">Admin AI Control has this module disconnected or Emergency AI OFF is active. Chat is read-only until it is connected in Admin AI Control.</div> : null}
-              <div className="sticky bottom-0 mt-4 flex gap-2 bg-background pt-2">
-                <Textarea rows={2} value={input} disabled={!chatEnabled} placeholder={chatEnabled ? "Message Admin AI" : "Admin AI Control has blocked chat"} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => {
+              <div className="sticky bottom-0 mt-4 bg-background pt-2">
+                {attachments.length ? <div className="mb-2 flex flex-wrap gap-2">{attachments.map((attachment) => <div key={attachment.id} className="relative"><img src={attachment.dataUrl} alt={attachment.name} className="h-16 w-16 rounded border border-border object-cover" /><button type="button" aria-label={`Remove ${attachment.name}`} className="absolute -right-1 -top-1 rounded-full bg-background p-0.5 shadow" onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><X className="size-3" /></button></div>)}</div> : null}
+                <input ref={attachmentInput} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { const files = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addImages(files); }} />
+                <div className="flex gap-2">
+                <Button type="button" variant="outline" size="icon" disabled={!chatEnabled || stream !== null} aria-label="Attach images" title="Attach images" onClick={() => attachmentInput.current?.click()}><Paperclip className="size-4" /></Button>
+                <Textarea rows={2} value={input} disabled={!chatEnabled} placeholder={chatEnabled ? "Message Admin AI — paste an image or attach up to 3 images" : "Admin AI Control has blocked chat"} onPaste={(event) => { const images = Array.from(event.clipboardData.items).filter((item) => item.type.startsWith("image/")).map((item) => item.getAsFile()).filter((file): file is File => file !== null); if (images.length) { event.preventDefault(); void addImages(images); } }} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     void send();
                   }
                 }} />
-                <Button onClick={() => void send()} disabled={!chatEnabled || stream !== null || !input.trim()}>Send</Button>
+                <Button onClick={() => void send()} disabled={!chatEnabled || stream !== null || (!input.trim() && attachments.length === 0)}>Send</Button>
+                </div>
               </div>
             </div>
 ) : null}
