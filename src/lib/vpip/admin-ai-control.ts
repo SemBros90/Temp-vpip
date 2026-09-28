@@ -6,7 +6,7 @@ import { logAdminAction } from "./admin-log";
 const db = supabase as unknown as { from: (table: string) => any };
 
 export const ADMIN_MODULES = [
-  ["home", "Home"], ["explorer", "Repository Explorer"], ["search", "Search Center"],
+  ["home", "Home"], ["chat", "Admin AI Chat"], ["explorer", "Repository Explorer"], ["search", "Search Center"],
   ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"],
   ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"],
   ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"],
