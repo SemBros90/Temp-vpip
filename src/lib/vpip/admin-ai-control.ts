@@ -2,6 +2,7 @@
 import {
   getAdminAiConfiguration,
   getModules,
+  getProviders,
   getSettings,
   updateModule,
   updateSettings,
@@ -20,8 +21,11 @@ export interface ModuleState { id: string; module_key: string; enabled: boolean;
 const state = (m: AdminAiModule): ModuleState => ({ id: m.id, module_key: m.module_name, enabled: m.ai_enabled, access_level: m.permission_level, connection_status: m.connection_status, updated_at: m.updated_at });
 export async function getControlState() {
   const { settings, modules, providers, runtime } = await getAdminAiConfiguration();
-  if (!settings) throw new Error("Admin AI settings have not been configured in the database.");
-  return { control: { enabled: settings.ai_enabled, emergency_off: settings.emergency_stop, provider: settings.provider, model: settings.model, connection_status: settings.connection_status }, modules: modules.map(state), providers, runtime, requests: [], responses: [] };
+  // Recover safely if a database was created before the seed migration ran.
+  // updateSettings persists a complete, disconnected singleton; it never
+  // enables a provider or module as part of this repair.
+  const controlSettings = settings ?? await updateSettings({});
+  return { control: { enabled: controlSettings.ai_enabled, emergency_off: controlSettings.emergency_stop, provider: controlSettings.provider, model: controlSettings.model, connection_status: controlSettings.connection_status }, modules: modules.map(state), providers, runtime, requests: [], responses: [] };
 }
 export async function setModuleAccess(module: ModuleState, access_level: AccessLevel, actor = "Platform owner") {
   const enabled = access_level !== "disconnected";
@@ -36,6 +40,10 @@ export async function setEntirePanel(connect: boolean, actor = "Platform owner")
   await writeActionLog(connect ? "panel_connect" : "panel_disconnect", null, "completed", { actor, module_count: modules.length });
 }
 export async function setControlProvider(provider: string, model: string, actor = "Platform owner") {
+  const available = await getProviders();
+  if (!available.some((entry) => entry.enabled && entry.provider_name === provider && entry.model_name === model)) {
+    throw new Error(`The ${provider} / ${model} provider model is not available in Admin AI Control.`);
+  }
   await updateSettings({ provider, model });
   await writeActionLog("provider_change", null, "completed", { actor, provider, model });
 }

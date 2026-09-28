@@ -17,6 +17,21 @@ export interface AdminAiModule { id: string; module_name: string; ai_enabled: bo
 export interface AdminAiProvider { id: string; provider_name: string; model_name: string; api_endpoint: string | null; enabled: boolean; created_at: string; updated_at: string }
 export interface AdminAiRuntimeStatus { id: string; repository_health: string; runtime_health: string; validation_health: string; snapshot_health: string; knowledge_health: string; risk_critical: number; risk_high: number; risk_medium: number; risk_low: number; updated_at: string }
 
+/**
+ * `upsert` inserts when the singleton is absent. Keep every NOT NULL column
+ * here so partial updates (for example selecting a provider) can never create
+ * an invalid settings record.
+ */
+const DEFAULT_SETTINGS = {
+  id: "default",
+  ai_enabled: false,
+  emergency_stop: false,
+  provider: "lovable",
+  model: "openai/gpt-6-astra",
+  connection_status: "disconnected",
+  active_module_count: 0,
+};
+
 async function result<T>(query: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<T> {
   const { data, error } = await query;
   if (error) throw new Error(error.message);
@@ -27,7 +42,11 @@ export async function getSettings(): Promise<AdminAiSettings | null> {
   return result<AdminAiSettings | null>(db.from("admin_ai_settings").select("*").eq("id", "default").maybeSingle());
 }
 export async function updateSettings(changes: Partial<Omit<AdminAiSettings, "id" | "created_at" | "updated_at">>): Promise<AdminAiSettings> {
-  return result<AdminAiSettings>(db.from("admin_ai_settings").upsert({ id: "default", ...changes, updated_at: new Date().toISOString() }).select("*").single());
+  // Read first so an update never resets unrelated control state. If a
+  // deployment is missing the singleton, the defaults below form a complete,
+  // intentionally disconnected row rather than a partial invalid insert.
+  const current = await getSettings();
+  return result<AdminAiSettings>(db.from("admin_ai_settings").upsert({ ...DEFAULT_SETTINGS, ...current, ...changes, updated_at: new Date().toISOString() }).select("*").single());
 }
 export async function getModules(): Promise<AdminAiModule[]> {
   return result<AdminAiModule[]>(db.from("admin_ai_modules").select("*").order("module_name"));

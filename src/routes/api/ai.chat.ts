@@ -146,10 +146,7 @@ function responsesToOpenAiStream(body: ReadableStream<Uint8Array>) {
   );
 }
 
-export const Route = createFileRoute("/api/ai/chat")({
-  server: {
-    handlers: {
-      POST: async ({ request }) => {
+async function handleChatRequest(request: Request): Promise<Response> {
         const body = (await request.json().catch(() => ({}))) as Body;
         const adminModule = request.headers.get("X-VPIP-Admin-Module");
         const started = Date.now();
@@ -382,7 +379,31 @@ export const Route = createFileRoute("/api/ai/chat")({
             },
           },
         );
-      },
+      }
+
+/**
+ * Translate runtime configuration failures into a clear service-unavailable
+ * response rather than leaking an unhandled server exception as HTTP 500.
+ * Provider failures are handled in `handleChatRequest` and retain their
+ * provider-specific status and message.
+ */
+function chatRuntimeError(error: unknown) {
+  const detail = error instanceof Error ? error.message : "Unknown server error";
+  console.error("[AI chat] Request setup failed", error);
+  return json(
+    {
+      error: detail.includes("Supabase environment variable")
+        ? "Admin AI chat is unavailable because its server database connection is not configured. Connect Supabase in Lovable Cloud and try again."
+        : "Admin AI chat is temporarily unavailable while its control configuration is being loaded. Please try again.",
+    },
+    503,
+  );
+}
+
+export const Route = createFileRoute("/api/ai/chat")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => handleChatRequest(request).catch(chatRuntimeError),
     },
   },
 });
