@@ -13,6 +13,7 @@ import { AdminKnowledgeBase } from "@/components/vpip/AdminKnowledgeBase";
 import { AdminRootCause } from "@/components/vpip/AdminRootCause";
 import { AdminAiControl } from "@/components/vpip/AdminAiControl";
 import { assertAdminAiAccess, getControlState, type AdminModuleKey } from "@/lib/vpip/admin-ai-control";
+import { getAdminAiConfiguration } from "@/lib/admin-ai-service";
 import { logAdminAction, listAdminActions } from "@/lib/vpip/admin-log";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
@@ -287,6 +288,8 @@ function AdminAiPage() {
     const resolved = resolve(access.provider as Engine);
     const provider = resolved.provider;
     const cfg = { ...resolved.cfg, model: access.model || resolved.cfg.model };
+    const configuration = await getAdminAiConfiguration();
+    const configurationContext = `# Canonical Admin AI database configuration\nProvider: ${configuration.settings?.provider ?? "not configured"}\nModel: ${configuration.settings?.model ?? "not configured"}\nConnection status: ${configuration.settings?.connection_status ?? "not configured"}\nActive modules: ${configuration.modules.filter((module) => module.ai_enabled).map((module) => module.module_name).join(", ") || "none"}\nModule permissions:\n${configuration.modules.map((module) => `- ${module.module_name}: ${module.permission_level} (${module.connection_status})`).join("\n") || "no module records"}`;
     const ctrl = new AbortController();
     abort.current = ctrl;
     setStream("");
@@ -294,7 +297,7 @@ function AdminAiPage() {
       const answer = await streamChat(
         provider,
         cfg,
-        [{ role: "system", content: adminSystemPrompt(extra ? `${context}\n\n# Recovery evidence\n${extra.context}` : context) }, ...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: extra ? extra.instruction : kind ? reportInstruction(kind) : userText, ...(imageAttachments.length ? { attachments: imageAttachments.map(({ mediaType, dataUrl }) => ({ mediaType, dataUrl })) } : {}) }],
+        [{ role: "system", content: adminSystemPrompt(`${extra ? `${context}\n\n# Recovery evidence\n${extra.context}` : context}\n\n${configurationContext}`) }, ...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: extra ? extra.instruction : kind ? reportInstruction(kind) : userText, ...(imageAttachments.length ? { attachments: imageAttachments.map(({ mediaType, dataUrl }) => ({ mediaType, dataUrl })) } : {}) }],
         (d) => setStream((s) => (s ?? "") + d),
         ctrl.signal,
         { originModule: tab, actor: "Platform owner" },
