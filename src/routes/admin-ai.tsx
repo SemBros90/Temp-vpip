@@ -21,6 +21,7 @@ import { Markdown } from "@/lib/vpip/markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { streamChat } from "@/lib/vpip/ai";
 import { AdminHomeHealth } from "@/components/vpip/AdminHomeHealth";
+import { AdminControlStatus } from "@/components/vpip/AdminControlStatus";
 import { AdminRepoInsights } from "@/components/vpip/AdminRepoInsights";
 import { classifyFile } from "@/lib/vpip/repo-map";
 import { useVpip } from "@/lib/vpip/store";
@@ -415,6 +416,7 @@ function AdminAiPage() {
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
 {tab === "control" ? <AdminAiControl /> : null}
 {tab === "home" ? (<div className="space-y-4">
+              <AdminControlStatus />
               <AdminHomeHealth />
               <div className="grid gap-2 rounded-md border border-border bg-surface p-4 md:grid-cols-[1fr_1fr_auto]">
                 <Input placeholder="VPIP repository, e.g. SemBros90/vpip" value={repo} onChange={(e) => setRepo(e.target.value)} />
