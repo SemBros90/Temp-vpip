@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, PlugZap, Trash2, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, Loader2, PlugZap, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/vpip/Shell";
+import { WorkspaceImport } from "@/components/vpip/WorkspaceImport";
 import { Tag } from "@/components/vpip/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,6 @@ import {
   PROVIDER_LABEL,
   PROVIDER_MODELS,
   type ProviderId,
-  type Workspace,
 } from "@/lib/vpip/types";
 
 export const Route = createFileRoute("/settings")({
@@ -41,12 +41,11 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
-  const { ws, saveNow, resetVault, importWorkspace } = useVpip();
+  const { ws, saveNow, resetVault } = useVpip();
   const actions = useVpipActions();
   const { keys } = useAiKeys();
   const [testing, setTesting] = useState<ProviderId | null>(null);
   const [size, setSize] = useState(0);
-  const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void vaultSize().then(setSize);
@@ -65,8 +64,8 @@ function SettingsPage() {
   };
 
   return (
-    <Shell title="Settings" subtitle="Engines, storage and vault maintenance">
-      <div className="mx-auto max-w-4xl space-y-5 px-6 py-6">
+    <Shell title="Settings" subtitle="Engines, storage and vault maintenance" mobileNavigation>
+      <div className="mx-auto max-w-4xl space-y-5 px-4 py-6 sm:px-6">
         <section className="panel p-5">
           <div className="label-mono mb-4">AI engines</div>
           <div className="space-y-5">
@@ -85,6 +84,7 @@ function SettingsPage() {
                     <div>
                       <div className="label-mono mb-1">API key</div>
                       <Input
+                        data-testid={`settings-${id.toLowerCase()}-api-key`}
                         type="password"
                         autoComplete="off"
                         spellCheck={false}
@@ -100,12 +100,12 @@ function SettingsPage() {
                         value={cfg.model}
                         onValueChange={(v) => actions.setProvider(id, { model: v })}
                       >
-                        <SelectTrigger className="font-mono text-xs">
+                        <SelectTrigger data-testid={`settings-${id.toLowerCase()}-model`} className="font-mono text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {PROVIDER_MODELS[id].map((m) => (
-                            <SelectItem key={m} value={m} className="font-mono text-xs">
+                            <SelectItem data-testid={`settings-${id.toLowerCase()}-model-${m.replace(/[^a-z0-9-]/gi, "-")}`} key={m} value={m} className="font-mono text-xs">
                               {m}
                             </SelectItem>
                           ))}
@@ -114,7 +114,7 @@ function SettingsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-1">
-                    <Button size="sm" variant="outline" className="h-8" onClick={() => void test(id)}>
+                    <Button data-testid={`settings-${id.toLowerCase()}-test-connection`} size="sm" variant="outline" className="h-8" onClick={() => void test(id)}>
                       {testing === id ? (
                         <Loader2 className="size-4 animate-spin" />
                       ) : (
@@ -123,6 +123,7 @@ function SettingsPage() {
                       Test connection
                     </Button>
                     <Button
+                      data-testid={`settings-${id.toLowerCase()}-make-default`}
                       size="sm"
                       variant={ws.settings.defaultProvider === id ? "secondary" : "outline"}
                       className="h-8"
@@ -131,7 +132,7 @@ function SettingsPage() {
                       Make default
                     </Button>
                     {cfg.statusMessage ? (
-                      <span className="truncate text-xs text-muted-foreground">{cfg.statusMessage}</span>
+                      <span data-testid={`settings-${id.toLowerCase()}-connection-status`} className="truncate text-xs text-muted-foreground">{cfg.statusMessage}</span>
                     ) : null}
                   </div>
                 </div>
@@ -151,6 +152,7 @@ function SettingsPage() {
             <div>
               <div className="label-mono mb-1">Project root label</div>
               <Input
+                data-testid="settings-project-root-label"
                 value={ws.settings.projectRootLabel}
                 onChange={(e) => actions.setSettings({ projectRootLabel: e.target.value })}
               />
@@ -158,6 +160,7 @@ function SettingsPage() {
             <div>
               <div className="label-mono mb-1">Backup folder label</div>
               <Input
+                data-testid="settings-backup-folder-label"
                 value={ws.settings.backupFolderLabel}
                 onChange={(e) => actions.setSettings({ backupFolderLabel: e.target.value })}
               />
@@ -165,6 +168,7 @@ function SettingsPage() {
             <div>
               <div className="label-mono mb-1">Auto-save interval (sec)</div>
               <Input
+                data-testid="settings-auto-save-interval"
                 type="number"
                 min={5}
                 value={ws.settings.autoSaveIntervalSec}
@@ -176,16 +180,18 @@ function SettingsPage() {
             <div>
               <div className="label-mono mb-1">Author name</div>
               <Input
+                data-testid="settings-author-name"
                 value={ws.settings.author}
                 onChange={(e) => actions.setSettings({ author: e.target.value })}
               />
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button size="sm" className="h-8" onClick={() => void saveNow().then((ok) => { if (ok) toast.success("Settings saved"); })}>
+            <Button data-testid="settings-save-now" size="sm" className="h-8" onClick={() => void saveNow().then((ok) => { if (ok) toast.success("Settings saved"); })}>
               Save now
             </Button>
             <Button
+              data-testid="settings-export-workspace"
               size="sm"
               variant="outline"
               className="h-8"
@@ -196,32 +202,8 @@ function SettingsPage() {
             >
               <Download className="size-4" /> Export workspace ZIP
             </Button>
-            <input
-              ref={importRef}
-              type="file"
-              accept="application/json"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  const parsed = JSON.parse(await file.text()) as Workspace;
-                  importWorkspace(parsed);
-                  toast.success("Workspace imported");
-                } catch {
-                  toast.error("That file is not a valid workspace.json");
-                }
-              }}
-            />
             <Button
-              size="sm"
-              variant="outline"
-              className="h-8"
-              onClick={() => importRef.current?.click()}
-            >
-              <Upload className="size-4" /> Import workspace.json
-            </Button>
-            <Button
+              data-testid="settings-clear-vault"
               size="sm"
               variant="outline"
               className="h-8"
@@ -233,7 +215,8 @@ function SettingsPage() {
             >
               <Trash2 className="size-4 text-destructive" /> Clear vault
             </Button>
-            <span className="label-mono">{(size / 1024).toFixed(1)} KB stored</span>
+            <span data-testid="settings-workspace-size" className="label-mono">{(size / 1024).toFixed(1)} KB stored</span>
+            <WorkspaceImport />
           </div>
         </section>
       </div>

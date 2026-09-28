@@ -6,6 +6,8 @@
  * the vault somewhere else.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { importCollections, validateWorkspaceImport } from "./workspace-import-schema";
+import { importConflict, importTables, mergeWorkspaceImport } from "./workspace-import";
 import {
   emptyWorkspace,
   type AgentTask,
@@ -86,7 +88,7 @@ async function selectAll(
   return { data: out };
 }
 
-export async function vaultRead<T>(): Promise<T | null> {
+export async function vaultRead<T>(trackOwnership = true): Promise<T | null> {
   const settingsRes = await supabase
     .from("vpip_settings")
     .select("*")
@@ -171,7 +173,7 @@ export async function vaultRead<T>(): Promise<T | null> {
     ["vpip_repo_env", repoEnv],
   ];
   for (const [table, res] of loaded) {
-    rememberIds(table, res.data.map((r) => r['id'] as string));
+    if (trackOwnership) rememberIds(table, res.data.map((r) => r['id'] as string));
   }
 
   const base = emptyWorkspace();
@@ -673,7 +675,7 @@ function rememberIds(table: string, ids: string[]) {
   ownedIds[table] = new Set(ids);
 }
 
-async function syncTable(table: string, rows: Row[], keepIds: string[]) {
+async function syncWorkspaceTable(table: string, rows: Row[], keepIds: string[]) {
   const keep = new Set(keepIds);
   const known = ownedIds[table] ?? new Set<string>();
   const removed = [...known].filter((id) => !keep.has(id));
@@ -743,6 +745,66 @@ export function vaultWrite(value: unknown): Promise<void> {
 }
 
 /**
+ * Imports never use full-sync deletes or updates. ON CONFLICT DO NOTHING also
+ * protects a record created in another app after our read. Existing serializers
+ * and tables are reused, so other editors need no migration or format change.
+ */
+export function vaultImport(input: unknown) {
+  const incoming = validateWorkspaceImport(input);
+  queued += 1;
+  const run = writeChain.then(async () => {
+    const current = await vaultRead<Workspace>(false);
+    if (!current) throw new Error("Could not read the current workspace. Nothing was imported.");
+    const plan = mergeWorkspaceImport(current, incoming);
+    const inserted = new Set<string>();
+    const insertOnly = async (table: string, rows: Row[]) => {
+      const collection = importCollections.find((key) => importTables[key] === table);
+      if (!collection) throw new Error(`Unsupported import table: ${table}`);
+      const additions = rows.filter((r) => plan.newIds[collection].has(r['id'] as string));
+      // Keep payloads bounded for workspaces containing large source files.
+      let batch: Row[] = [];
+      let size = 0;
+      const flush = async () => {
+        if (!batch.length) return;
+        const { data, error } = await supabase.from(table as never)
+          .upsert(batch as never, { onConflict: "id", ignoreDuplicates: true }).select("id");
+        if (error) throw new Error(error.message);
+        for (const row of (data ?? []) as Row[]) inserted.add(`${collection}:${row['id']}`);
+        batch = [];
+        size = 0;
+      };
+      for (const row of additions) {
+        const length = JSON.stringify(row).length;
+        if (batch.length && (size + length > 1_500_000 || batch.length >= 200)) await flush();
+        batch.push(row);
+        size += length;
+      }
+      await flush();
+    };
+    try {
+      if (plan.report.added) await writeWorkspace(plan.workspace, insertOnly, false);
+      const workspace = await vaultRead<Workspace>();
+      if (!workspace) throw new Error("Import verification could not read the workspace.");
+      for (const key of importCollections) {
+        const visible = new Set(workspace[key].map((row) => row.id));
+        for (const row of incoming[key]) {
+          if (!plan.newIds[key].has(row.id)) continue;
+          if (!visible.has(row.id)) throw new Error(`Import verification failed for ${key}: ${row.id}.`);
+          if (!inserted.has(`${key}:${row.id}`)) plan.report.conflicts.push(importConflict(key, row));
+        }
+      }
+      plan.report.added = inserted.size;
+      return { workspace, report: plan.report };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Database request failed";
+      throw new Error(`Import did not finish: ${detail} Existing records were not replaced or deleted. Some new records may already have been added; retrying the same file is safe.`);
+    }
+  });
+  writeChain = run.then(() => undefined, () => undefined);
+  return run.finally(() => { queued = Math.max(0, queued - 1); });
+}
+
+/**
  * Reads one record straight back from the database after a save, so a write
  * that silently did nothing cannot be reported as success.
  */
@@ -772,11 +834,16 @@ export async function pingDatabase(): Promise<{ ok: boolean; ms: number; message
   };
 }
 
-async function writeWorkspace(value: unknown): Promise<void> {
+async function writeWorkspace(
+  value: unknown,
+  syncTable: typeof syncWorkspaceTable = syncWorkspaceTable,
+  writeSettings = true,
+): Promise<void> {
   const ws = value as Workspace;
   if (!ws || !Array.isArray(ws.projects)) return;
 
-  const { error: sErr } = await supabase.from("vpip_settings").upsert(
+  if (writeSettings) {
+    const { error: sErr } = await supabase.from("vpip_settings").upsert(
     {
       id: 1,
       author: ws.settings.author,
@@ -789,7 +856,8 @@ async function writeWorkspace(value: unknown): Promise<void> {
     },
     { onConflict: "id" },
   );
-  if (sErr) throw sErr;
+    if (sErr) throw sErr;
+  }
 
   const projectIds = ws.projects.map((p) => p.id);
   const inProject = <T extends { projectId: string }>(list: T[] | undefined) =>
@@ -1326,7 +1394,8 @@ async function writeWorkspace(value: unknown): Promise<void> {
 /* --------------------------------------------------------------- utility */
 
 export async function vaultSize(): Promise<number> {
-  const ws = await vaultRead<Workspace>();
+  // A diagnostic read must never expand the set a stale tab may delete.
+  const ws = await vaultRead<Workspace>(false);
   return ws ? new Blob([JSON.stringify(ws)]).size : 0;
 }
 

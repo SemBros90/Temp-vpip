@@ -25,8 +25,9 @@ import {
   ShieldCheck,
   Server,
   ShieldQuestion,
+  Menu,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useVpip } from "@/lib/vpip/store";
 import { PROVIDER_LABEL } from "@/lib/vpip/types";
 import { cn } from "@/lib/utils";
@@ -107,13 +108,16 @@ export function Shell({
   subtitle,
   actions,
   scroll = true,
+  mobileNavigation = false,
 }: {
   children: ReactNode;
   title: string;
   subtitle?: ReactNode;
   actions?: ReactNode;
   scroll?: boolean;
+  mobileNavigation?: boolean;
 }) {
+  const [navigationOpen, setNavigationOpen] = useState(false);
   const params = useParams({ strict: false }) as { projectId?: string };
   const projectId = params.projectId;
   const { ws } = useVpip();
@@ -121,7 +125,11 @@ export function Shell({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+      {mobileNavigation && navigationOpen ? <button data-testid="settings-navigation-dismiss" type="button" aria-label="Close navigation" onClick={() => setNavigationOpen(false)} className="fixed inset-0 z-40 bg-black/50 md:hidden" /> : null}
+      <aside id="workspace-navigation" className={cn("flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
+        mobileNavigation && "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50",
+        mobileNavigation && !navigationOpen && "max-md:hidden")}
+        onClick={(event) => { if ((event.target as HTMLElement).closest("a")) setNavigationOpen(false); }}>
         <div className="flex items-center gap-2.5 border-b border-sidebar-border px-4 py-3.5">
           <div className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground">
             <Boxes className="size-4" />
@@ -168,6 +176,7 @@ export function Shell({
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-6 py-3.5">
+          {mobileNavigation ? <button data-testid="settings-navigation-toggle" type="button" aria-label="Open navigation" aria-expanded={navigationOpen} aria-controls="workspace-navigation" onClick={() => setNavigationOpen((open) => !open)} className="shrink-0 rounded border border-border p-2 transition-colors hover:bg-muted md:hidden"><Menu className="size-4" /></button> : null}
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold tracking-tight">{title}</h1>
             {subtitle ? (

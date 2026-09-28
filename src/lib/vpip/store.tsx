@@ -10,7 +10,9 @@ import {
 } from "react";
 import { repoDiagnosticsSummary } from "./repo-analyzer";
 import { toast } from "sonner";
-import { saveQueueLength, vaultClear, vaultRead, vaultWrite, verifySave } from "./db";
+import { saveQueueLength, vaultClear, vaultImport, vaultRead, vaultWrite, verifySave } from "./db";
+import { validateWorkspaceImport } from "./workspace-import-schema";
+import type { ImportReport } from "./workspace-import";
 import {
   emptyWorkspace,
   KNOWLEDGE_PREFIX,
@@ -79,7 +81,7 @@ interface Ctx {
   update: (fn: (ws: Workspace) => Workspace) => void;
   saveNow: () => Promise<boolean>;
   resetVault: () => Promise<void>;
-  importWorkspace: (ws: Workspace) => void;
+  importWorkspace: (input: unknown) => Promise<ImportReport>;
   /* persistence observability */
   saveState: SaveState;
   saveError: string | null;
@@ -118,6 +120,9 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   const [pendingChanges, setPendingChanges] = useState(0);
   const [queueLength, setQueueLength] = useState(0);
   const [otherTabs, setOtherTabs] = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
+  const importingRef = useRef(false);
+  const deferredUpdatesRef = useRef<Array<(w: Workspace) => Workspace>>([]);
   const wsRef = useRef(ws);
   wsRef.current = ws;
   const pendingRef = useRef(0);
@@ -129,6 +134,7 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   const readableRef = useRef(false);
 
   const load = useCallback(async () => {
+    if (importingRef.current) return;
     try {
       // The database may be waking up (schema cache / 5xx). Retry with backoff
       // instead of showing an empty workspace that needs manual refreshes.
@@ -166,6 +172,8 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   }, [load]);
 
   const saveNow = useCallback(async () => {
+    // Do not let autosave or a second manual save race an import/save snapshot.
+    if (importingRef.current || savingRef.current) return false;
     if (!readableRef.current) {
       console.warn("Vault save skipped: workspace was never loaded successfully");
       toast.error("Not saved — your saved data hasn't loaded yet", {
@@ -236,6 +244,12 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const update = useCallback((fn: (w: Workspace) => Workspace) => {
+    if (importingRef.current) {
+      // A generation started before import may finish in the background. Keep
+      // its update and apply it to the refreshed workspace, rather than lose it.
+      deferredUpdatesRef.current.push(fn);
+      return;
+    }
     setWs((prev) => {
       const next = fn(prev);
       wsRef.current = next;
@@ -272,7 +286,7 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   // Unsaved-changes / save-in-progress protection on close, refresh and navigation.
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!dirty && !savingRef.current && !failedRef.current) return;
+      if (!dirty && !savingRef.current && !failedRef.current && !importingRef.current) return;
       e.preventDefault();
       e.returnValue = "";
       return "";
@@ -310,6 +324,7 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetVault = useCallback(async () => {
+    if (importingRef.current) throw new Error("Please wait for the import to finish.");
     await vaultClear();
     const fresh = emptyWorkspace();
     wsRef.current = fresh;
@@ -317,11 +332,50 @@ export function VpipProvider({ children }: { children: ReactNode }) {
     setLastSavedAt(null);
   }, []);
 
-  const importWorkspace = useCallback((incoming: Workspace) => {
-    const merged = { ...emptyWorkspace(), ...incoming };
-    wsRef.current = merged;
-    setWs(merged);
-    setDirty(true);
+  const importWorkspace = useCallback(async (input: unknown): Promise<ImportReport> => {
+    const incoming = validateWorkspaceImport(input);
+    if (!readableRef.current) throw new Error("Wait until the existing workspace has loaded before importing.");
+    if (importingRef.current) throw new Error("An import is already running.");
+    if (pendingRef.current || savingRef.current || saveQueueLength()) {
+      throw new Error("Your current changes are still saving. Wait for Saved, then import the file again.");
+    }
+    importingRef.current = true;
+    setImporting(true);
+    try {
+      const { workspace, report } = await vaultImport(incoming);
+      wsRef.current = workspace;
+      setWs(workspace);
+      setLastLoadedAt(now());
+      setSaveError(null);
+      setSaveState("saved");
+      return report;
+    } catch (error) {
+      // Imports may add several batches before a network failure. Reload them
+      // before allowing any full sync; never delete partially imported rows.
+      try {
+        const stored = await vaultRead<Workspace>();
+        if (!stored) throw new Error("Workspace read failed");
+        wsRef.current = stored;
+        setWs(stored);
+      } catch {
+        readableRef.current = false;
+        setLoadError("Import verification could not reload your data. Reload the workspace before editing or saving.");
+      }
+      throw error;
+    } finally {
+      importingRef.current = false;
+      setImporting(false);
+      const deferred = deferredUpdatesRef.current;
+      deferredUpdatesRef.current = [];
+      if (deferred.length) {
+        const next = deferred.reduce((w, fn) => fn(w), wsRef.current);
+        wsRef.current = next;
+        setWs(next);
+        pendingRef.current += deferred.length;
+        setPendingChanges(pendingRef.current);
+        setDirty(true);
+      }
+    }
   }, []);
 
   const value = useMemo(
@@ -371,7 +425,17 @@ export function VpipProvider({ children }: { children: ReactNode }) {
   return (
     <VpipContext.Provider value={value}>
       {loaded ? (
-        children
+        <>
+          <div className="contents" inert={importing || undefined}>{children}</div>
+          {importing ? (
+            <div data-testid="workspace-import-progress" role="status" aria-live="polite" className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 p-6">
+              <div className="panel max-w-md p-6 text-center text-sm">
+                <p data-testid="workspace-import-progress-title" className="font-semibold">Importing new records safely…</p>
+                <p data-testid="workspace-import-progress-description" className="mt-2 text-muted-foreground">Existing records and settings are kept. Please keep this page open until verification finishes.</p>
+              </div>
+            </div>
+          ) : null}
+        </>
       ) : (
         <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
           Loading project data…
