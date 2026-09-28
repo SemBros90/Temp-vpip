@@ -175,12 +175,12 @@ export const Route = createFileRoute("/api/ai/chat")({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const cdb = supabaseAdmin as unknown as { from: (table: string) => any };
           const [{ data: control }, { data: module }] = await Promise.all([
-            cdb.from("vpip_admin_ai_control").select("enabled,emergency_off").eq("id", "default").maybeSingle(),
-            cdb.from("vpip_admin_ai_modules").select("enabled,access_level").eq("module_key", coderModule).maybeSingle(),
+            cdb.from("admin_ai_settings").select("ai_enabled,emergency_stop").eq("id", "default").maybeSingle(),
+            cdb.from("admin_ai_modules").select("ai_enabled,permission_level").eq("module_name", coderModule).maybeSingle(),
           ]);
           const label = coderModule === "ai1" ? "AI 1" : "AI 2";
-          if (control?.emergency_off) return json({ error: `${label} is blocked: Emergency AI OFF is active in Admin AI Control.` }, 403);
-          if (!control?.enabled || !module?.enabled || module.access_level === "disconnected") return json({ error: `${label} is blocked: connect it in Admin AI Control.` }, 403);
+          if (control?.emergency_stop) return json({ error: `${label} is blocked: Emergency AI OFF is active in Admin AI Control.` }, 403);
+          if (!control?.ai_enabled || !module?.ai_enabled || module.permission_level === "disconnected") return json({ error: `${label} is blocked: connect it in Admin AI Control.` }, 403);
         }
         // Admin calls cannot bypass the Control registry.
         if (adminModule) {
@@ -190,10 +190,10 @@ export const Route = createFileRoute("/api/ai/chat")({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           controlDb = supabaseAdmin as unknown as { from: (table: string) => any };
           const [{ data: control }, { data: module }] = await Promise.all([
-            controlDb.from("vpip_admin_ai_control").select("enabled,emergency_off,provider,model").eq("id", "default").maybeSingle(),
-            controlDb.from("vpip_admin_ai_modules").select("enabled,access_level").eq("module_key", adminModule).maybeSingle(),
+            controlDb.from("admin_ai_settings").select("ai_enabled,emergency_stop,provider,model").eq("id", "default").maybeSingle(),
+            controlDb.from("admin_ai_modules").select("ai_enabled,permission_level").eq("module_name", adminModule).maybeSingle(),
           ]);
-          const allowed = control?.enabled && !control.emergency_off && module?.enabled && module.access_level !== "disconnected";
+          const allowed = control?.ai_enabled && !control.emergency_stop && module?.ai_enabled && module.permission_level !== "disconnected";
           if (!allowed) return json({ error: "Admin AI Control has disconnected this module or activated the emergency kill switch." }, 403);
           if (control.provider !== body.provider || control.model !== body.model) return json({ error: "Request provider/model does not match Admin AI Control configuration." }, 403);
           const prompt = body.messages?.at(-1)?.content ?? "";

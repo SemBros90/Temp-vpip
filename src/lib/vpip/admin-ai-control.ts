@@ -1,84 +1,62 @@
-/** Central authorization, registration, and audit boundary for Admin AI. */
+/** Compatibility boundary backed exclusively by the canonical Admin AI tables. */
+import {
+  getAdminAiConfiguration,
+  getModules,
+  getSettings,
+  updateModule,
+  updateSettings,
+  writeActionLog,
+  type AdminAiModule,
+  type PermissionLevel,
+} from "@/lib/admin-ai-service";
 import { supabase } from "@/integrations/supabase/client";
-import { logAdminAction } from "./admin-log";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = supabase as unknown as { from: (table: string) => any };
-
-export const ADMIN_MODULES = [
-  ["home", "Home"], ["chat", "Admin AI Chat"], ["explorer", "Repository Explorer"], ["search", "Search Center"],
-  ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"],
-  ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"],
-  ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"],
-  ["proposals", "Change Proposal Center"], ["accessibility", "Accessibility Center"],
-] as const;
-export type AdminModuleKey = (typeof ADMIN_MODULES)[number][0];
-export type AccessLevel = "disconnected" | "read_only" | "read_analyze" | "read_analyze_recommend" | "full";
+export type AdminModuleKey = string;
+export type AccessLevel = PermissionLevel;
 export const ACCESS_LABEL: Record<AccessLevel, string> = { disconnected: "Disconnect", read_only: "Read Only", read_analyze: "Read + Analyze", read_analyze_recommend: "Read + Analyze + Recommend", full: "Full AI Access" };
+export interface ControlState { enabled: boolean; emergency_off: boolean; provider: string; model: string; connection_status: string }
+export interface ModuleState { id: string; module_key: string; enabled: boolean; access_level: AccessLevel; connection_status: string; updated_at?: string }
 
-export interface ControlState { enabled: boolean; emergency_off: boolean; provider: string; model: string }
-export interface ModuleState { module_key: AdminModuleKey; enabled: boolean; access_level: AccessLevel; updated_at?: string }
-
-export async function getControlState(): Promise<{ control: ControlState; modules: ModuleState[]; requests: any[]; responses: any[] }> {
-  const [controlResult, moduleResult, requestResult, responseResult] = await Promise.all([
-    db.from("vpip_admin_ai_control").select("*").eq("id", "default").maybeSingle(),
-    db.from("vpip_admin_ai_modules").select("*").order("module_key"),
-    db.from("vpip_admin_ai_request_history").select("*").order("created_at", { ascending: false }).limit(100),
-    db.from("vpip_admin_ai_response_history").select("*").order("created_at", { ascending: false }).limit(100),
-  ]);
-  const control = controlResult.data ?? { enabled: false, emergency_off: false, provider: "lovable", model: "openai/gpt-6-astra" };
-  const loaded = new Map<string, ModuleState>(((moduleResult.data ?? []) as ModuleState[]).map((row) => [row.module_key, row]));
-  const modules = ADMIN_MODULES.map(([module_key]) => loaded.get(module_key) ?? { module_key, enabled: false, access_level: "disconnected" as AccessLevel });
-  return { control, modules, requests: requestResult.data ?? [], responses: responseResult.data ?? [] };
+const state = (m: AdminAiModule): ModuleState => ({ id: m.id, module_key: m.module_name, enabled: m.ai_enabled, access_level: m.permission_level, connection_status: m.connection_status, updated_at: m.updated_at });
+export async function getControlState() {
+  const { settings, modules, providers, runtime } = await getAdminAiConfiguration();
+  if (!settings) throw new Error("Admin AI settings have not been configured in the database.");
+  return { control: { enabled: settings.ai_enabled, emergency_off: settings.emergency_stop, provider: settings.provider, model: settings.model, connection_status: settings.connection_status }, modules: modules.map(state), providers, runtime, requests: [], responses: [] };
 }
-
-export async function setModuleAccess(module_key: AdminModuleKey, access_level: AccessLevel, actor = "Platform owner") {
+export async function setModuleAccess(module: ModuleState, access_level: AccessLevel, actor = "Platform owner") {
   const enabled = access_level !== "disconnected";
-  const { error } = await db.from("vpip_admin_ai_modules").upsert({ module_key, access_level, enabled, updated_at: new Date().toISOString() });
-  if (error) throw new Error(error.message);
-  await logAdminAction({ action: enabled ? "admin_ai_module_connect" : "admin_ai_module_disconnect", actor, status: "ok", detail: { module: module_key, access_level } });
+  await updateModule(module.id, { ai_enabled: enabled, permission_level: access_level, connection_status: enabled ? "connected" : "disconnected", last_connected_at: enabled ? new Date().toISOString() : null });
+  await updateSettings({ active_module_count: (await getModules()).filter((item) => item.ai_enabled).length });
+  await writeActionLog(enabled ? "module_connect" : "module_disconnect", module.module_key, "completed", { actor, permission_level: access_level });
 }
-
 export async function setEntirePanel(connect: boolean, actor = "Platform owner") {
-  const { data: previous } = await db.from("vpip_admin_ai_control").select("emergency_off").eq("id", "default").maybeSingle();
-  const rows = ADMIN_MODULES.map(([module_key]) => ({ module_key, enabled: connect, access_level: connect ? "read_analyze_recommend" : "disconnected", updated_at: new Date().toISOString() }));
-  const { error } = await db.from("vpip_admin_ai_modules").upsert(rows);
-  if (error) throw new Error(error.message);
-  await db.from("vpip_admin_ai_control").upsert({ id: "default", enabled: connect, emergency_off: false, updated_at: new Date().toISOString() });
-  await logAdminAction({ action: connect ? "admin_ai_panel_connect" : "admin_ai_panel_disconnect", actor, status: "ok", detail: { modules: rows.map((row) => row.module_key), result: `${rows.length} modules ${connect ? "connected" : "disconnected"}` } });
-  if (connect && previous?.emergency_off) await logAdminAction({ action: "admin_ai_emergency_off_disabled", actor, status: "ok", detail: { scope: "entire Admin Panel", reason: "panel reconnected" } });
+  const modules = await getModules();
+  await Promise.all(modules.map((m) => updateModule(m.id, { ai_enabled: connect, permission_level: connect ? "read_analyze_recommend" : "disconnected", connection_status: connect ? "connected" : "disconnected", last_connected_at: connect ? new Date().toISOString() : null })));
+  await updateSettings({ ai_enabled: connect, emergency_stop: false, connection_status: connect ? "connected" : "disconnected", active_module_count: connect ? modules.length : 0 });
+  await writeActionLog(connect ? "panel_connect" : "panel_disconnect", null, "completed", { actor, module_count: modules.length });
 }
-
-/** Provider choice is data, not a module binding: VPIP can add adapters without changing module permissions. */
 export async function setControlProvider(provider: string, model: string, actor = "Platform owner") {
-  const { error } = await db.from("vpip_admin_ai_control").upsert({ id: "default", provider, model, updated_at: new Date().toISOString() });
-  if (error) throw new Error(error.message);
-  await logAdminAction({ action: "admin_ai_provider_change", actor, status: "ok", detail: { provider, model } });
+  await updateSettings({ provider, model });
+  await writeActionLog("provider_change", null, "completed", { actor, provider, model });
 }
-
 export async function setEmergencyOff(actor = "Platform owner") {
-  const { error } = await db.from("vpip_admin_ai_control").upsert({ id: "default", enabled: false, emergency_off: true, updated_at: new Date().toISOString() });
-  if (error) throw new Error(error.message);
-  await setEntirePanel(false, actor);
-  await db.from("vpip_admin_ai_control").upsert({ id: "default", enabled: false, emergency_off: true, updated_at: new Date().toISOString() });
-  await logAdminAction({ action: "admin_ai_emergency_off", actor, status: "ok", detail: { scope: "entire Admin Panel" } });
+  const modules = await getModules();
+  await Promise.all(modules.map((m) => updateModule(m.id, { ai_enabled: false, permission_level: "disconnected", connection_status: "disconnected", last_connected_at: null })));
+  await updateSettings({ ai_enabled: false, emergency_stop: true, connection_status: "emergency_stopped", active_module_count: 0 });
+  await writeActionLog("emergency_stop", null, "completed", { actor, module_count: modules.length });
 }
-
-/** Live updates: fires on any change to control, modules or request/response history. */
 let channelSeq = 0;
 export function subscribeControl(onChange: () => void): () => void {
-  const channel = supabase.channel(`admin-ai-control-${++channelSeq}`);
-  for (const table of ["vpip_admin_ai_control", "vpip_admin_ai_modules", "vpip_admin_ai_request_history", "vpip_admin_ai_response_history"]) {
-    channel.on("postgres_changes" as never, { event: "*", schema: "public", table } as never, onChange);
-  }
+  const channel = supabase.channel(`admin-ai-canonical-${++channelSeq}`);
+  for (const table of ["admin_ai_settings", "admin_ai_modules", "admin_ai_providers", "admin_ai_runtime_status"]) channel.on("postgres_changes" as never, { event: "*", schema: "public", table } as never, onChange);
   channel.subscribe();
   return () => { void supabase.removeChannel(channel); };
 }
-
 export async function assertAdminAiAccess(module: AdminModuleKey) {
-  const { control, modules } = await getControlState();
-  const entry = modules.find((item) => item.module_key === module);
-  if (control.emergency_off) throw new Error("Admin AI is disabled by the emergency kill switch.");
-  if (!control.enabled || !entry?.enabled) throw new Error(`Admin AI access is disconnected for ${module}. Connect it in Admin AI Control.`);
-  return { provider: control.provider, model: control.model, access: entry.access_level };
+  const settings = await getSettings();
+  const entry = (await getModules()).find((item) => item.module_name === module);
+  if (!settings) throw new Error("Admin AI settings have not been configured in the database.");
+  if (settings.emergency_stop) throw new Error("Admin AI is disabled by the emergency kill switch.");
+  if (!settings.ai_enabled || !entry?.ai_enabled || entry.permission_level === "disconnected") throw new Error(`Admin AI access is disconnected for ${module}. Connect it in Admin AI Control.`);
+  return { provider: settings.provider, model: settings.model, access: entry.permission_level };
 }
