@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, Paperclip, X } from "lucide-react";
 import { Paperclip, X } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -109,11 +110,18 @@ function AdminAiPage() {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
   const attachmentInput = useRef<HTMLInputElement | null>(null);
+  const chatScroll = useRef<HTMLDivElement | null>(null);
+  const [showGoToBottom, setShowGoToBottom] = useState(false);
   const [stream, setStream] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [openReport, setOpenReport] = useState<Report | null>(null);
   const [evidence, setEvidence] = useState<Record<string, unknown[]>>({});
+
+  const scrollToChatBottom = useCallback(() => {
+    chatScroll.current?.scrollTo({ top: chatScroll.current.scrollHeight, behavior: "smooth" });
+    setShowGoToBottom(false);
+  }, []);
 
   const loadAll = useCallback(async () => {
     const [s, m, r, f, a1, a2, sn] = await Promise.all([
@@ -475,7 +483,7 @@ function AdminAiPage() {
 {tab === "chat" ? (
             <div className="mx-auto flex h-full max-w-3xl flex-col rounded-md border border-border bg-surface p-4">
               <div className="text-sm font-semibold">Admin AI Chat</div>
-<div className="flex-1 space-y-3 overflow-y-auto py-2">
+<div ref={chatScroll} className="flex-1 space-y-3 overflow-y-auto py-2" onScroll={(event) => { const element = event.currentTarget; setShowGoToBottom(element.scrollHeight - element.scrollTop - element.clientHeight > 80); }}>
                 {msgs.length === 0 && stream === null ? (
                   <div className="text-sm text-muted-foreground">Ask Admin AI about VPIP — e.g. "Why do AI 1 builds keep failing on routes?" It sees the connected repository, pinned files, AI 1/AI 2 reports and your feedback.</div>
                 ) : null}
@@ -487,6 +495,7 @@ function AdminAiPage() {
                 ))}
                 {stream !== null ? <div className="text-sm"><Markdown source={stream || "Thinking…"} /></div> : null}
               </div>
+              {showGoToBottom ? <Button type="button" size="sm" variant="secondary" className="mx-auto mt-2 gap-1" onClick={scrollToChatBottom}><ArrowDown className="size-3.5" />Go to bottom</Button> : null}
               {!chatEnabled ? <div className="mt-4 rounded border border-destructive/40 bg-destructive/5 p-2 text-xs text-muted-foreground">Admin AI Control has this module disconnected or Emergency AI OFF is active. Chat is read-only until it is connected in Admin AI Control.</div> : null}
               <div className="sticky bottom-0 mt-4 bg-background pt-2">
                 {attachments.length ? <div className="mb-2 flex flex-wrap gap-2">{attachments.map((attachment) => <div key={attachment.id} className="relative"><img src={attachment.dataUrl} alt={attachment.name} className="h-16 w-16 rounded border border-border object-cover" /><button type="button" aria-label={`Remove ${attachment.name}`} className="absolute -right-1 -top-1 rounded-full bg-background p-0.5 shadow" onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><X className="size-3" /></button></div>)}</div> : null}
