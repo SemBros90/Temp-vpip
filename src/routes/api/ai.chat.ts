@@ -73,8 +73,9 @@ function sseFrame(text: string) {
 
 function streamText(frame: string) {
   const match = frame.match(/^data:\s*(.+)$/m);
-  if (!match || match[1] === "[DONE]") return "";
-  try { return (JSON.parse(match[1]) as { choices?: Array<{ delta?: { content?: string } }> }).choices?.[0]?.delta?.content ?? ""; } catch { return ""; }
+  const body = match?.[1];
+  if (!body || body === "[DONE]") return "";
+  try { return (JSON.parse(body) as { choices?: Array<{ delta?: { content?: string } }> }).choices?.[0]?.delta?.content ?? ""; } catch { return ""; }
 }
 
 /** Re-shapes Anthropic's SSE stream into the chunk shape the app already reads. */

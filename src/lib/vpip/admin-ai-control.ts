@@ -27,7 +27,7 @@ export async function getControlState(): Promise<{ control: ControlState; module
     db.from("vpip_admin_ai_response_history").select("*").order("created_at", { ascending: false }).limit(100),
   ]);
   const control = controlResult.data ?? { enabled: false, emergency_off: false, provider: "lovable", model: "openai/gpt-6-astra" };
-  const loaded = new Map((moduleResult.data ?? []).map((row: ModuleState) => [row.module_key, row]));
+  const loaded = new Map<string, ModuleState>(((moduleResult.data ?? []) as ModuleState[]).map((row) => [row.module_key, row]));
   const modules = ADMIN_MODULES.map(([module_key]) => loaded.get(module_key) ?? { module_key, enabled: false, access_level: "disconnected" as AccessLevel });
   return { control, modules, requests: requestResult.data ?? [], responses: responseResult.data ?? [] };
 }
