@@ -66,8 +66,8 @@ export const Route = createFileRoute("/admin-ai")({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
 const LOVABLE_MODEL = "openai/gpt-6-astra";
-type Tab = "control" | "home" | "explorer" | "search" | "dependency" | "github" | "snapshots" | "actionLog" | "ai1" | "ai2" | "knowledge" | "rootCause" | "runtime" | "proposals" | "accessibility";
-const SECTIONS: Array<[Tab, string]> = [["control", "Admin AI Control"], ["home", "Home"], ["explorer", "Repository Explorer"], ["search", "Search Center"], ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"], ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"], ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"], ["proposals", "Change Proposal Center"], ["accessibility", "Accessibility Center"]];
+type Tab = "control" | "home" | "chat" | "explorer" | "search" | "dependency" | "github" | "snapshots" | "actionLog" | "ai1" | "ai2" | "knowledge" | "rootCause" | "runtime" | "proposals" | "accessibility";
+const SECTIONS: Array<[Tab, string]> = [["control", "Admin AI Control"], ["home", "Home"], ["chat", "Chat"], ["explorer", "Repository Explorer"], ["search", "Search Center"], ["dependency", "Dependency Analyzer"], ["github", "GitHub Center"], ["snapshots", "Snapshot Center"], ["actionLog", "Action Log"], ["ai1", "AI1 Center"], ["ai2", "AI2 Center"], ["knowledge", "Knowledge Base"], ["rootCause", "Root Cause Engine"], ["runtime", "Runtime Center"], ["proposals", "Change Proposal Center"], ["accessibility", "Accessibility Center"]];
 type Engine = "lovable" | ProviderId;
 
 interface Msg { id?: string; role: "user" | "assistant"; content: string; created_at?: string }
