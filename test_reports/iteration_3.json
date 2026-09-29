@@ -1,0 +1,37 @@
+{
+  "summary": "Focused preview validation completed: external preview loads real Projects and Settings UI, settings import button is enabled in read-only checks, /api bridge responds correctly, and preview supervisor programs are configured/running with autostart+autorestart.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/etc/supervisor/conf.d/vpip-import-preview.conf",
+    "/app/scripts/preview-api-proxy.mjs",
+    "/root/.emergent/automation_output/20260929_051034/console_20260929_051034.log",
+    "/root/.emergent/automation_output/20260929_050947/console_20260929_050947.log"
+  ],
+  "action_items": [
+    "No functional fix required for the scoped preview checks; keep monitoring only if new preview restarts reappear."
+  ],
+  "critical_code_review_comments": [
+    "No critical code defects found in reviewed bridge/supervisor files for the scoped preview issue.",
+    "Note: default supervisor programs backend/frontend remain FATAL in this container, but scoped preview services vpip-import-preview and vpip-api-preview are RUNNING and served expected responses."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_3.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "None (read-only verification only; no mutations executed)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Scoped checks executed only: GET /api/ai/status => 200 JSON, GET /api/definitely-not-a-real-route => 404 (non-502), Projects and Settings loaded from external preview, workspace-import-button enabled after up to 70s wait, Settings reload and Projects↔Settings navigation verified without mutation clicks. Post-warmup on Settings: 0 failed requests, 0 HTTP>=400 responses, one non-blocking TanStack code-splitting warning.",
+  "rca of the issue": "Prior mismatch/autostart issues appear resolved: supervisor config now sets autostart/autorestart=true for vpip-import-preview and vpip-api-preview; API bridge proxies /api/* from port 8001 to app at 3000 and correctly propagates non-existent route as 404 instead of 502."
+}

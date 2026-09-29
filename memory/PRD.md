@@ -51,3 +51,16 @@ Authorization is limited to this safe-import change and its supporting tests/UI.
 - P1 (requires approval): Resolve the two pre-existing TypeScript errors.
 - P2 (optional): Conflict preview/resolution workflow and optional pre-import export reminder.
 - Next: Ensure the other coding-app copy receives the same source changes before relying on the new protections there. Keep the original import file until results are reviewed; this is not automatic two-way synchronization.
+
+## Follow-up: real preview repaired
+
+User explicitly requested: **correct its preview**.
+
+- Reproduced stopped preview app after restart: supplemental supervisor program had autostart/autorestart disabled. Default template programs point to nonexistent frontend/backend subdirectories in this root-level TanStack repository.
+- Enabled autostart/autorestart for the existing root-level app on port 3000.
+- Added scripts/preview-api-proxy.mjs: a preview-only streaming bridge from the separately routed API port 8001 to the real TanStack app on 3000, configured entirely through environment variables. No application route, Supabase environment, package, schema, or credentials changed.
+- Managed by vpip-import-preview and vpip-api-preview. Configuration saved persistently at /root/.config/vpip-preview/supervisor.conf and linked into /etc/supervisor/conf.d/vpip-import-preview.conf.
+- Real publishable-key Supabase read returned 200. Existing Projects and Settings load, safe-import control is enabled, and reload/navigation pass WITHOUT test fixtures or replaced responses. Initial full workspace loading can take longer than six seconds; prior verification ended too early.
+- External GET /api/ai/status now returns 200 JSON; nonexistent API route returns 404 instead of 502. No failed requests/HTTP errors after warmup in testing report iteration_3.json. Both preview programs RUNNING.
+- These real read-only checks supersede the earlier preview/database-read limitations above. No production import/write, AI call, configuration mutation in the database, or other user-data modification was performed. AI provider availability still depends on existing keys/configuration; it was not exercised.
+- Preview: https://dd182498-a6ed-4dee-a4e1-a786f613fd2c.preview.emergentagent.com/
